@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,23 +19,28 @@ export default function ParticipantsPage() {
 
   const participantsRef = useMemoFirebase(() => {
     if (!firestore) return null;
+    // Participants can be viewed by all signed-in users according to rules
     return collection(firestore, 'participants');
   }, [firestore]);
 
-  const groupsRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'groups');
-  }, [firestore]);
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    // Groups must be filtered by ownership or membership to satisfy security rules
+    return query(
+      collection(firestore, 'groups'),
+      where('ownerId', '==', user.uid)
+    );
+  }, [firestore, user]);
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: groups, isLoading: groupsLoading } = useCollection(groupsRef);
+  const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
 
   function handleAddParticipant() {
     if (!newName.trim() || !firestore || !user) return;
     
     addDocumentNonBlocking(collection(firestore, 'participants'), {
       name: newName,
-      userId: user.uid, // Tie to current user if needed, though rules allow global read
+      userId: user.uid,
       totalPoints: 0,
       totalFines: 0,
       dateJoined: new Date().toISOString()
@@ -51,7 +56,7 @@ export default function ParticipantsPage() {
       ownerId: user.uid,
       totalPoints: 0,
       totalFines: 0,
-      members: [],
+      members: { [user.uid]: 'owner' },
       createdAt: new Date().toISOString()
     });
     setNewGroupName('');
@@ -197,14 +202,14 @@ export default function ParticipantsPage() {
                     <span className="font-bold text-accent">{g.totalPoints || 0}</span>
                   </div>
                   <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-                    Members: {g.members?.length || 0}
+                    Members: {Object.keys(g.members || {}).length}
                   </div>
                 </CardContent>
               </Card>
             ))}
             {!groupsLoading && (!groups || groups.length === 0) && (
               <div className="col-span-full text-center py-10 text-muted-foreground">
-                No groups created yet.
+                No groups found that you own or belong to.
               </div>
             )}
           </div>

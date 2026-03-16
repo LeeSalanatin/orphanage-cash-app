@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useMemoFirebase, useCollection, useFirestore, useUser } from '@/firebase';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,26 +9,20 @@ import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2 } from 'lucide-react
 import Link from 'next/link';
 
 export default function SessionsPage() {
-  const db = useFirestore();
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useUser();
+  const firestore = useFirestore();
 
-  useEffect(() => {
-    async function fetchSessions() {
-      if (!db) return;
-      try {
-        const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setSessions(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchSessions();
-  }, [db]);
+  // Memoize query to satisfy security rules (must filter by ownerId or members)
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'sessions'),
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+  }, [firestore, user]);
+
+  const { data: sessions, isLoading } = useCollection(sessionsQuery);
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -55,13 +48,13 @@ export default function SessionsPage() {
         <Button variant="ghost" size="sm" className="rounded-full">Completed</Button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="h-48 bg-muted animate-pulse rounded-lg border" />
           ))}
         </div>
-      ) : sessions.length > 0 ? (
+      ) : sessions && sessions.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sessions.map((session) => (
             <SessionCard key={session.id} session={session} />
@@ -95,7 +88,7 @@ function SessionCard({ session }: { session: any }) {
       <Card className="hover:shadow-xl transition-all border-none shadow-sm h-full flex flex-col cursor-pointer group hover:-translate-y-1 duration-300 bg-card">
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start mb-2">
-            <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>
+            <Badge className="capitalize" variant={session.status === 'active' ? 'active' : 'secondary'}>
               {session.status}
             </Badge>
             <Badge variant="outline" className="capitalize text-[10px] font-bold">
