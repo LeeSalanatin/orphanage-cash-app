@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -76,7 +76,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         setEditFineAmount(session.fineRules[0].amount.toString());
         setEditFineType(session.fineRules[0].type);
       }
-      setVotingEnabled(session.votingConfig?.enabled || false);
+      setEditVotingEnabled(session.votingConfig?.enabled || false);
       setEditPointsEnabled(session.pointDistribution?.enabled || false);
       setEditTopN(session.votingConfig?.topIndividualsToVoteFor?.toString() || '3');
       setEditPointsAmount(session.pointDistribution?.pointsPerTopIndividual?.toString() || '100');
@@ -104,6 +104,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return () => clearInterval(interval);
   }, [activeId]);
 
+  function formatDuration(seconds: number) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
   function handleStartTracking(targetId: string, type: 'individual' | 'group') {
     setActiveId(targetId);
     setActiveType(type);
@@ -114,43 +120,58 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (!activeId || !session || !firestore || !user) return;
     
     const durationSeconds = timer;
-    const durationMinutes = durationSeconds / 60;
-    const maxMinutes = session.maxPreachingTimeMinutes || 9999;
-    const overage = Math.max(0, durationMinutes - maxMinutes);
+    const maxSeconds = (session.maxPreachingTimeMinutes || 0) * 60;
+    const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
     
     const rule = session.fineRules?.find((r: any) => 
       activeType === 'individual' ? r.appliesTo === 'individual' : r.appliesTo === 'group'
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
     
-    let fineAmount = 0;
-    if (overage > 0) {
+    let totalFineAmount = 0;
+    let fineCalculationDetails = "";
+
+    if (overageSeconds > 0) {
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
-        fineAmount = rule.amount;
+        totalFineAmount = rule.amount;
+        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage.`;
       } else {
-        fineAmount = overage * rule.amount;
+        // Compute per second: rate / 60
+        const ratePerSecond = rule.amount / 60;
+        totalFineAmount = overageSeconds * ratePerSecond;
+        fineCalculationDetails = `${formatDuration(overageSeconds)} overage (${overageSeconds}s) at $${rule.amount}/min ($${ratePerSecond.toFixed(2)}/sec). Total: $${totalFineAmount.toFixed(2)}`;
       }
     }
 
-    const targetName = activeType === 'individual' 
-      ? availableParticipants?.find(p => p.id === activeId)?.name 
-      : userGroups?.find(g => g.id === activeId)?.name;
+    const targetGroup = activeType === 'group' ? userGroups?.find(g => g.id === activeId) : null;
+    const targetParticipant = activeType === 'individual' ? availableParticipants?.find(p => p.id === activeId) : null;
+    const targetName = activeType === 'individual' ? targetParticipant?.name : targetGroup?.name;
     
     let explanation = "No fine incurred.";
-    if (fineAmount > 0) {
+    if (totalFineAmount > 0) {
       try {
         const aiResponse = await generateFineExplanation({
           sessionType: session.sessionType,
           participantName: targetName || 'Target',
-          preachingDurationMinutes: Math.round(durationMinutes * 10) / 10,
-          maxAllowedDurationMinutes: maxMinutes,
+          preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
+          maxAllowedDurationMinutes: session.maxPreachingTimeMinutes || 0,
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
-          fineAmount: Math.round(fineAmount * 100) / 100,
-          overageMinutes: Math.round(overage * 10) / 10,
-          rulesSummary: `Maximum allowed time is ${maxMinutes} minutes.`
+          fineAmount: parseFloat(totalFineAmount.toFixed(2)),
+          overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
+          rulesSummary: `Maximum allowed time is ${session.maxPreachingTimeMinutes} minutes. Fines are calculated by the second.`
         });
         explanation = aiResponse.explanation;
       } catch (e) {
-        explanation = `Incurred a fine of $${fineAmount.toFixed(2)} for ${overage.toFixed(1)} mins overage.`;
+        explanation = fineCalculationDetails;
+      }
+    }
+
+    // If group, split the fine
+    let perMemberFine = totalFineAmount;
+    if (activeType === 'group' && targetGroup && targetGroup.members) {
+      const memberCount = Object.keys(targetGroup.members).length;
+      perMemberFine = totalFineAmount / (memberCount || 1);
+      if (memberCount > 1) {
+        explanation += ` (Split among ${memberCount} members: $${perMemberFine.toFixed(2)} each)`;
       }
     }
 
@@ -159,11 +180,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       participantId: activeType === 'individual' ? activeId : null,
       preachingGroupId: activeType === 'group' ? activeId : null,
       participantName: targetName || 'Unknown',
-      actualDurationMinutes: Math.round(durationMinutes * 10) / 10,
-      overageMinutes: Math.round(overage * 10) / 10,
+      actualDurationSeconds: durationSeconds,
+      actualDurationFormatted: formatDuration(durationSeconds),
+      overageSeconds: overageSeconds,
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
-      fineAmount,
+      totalFineAmount,
       explanation,
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' }
@@ -171,13 +193,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
-    if (fineAmount > 0) {
+    if (totalFineAmount > 0) {
       const fineData = {
         sessionId: id,
         targetParticipantId: activeType === 'individual' ? activeId : null,
         targetGroupId: activeType === 'group' ? activeId : null,
-        amount: fineAmount,
-        calculationDetails: `${Math.round(overage * 10) / 10} minutes overage`,
+        amount: totalFineAmount,
+        perMemberAmount: perMemberFine,
+        calculationDetails: fineCalculationDetails,
         explanation,
         status: 'ISSUED',
         issuedDateTime: new Date().toISOString(),
@@ -189,7 +212,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     setActiveId(null);
     setActiveType(null);
-    toast({ title: "Session Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
+    toast({ title: "Session Recorded", description: totalFineAmount > 0 ? `Fine: $${totalFineAmount.toFixed(2)}` : "No fines incurred." });
   }
 
   function handleSaveSettings() {
@@ -304,8 +327,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         : userGroups?.find(g => g.id === activeId)?.name}
                     </p>
                     <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
-                      {Math.floor(timer / 60).toString().padStart(2, '0')}:
-                      {(timer % 60).toString().padStart(2, '0')}
+                      {formatDuration(timer)}
                     </div>
                     <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold shadow-lg" onClick={handleStopTracking}>
                       <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
@@ -332,10 +354,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               </Badge>
                             </div>
                             <div className="flex gap-3 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.actualDurationMinutes} min</span>
-                              {record.fineAmount > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-4 w-4" /> {record.actualDurationFormatted || formatDuration(record.actualDurationSeconds || 0)}
+                              </span>
+                              {record.totalFineAmount > 0 && (
                                 <span className="flex items-center gap-1 text-destructive font-semibold">
-                                  <AlertTriangle className="h-4 w-4" /> Fine: ${record.fineAmount.toFixed(2)}
+                                  <AlertTriangle className="h-4 w-4" /> Fine: ${record.totalFineAmount.toFixed(2)}
                                 </span>
                               )}
                             </div>
@@ -345,8 +369,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               </div>
                             )}
                           </div>
-                          <Badge variant={record.fineAmount > 0 ? "destructive" : "default"}>
-                            {record.fineAmount > 0 ? 'Fined' : 'Clear'}
+                          <Badge variant={record.totalFineAmount > 0 ? "destructive" : "default"}>
+                            {record.totalFineAmount > 0 ? 'Fined' : 'Clear'}
                           </Badge>
                         </div>
                       ))}
@@ -360,7 +384,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Card>
             </TabsContent>
 
-            {/* NEW MENU: Timing & Fines */}
             <TabsContent value="timing" className="animate-in fade-in slide-in-from-bottom-2">
               <Card className="shadow-md border-primary/10">
                 <CardHeader>
@@ -369,7 +392,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     Menu: Timing & Fines
                   </CardTitle>
                   <CardDescription>
-                    Configure the time limits and fine penalties for this session.
+                    Configure the time limits and fine penalties for this session. Fines are calculated per second.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -385,14 +408,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="editFineAmount">Fine Amount ($)</Label>
+                      <Label htmlFor="editFineAmount">Fine Amount ($ per Min)</Label>
                       <Input 
                         id="editFineAmount" 
                         type="number" 
-                        placeholder="e.g. 10" 
+                        placeholder="e.g. 30" 
                         value={editFineAmount} 
                         onChange={(e) => setEditFineAmount(e.target.value)} 
                       />
+                      <p className="text-[10px] text-muted-foreground">Example: $30/min = $0.50/sec overage.</p>
                     </div>
                   </div>
 
@@ -407,23 +431,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <div className="flex items-center space-x-2 rounded-md border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
                         <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
                         <div className="flex-grow cursor-pointer">
-                          <Label htmlFor="edit-per-min" className="font-semibold block">Per Minute Overage</Label>
-                          <span className="text-xs text-muted-foreground">Charge ${editFineAmount || '0'} for every minute over.</span>
+                          <Label htmlFor="edit-per-min" className="font-semibold block">Per Second (Variable)</Label>
+                          <span className="text-xs text-muted-foreground">Charge based on exact seconds over.</span>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2 rounded-md border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
                         <RadioGroupItem value="fixed" id="edit-fixed" />
                         <div className="flex-grow cursor-pointer">
                           <Label htmlFor="edit-fixed" className="font-semibold block">Fixed Rate</Label>
-                          <span className="text-xs text-muted-foreground">One-time ${editFineAmount || '0'} fee if time is exceeded.</span>
+                          <span className="text-xs text-muted-foreground">One-time fee if any overage occurs.</span>
                         </div>
                       </div>
                     </RadioGroup>
-                    {session.sessionType === 'sunday preaching' && (
-                      <p className="text-xs text-primary bg-primary/5 p-2 rounded italic">
-                        * Sunday Service defaults to a Fixed Rate fine.
-                      </p>
-                    )}
                   </div>
                 </CardContent>
                 <CardFooter className="bg-muted/5 border-t py-4">
@@ -434,7 +453,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Card>
             </TabsContent>
 
-            {/* NEW MENU: Incentives & Voting */}
             <TabsContent value="incentives" className="animate-in fade-in slide-in-from-bottom-2">
               <Card className="shadow-md border-primary/10">
                 <CardHeader>
@@ -527,7 +545,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <TabsContent value="groups" className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
                   {userGroups?.map((g) => (
                     <div key={g.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border bg-background">
-                      <span className="font-medium text-sm">{g.name}</span>
+                      <div>
+                        <span className="font-medium text-sm block">{g.name}</span>
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <UsersIcon className="h-3 w-3" /> {Object.keys(g.members || {}).length} members
+                        </span>
+                      </div>
                       <Button 
                         size="sm" 
                         variant="outline" 
@@ -565,7 +588,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <span className="text-muted-foreground block mb-1">Active Penalties:</span>
                 {session.fineRules?.map((rule: any, i: number) => (
                   <div key={i} className="bg-background p-2 rounded text-[10px] border border-primary/10 flex justify-between items-center">
-                    <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Variable'} ({rule.appliesTo})</span>
+                    <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Per Sec'} ({rule.appliesTo})</span>
                     <span className="font-bold text-destructive">${rule.amount} {rule.type === 'per-minute-overage' ? '/ min' : ''}</span>
                   </div>
                 ))}
