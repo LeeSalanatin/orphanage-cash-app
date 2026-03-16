@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -59,12 +59,35 @@ export default function NewConfiguration() {
 
   const [aiDescription, setAiDescription] = useState('');
 
+  // Simulator State
+  const [simMin, setSimMin] = useState('');
+  const [simSec, setSimSec] = useState('');
+  const [simResult, setSimResult] = useState<number | null>(null);
+
   // Handle Sunday Preaching specific logic
   useEffect(() => {
     if (sessionType === 'sunday preaching') {
       setFineType('fixed');
     }
   }, [sessionType]);
+
+  function calculateSimulatedFine() {
+    const maxSeconds = (parseInt(maxTimeMin) || 0) * 60 + (parseInt(maxTimeSec) || 0);
+    const simSeconds = (parseInt(simMin) || 0) * 60 + (parseInt(simSec) || 0);
+    const overage = Math.max(0, simSeconds - maxSeconds);
+    
+    if (overage === 0) {
+      setSimResult(0);
+      return;
+    }
+
+    if (fineType === 'fixed') {
+      setSimResult(parseFloat(fineAmount) || 0);
+    } else {
+      const ratePerSecond = (parseFloat(fineAmount) || 0) / 60;
+      setSimResult(overage * ratePerSecond);
+    }
+  }
 
   async function handleGenerateRules() {
     if (!aiDescription.trim()) {
@@ -193,6 +216,35 @@ export default function NewConfiguration() {
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 Auto-fill
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-md border-accent/20 bg-accent/5">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-accent" />
+                Fine Simulator
+              </CardTitle>
+              <CardDescription>Test how much the fine will be.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px]">Test Min</Label>
+                  <Input size={1} placeholder="Min" value={simMin} onChange={(e) => setSimMin(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px]">Test Sec</Label>
+                  <Input size={1} placeholder="Sec" value={simSec} onChange={(e) => setSimSec(e.target.value)} />
+                </div>
+              </div>
+              <Button variant="outline" className="w-full h-8 text-xs" onClick={calculateSimulatedFine}>Calculate</Button>
+              {simResult !== null && (
+                <div className="mt-2 text-center p-2 bg-background rounded border border-accent/20">
+                  <p className="text-xs text-muted-foreground">Resulting Fine:</p>
+                  <p className="text-xl font-bold text-destructive">${simResult.toFixed(2)}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

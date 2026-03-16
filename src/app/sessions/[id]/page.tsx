@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -37,6 +37,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editPointsEnabled, setEditPointsEnabled] = useState(false);
   const [editTopN, setEditTopN] = useState('3');
   const [editPointsAmount, setEditPointsAmount] = useState('100');
+
+  // Simulator State
+  const [simMin, setSimMin] = useState('');
+  const [simSec, setSimSec] = useState('');
+  const [simResult, setSimResult] = useState<number | null>(null);
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -111,6 +116,24 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function calculateSimulatedFine() {
+    const maxSeconds = (parseInt(editMaxTimeMin) || 0) * 60 + (parseInt(editMaxTimeSec) || 0);
+    const simSeconds = (parseInt(simMin) || 0) * 60 + (parseInt(simSec) || 0);
+    const overage = Math.max(0, simSeconds - maxSeconds);
+    
+    if (overage === 0) {
+      setSimResult(0);
+      return;
+    }
+
+    if (editFineType === 'fixed' || session?.sessionType === 'sunday preaching') {
+      setSimResult(parseFloat(editFineAmount) || 0);
+    } else {
+      const ratePerSecond = (parseFloat(editFineAmount) || 0) / 60;
+      setSimResult(overage * ratePerSecond);
+    }
   }
 
   function handleStartTracking(targetId: string, type: 'individual' | 'group') {
@@ -391,7 +414,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Card>
             </TabsContent>
 
-            <TabsContent value="timing" className="animate-in fade-in slide-in-from-bottom-2">
+            <TabsContent value="timing" className="animate-in fade-in slide-in-from-bottom-2 space-y-6">
               <Card className="shadow-md border-primary/10">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-2">
@@ -476,6 +499,35 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     Save Timing & Fine Rules
                   </Button>
                 </CardFooter>
+              </Card>
+
+              <Card className="shadow-md border-accent/20 bg-accent/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-accent" />
+                    Fine Simulator
+                  </CardTitle>
+                  <CardDescription>Verify your math by entering a test time.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Simulated Min</Label>
+                      <Input placeholder="Min" value={simMin} onChange={(e) => setSimMin(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Simulated Sec</Label>
+                      <Input placeholder="Sec" value={simSec} onChange={(e) => setSimSec(e.target.value)} />
+                    </div>
+                  </div>
+                  <Button variant="secondary" className="w-full" onClick={calculateSimulatedFine}>Calculate Test Fine</Button>
+                  {simResult !== null && (
+                    <div className="p-4 bg-background rounded-lg border border-accent/20 flex flex-col items-center">
+                      <span className="text-sm text-muted-foreground">Estimated Fine:</span>
+                      <span className="text-3xl font-bold text-destructive">${simResult.toFixed(2)}</span>
+                    </div>
+                  )}
+                </CardContent>
               </Card>
             </TabsContent>
 
