@@ -12,9 +12,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator, Star, CheckCircle2, User, Calendar } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use, useMemo } from 'react';
 
@@ -171,9 +172,17 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }
 
   function handleStartTracking(targetId: string, type: 'individual' | 'group') {
+    if (activeId) return;
     setActiveId(targetId);
     setActiveType(type);
-    toast({ title: "Tracking Started", description: `Monitoring ${type} time now.` });
+    toast({ title: "Stopwatch Started", description: "Time is now being recorded for this preacher." });
+  }
+
+  function handleCancelTracking() {
+    setActiveId(null);
+    setActiveType(null);
+    setTimer(0);
+    toast({ title: "Tracking Cancelled", description: "No record was saved." });
   }
 
   async function handleStopTracking() {
@@ -272,7 +281,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     setActiveId(null);
     setActiveType(null);
-    toast({ title: "Session Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "No fines incurred." });
+    toast({ title: "Preaching Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "Duration logged successfully." });
   }
 
   function handleSaveSettings() {
@@ -407,11 +416,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <TabsContent value="live" className="space-y-8">
               {activeId && (
                 <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in duration-300">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center text-accent">
                       <div className="w-3 h-3 bg-accent rounded-full animate-pulse mr-2" />
-                      Live Tracking
+                      Live Stopwatch
                     </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={handleCancelTracking} className="text-muted-foreground hover:text-destructive">
+                      <XCircle className="h-4 w-4 mr-1" /> Cancel
+                    </Button>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center py-8">
                     <p className="text-3xl font-bold font-headline mb-6 text-primary text-center">
@@ -628,7 +640,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         <div className="space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>Participants</CardTitle>
+              <CardTitle>Stopwatch Roster</CardTitle>
+              <CardDescription>Start or stop time for participants.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Tabs defaultValue="individuals">
@@ -638,21 +651,53 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 </TabsList>
                 <TabsContent value="individuals" className="p-4 space-y-2">
                   {availableParticipants?.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between p-2 border rounded hover:bg-muted">
-                      <span className="text-sm">{p.name}</span>
-                      <Button size="sm" variant="outline" disabled={!!activeId || session.status !== 'active'} onClick={() => handleStartTracking(p.id, 'individual')}>
-                        Start
-                      </Button>
+                    <div key={p.id} className={cn(
+                      "flex items-center justify-between p-3 border rounded-lg transition-all",
+                      activeId === p.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
+                    )}>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{p.name}</span>
+                        {activeId === p.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1"><Mic2 className="h-2 w-2" /> LIVE PREACHING</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {activeId === p.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
+                        <Button 
+                          size="sm" 
+                          variant={activeId === p.id ? "destructive" : "outline"} 
+                          className="h-8 px-2"
+                          disabled={(activeId !== null && activeId !== p.id) || session.status !== 'active'} 
+                          onClick={() => activeId === p.id ? handleStopTracking() : handleStartTracking(p.id, 'individual')}
+                        >
+                          {activeId === p.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          <span className="ml-1 text-[10px]">{activeId === p.id ? 'Stop' : 'Start'}</span>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </TabsContent>
                 <TabsContent value="groups" className="p-4 space-y-2">
                   {allGroups?.map((g) => (
-                    <div key={g.id} className="flex items-center justify-between p-2 border rounded hover:bg-muted">
-                      <span className="text-sm">{g.name}</span>
-                      <Button size="sm" variant="outline" disabled={!!activeId || session.status !== 'active'} onClick={() => handleStartTracking(g.id, 'group')}>
-                        Start
-                      </Button>
+                    <div key={g.id} className={cn(
+                      "flex items-center justify-between p-3 border rounded-lg transition-all",
+                      activeId === g.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
+                    )}>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{g.name}</span>
+                        {activeId === g.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1"><Mic2 className="h-2 w-2" /> LIVE PREACHING</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {activeId === g.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
+                        <Button 
+                          size="sm" 
+                          variant={activeId === g.id ? "destructive" : "outline"} 
+                          className="h-8 px-2"
+                          disabled={(activeId !== null && activeId !== g.id) || session.status !== 'active'} 
+                          onClick={() => activeId === g.id ? handleStopTracking() : handleStartTracking(g.id, 'group')}
+                        >
+                          {activeId === g.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          <span className="ml-1 text-[10px]">{activeId === g.id ? 'Stop' : 'Start'}</span>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </TabsContent>
