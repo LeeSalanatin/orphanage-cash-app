@@ -31,7 +31,8 @@ interface InternalQuery {
     path?: {
       toString: () => string;
       canonicalString?: () => string;
-    }
+    };
+    collectionGroup?: string;
   };
   path?: string;
 }
@@ -91,7 +92,9 @@ export function useCollection<T = any>(
             } else {
               // It's likely a Query or CollectionGroup query
               const internal = memoizedTargetRefOrQuery as any as InternalQuery;
-              if (internal._query?.path) {
+              if (internal._query?.collectionGroup) {
+                path = `collectionGroup(${internal._query.collectionGroup})`;
+              } else if (internal._query?.path) {
                 path = internal._query.path.toString();
               } else if (internal.path) {
                 path = internal.path;
