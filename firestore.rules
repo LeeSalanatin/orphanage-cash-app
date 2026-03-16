@@ -49,7 +49,7 @@ service cloud.firestore {
 
     match /session_configurations/{configId} {
       allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+      allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
 
@@ -62,7 +62,7 @@ service cloud.firestore {
 
     match /sessions/{sessionId} {
       allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members) || isAdmin());
-      allow create: if isSignedIn();
+      allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
 
       match /preaching_events/{eventId} {

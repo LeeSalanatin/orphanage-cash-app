@@ -4,14 +4,40 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut, Settings2 } from 'lucide-react';
-import { useUser, useAuth } from '@/firebase';
+import { useUser, useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';
+import { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
 
 export function Navbar() {
   const pathname = usePathname();
   const { user, isUserLoading } = useUser();
   const auth = useAuth();
+  const firestore = useFirestore();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!firestore || !user) {
+      setIsAdmin(false);
+      return;
+    }
+    const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, [firestore, user]);
 
   const links = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,12 +78,14 @@ export function Navbar() {
           {!isUserLoading && (
             user ? (
               <div className="flex items-center gap-4">
-                <Link href="/sessions/new" className="hidden sm:block">
-                  <Button size="sm">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    New Session
-                  </Button>
-                </Link>
+                {isAdmin && (
+                  <Link href="/sessions/new" className="hidden sm:block">
+                    <Button size="sm">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      New Session
+                    </Button>
+                  </Link>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => signOut(auth)}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out

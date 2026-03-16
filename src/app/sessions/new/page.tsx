@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { collection, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, serverTimestamp, query, where, doc, getDoc } from 'firebase/firestore';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,11 +13,13 @@ import { Loader2, Save, ArrowLeft, AlertCircle, PlusCircle, Calendar as Calendar
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+
 function NewSessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const db = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
   const initialConfigId = searchParams.get('configId') || '';
@@ -27,6 +28,33 @@ function NewSessionContent() {
   const [sessionDate, setSessionDate] = useState('');
   const [selectedConfigId, setSelectedConfigId] = useState(initialConfigId);
   const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  // Check admin status
+  useEffect(() => {
+    if (isUserLoading || !db || !user) return;
+    const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(db, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, [db, user, isUserLoading]);
+
+  // Redirect if not admin after check is complete
+  useEffect(() => {
+    if (isAdmin === false) {
+      toast({ variant: "destructive", title: "Access Denied", description: "Only administrators can create sessions." });
+      router.push('/sessions');
+    }
+  }, [isAdmin, router, toast]);
 
   // Set default date to today on mount
   useEffect(() => {
@@ -76,6 +104,14 @@ function NewSessionContent() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (isAdmin === null || isUserLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (

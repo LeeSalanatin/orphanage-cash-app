@@ -1,18 +1,38 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
 
 export default function SessionsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check admin status
+  useEffect(() => {
+    if (!firestore || !user) return;
+    const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, [firestore, user]);
 
   // Query sessions where the user is a member
   const sessionsQuery = useMemoFirebase(() => {
@@ -43,12 +63,14 @@ export default function SessionsPage() {
           <h1 className="text-3xl font-headline font-bold text-primary">Sessions</h1>
           <p className="text-muted-foreground">Manage and track your preaching events.</p>
         </div>
-        <Button asChild className="shadow-lg shadow-primary/20">
-          <Link href="/sessions/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Create Session
-          </Link>
-        </Button>
+        {isAdmin && (
+          <Button asChild className="shadow-lg shadow-primary/20">
+            <Link href="/sessions/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Session
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
@@ -82,9 +104,11 @@ export default function SessionsPage() {
             <p className="text-muted-foreground max-w-xs mx-auto">
               Start by creating a new preaching session and define your timing and fine rules.
             </p>
-            <Button asChild size="lg" className="mt-4">
-              <Link href="/sessions/new">Get Started</Link>
-            </Button>
+            {isAdmin && (
+              <Button asChild size="lg" className="mt-4">
+                <Link href="/sessions/new">Get Started</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

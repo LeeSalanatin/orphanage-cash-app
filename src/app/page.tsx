@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
-import { collection, query, limit, where, doc } from 'firebase/firestore';
+import { collection, query, limit, where, doc, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,12 @@ export default function Dashboard() {
       if (user.email && HARDCODED_ADMINS.includes(user.email)) {
         setIsAdmin(true);
         return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
       }
     };
     checkAdmin();
@@ -236,9 +242,11 @@ export default function Dashboard() {
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground mb-4">You haven't participated in any sessions yet.</p>
-                  <Button asChild>
-                    <Link href="/sessions/new">Create Your First Session</Link>
-                  </Button>
+                  {isAdmin && (
+                    <Button asChild>
+                      <Link href="/sessions/new">Create Your First Session</Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -303,12 +311,14 @@ export default function Dashboard() {
               <CardDescription>Commonly used management tools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/sessions/new">
-                  <PlusCircle className="mr-3 h-5 w-5 text-primary" />
-                  New Preaching Session
-                </Link>
-              </Button>
+              {isAdmin && (
+                <Button className="w-full justify-start h-12" variant="outline" asChild>
+                  <Link href="/sessions/new">
+                    <PlusCircle className="mr-3 h-5 w-5 text-primary" />
+                    New Preaching Session
+                  </Link>
+                </Button>
+              )}
               <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/participants">
                   <Users className="mr-3 h-5 w-5 text-primary" />
