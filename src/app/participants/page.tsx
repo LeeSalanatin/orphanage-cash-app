@@ -14,6 +14,8 @@ import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2 } 
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+
 export default function ParticipantsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -30,6 +32,10 @@ export default function ParticipantsPage() {
   useEffect(() => {
     if (!firestore || !user) return;
     const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
       const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
       setIsAdmin(adminDoc.exists());
     };
@@ -202,7 +208,7 @@ export default function ParticipantsPage() {
                       </TableCell>
                     </TableRow>
                   ) : participants && participants.map((p) => {
-                    const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : false;
+                    const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email));
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">
@@ -244,7 +250,7 @@ export default function ParticipantsPage() {
                                 size="icon" 
                                 className="h-7 w-7" 
                                 title={isParticipantAdmin ? "Demote to User" : "Promote to Admin"}
-                                onClick={() => toggleAdmin(p.userId!, isParticipantAdmin, p.name)}
+                                onClick={() => toggleAdmin(p.userId!, !!isParticipantAdmin, p.name)}
                               >
                                 <UserCog className="h-4 w-4" />
                               </Button>

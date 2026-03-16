@@ -18,6 +18,7 @@ service cloud.firestore {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
         // Hardcoded admin for initial setup/bypass if necessary
+        request.auth.token.email == 'yfjcenter@gmail.com' ||
         request.auth.token.email == 'yfj@example.com' ||
         request.auth.token.email == 'admin@example.com'
       );
