@@ -107,6 +107,64 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
   }, [rawRecords]);
 
+  function formatDuration(seconds: number) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Grouped History Logic
+  const groupedHistory = useMemo(() => {
+    if (!records || !session) return [];
+    
+    if (session.sessionType !== 'group') {
+      return records.map(r => ({
+        type: 'individual',
+        id: r.id,
+        name: r.participantName,
+        totalDuration: r.actualDurationSeconds,
+        formatted: r.actualDurationFormatted,
+        totalFine: r.totalFineAmount || 0
+      }));
+    }
+
+    const groups: Record<string, any> = {};
+    
+    records.forEach(r => {
+      const gId = r.preachingGroupId || `ind-${r.id}`;
+      if (!groups[gId]) {
+        const groupInfo = allGroups?.find(g => g.id === r.preachingGroupId);
+        groups[gId] = {
+          type: r.preachingGroupId ? 'group' : 'individual',
+          id: gId,
+          name: r.preachingGroupId ? (groupInfo?.name || 'Unknown Group') : r.participantName,
+          totalDuration: 0,
+          members: [],
+          totalFine: 0
+        };
+      }
+      groups[gId].totalDuration += r.actualDurationSeconds;
+      groups[gId].totalFine += (r.totalFineAmount || 0);
+      
+      if (r.preachingGroupId) {
+        // Extract participant name from "Group - Name" if possible
+        const cleanName = r.participantName.includes(' - ') 
+          ? r.participantName.split(' - ').slice(1).join(' - ') 
+          : r.participantName;
+          
+        groups[gId].members.push({
+          name: cleanName,
+          duration: r.actualDurationFormatted
+        });
+      }
+    });
+
+    return Object.values(groups).sort((a: any, b: any) => {
+       // Just sort by their appearance order (roughly reversed by Firestore query)
+       return 0; 
+    });
+  }, [records, session, allGroups]);
+
   const leaderboard = useMemo(() => {
     if (!votes) return { individuals: [], groups: [] };
 
@@ -165,24 +223,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return () => clearInterval(interval);
   }, [activeParticipantId]);
 
-  function formatDuration(seconds: number) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
   function handleStartTracking(participantId: string, groupId: string | null = null) {
     if (activeParticipantId) return;
     setActiveParticipantId(participantId);
     setActiveGroupId(groupId);
-    toast({ title: "Timer Started", description: "Time is now being recorded for this participant." });
+    toast({ title: "Timer Started", description: "Time is now being recorded." });
   }
 
   function handleCancelTracking() {
     setActiveParticipantId(null);
     setActiveGroupId(null);
     setTimer(0);
-    toast({ title: "Tracking Cancelled", description: "No record was saved." });
+    toast({ title: "Tracking Cancelled" });
   }
 
   async function handleStopTracking() {
@@ -211,8 +263,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     }
 
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
-    const targetGroupName = activeGroupId ? allGroups?.find(g => g.id === activeGroupId)?.name : null;
-    const displayName = targetGroupName ? `${targetGroupName} - ${targetParticipant?.name}` : targetParticipant?.name;
+    const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
+    const displayName = targetGroup ? `${targetGroup.name} - ${targetParticipant?.name}` : targetParticipant?.name;
     
     let explanation = "No fine incurred.";
     if (totalFineAmount > 0) {
@@ -271,7 +323,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     setActiveParticipantId(null);
     setActiveGroupId(null);
-    toast({ title: "Preaching Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "Duration logged." });
+    toast({ title: "Preaching Recorded" });
   }
 
   function handleSaveSettings() {
@@ -327,7 +379,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       if (item.rank === 1) {
         const reward = dist.rewardGroupTop1;
         
-        // Find participants who actually preached in this group for this session
         const participatingMemberIds = new Set(
           records
             .filter(r => r.preachingGroupId === item.id)
@@ -337,12 +388,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         if (participatingMemberIds.size > 0) {
           const splitReward = Math.floor(reward / participatingMemberIds.size);
           
-          // Update group total points
           updateDocumentNonBlocking(doc(firestore, 'groups', item.id), {
             totalPoints: increment(reward)
           });
 
-          // Award each active member
           participatingMemberIds.forEach(mId => {
             if (mId) {
               updateDocumentNonBlocking(doc(firestore, 'participants', mId), {
@@ -351,13 +400,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             }
           });
           
-          toast({ title: "Group Reward Split", description: `₱${reward} split among ${participatingMemberIds.size} active members of ${item.name}.` });
+          toast({ title: "Group Reward Split", description: `₱${reward} split among ${participatingMemberIds.size} active members.` });
         }
       }
     });
 
     updateDocumentNonBlocking(doc(firestore, 'sessions', id), { rewardsDistributed: true });
-    toast({ title: "Rewards Distributed", description: "Points awarded to active winners." });
+    toast({ title: "Rewards Distributed" });
   }
 
   function toggleSessionStatus() {
@@ -446,18 +495,27 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <CardTitle>Session History</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {records && records.length > 0 ? (
+                  {groupedHistory && groupedHistory.length > 0 ? (
                     <div className="space-y-4">
-                      {records.map((record) => (
-                        <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4">
-                          <div className="space-y-1">
-                            <p className="font-bold text-lg">{record.participantName}</p>
-                            <div className="flex gap-3 text-sm text-muted-foreground">
-                              <span><Clock className="inline h-4 w-4 mr-1" /> {record.actualDurationFormatted}</span>
-                              {record.totalFineAmount > 0 && <span className="text-destructive font-semibold">₱{record.totalFineAmount.toFixed(2)} Fine</span>}
+                      {groupedHistory.map((item: any) => (
+                        <div key={item.id} className="p-4 rounded-lg border bg-card space-y-2">
+                          <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
+                            <div className="space-y-1">
+                              <p className="font-bold text-lg flex items-center gap-2">
+                                {item.type === 'group' ? <UsersIcon className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-muted-foreground" />}
+                                {item.name} 
+                                <span className="text-muted-foreground font-normal ml-1">= {formatDuration(item.totalDuration)}</span>
+                              </p>
+                              {item.type === 'group' && (
+                                <p className="text-sm text-muted-foreground italic">
+                                  ({item.members.map((m: any) => `${m.name} ${m.duration}`).join(' and ')})
+                                </p>
+                              )}
                             </div>
+                            <Badge variant={item.totalFine > 0 ? "destructive" : "default"}>
+                              {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'Clear'}
+                            </Badge>
                           </div>
-                          <Badge variant={record.totalFineAmount > 0 ? "destructive" : "default"}>{record.totalFineAmount > 0 ? 'Fined' : 'Clear'}</Badge>
                         </div>
                       ))}
                     </div>
@@ -692,7 +750,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               </div>
                             </div>
                           ))}
-                          {members.length === 0 && <p className="text-[10px] text-muted-foreground italic">No members assigned to this group.</p>}
+                          {members.length === 0 && <p className="text-[10px] text-muted-foreground italic">No members assigned.</p>}
                         </div>
                       </div>
                     );
