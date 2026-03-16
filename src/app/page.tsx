@@ -1,19 +1,22 @@
 
 "use client";
 
-import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, limit, where } from 'firebase/firestore';
+import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
+import { collection, query, limit, where, doc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle, Loader2, Award, Trophy, Star } from 'lucide-react';
+import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle, Loader2, Award, Trophy, Star, ShieldCheck, Gavel } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
 
 export default function Dashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -34,9 +37,30 @@ export default function Dashboard() {
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
+  const userParticipantRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'participants', user.uid);
+  }, [firestore, user]);
+
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
+
+  // Check admin status
+  useEffect(() => {
+    if (!firestore || !user) return;
+    const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
+      // We could fetch the roles_admin doc here, but for dashboard simplicity 
+      // we check if they are in the hardcoded list or if they have admin access 
+      // via the participants page.
+    };
+    checkAdmin();
+  }, [firestore, user]);
 
   const recentSessions = useMemo(() => {
     if (!rawSessions) return [];
@@ -67,28 +91,60 @@ export default function Dashboard() {
     totalSessions: rawSessions?.length || 0,
     activeSessions: rawSessions?.filter((s: any) => s.status === 'active').length || 0,
     totalParticipants: participants?.length || 0,
-    totalGroups: allGroups?.filter(g => g.members?.[user?.uid])?.length || 0
+    totalGroups: allGroups?.filter(g => g.members?.[user?.uid])?.length || 0,
+    myPoints: userData?.totalPoints || 0,
+    myFines: userData?.totalFines || 0
   };
 
-  const loading = sessionsLoading || participantsLoading || groupsLoading;
+  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading;
 
   if (!user) {
     return (
       <div className="container mx-auto py-20 px-4 text-center">
-        <h1 className="text-3xl font-bold mb-4">Welcome to PreachPoint</h1>
-        <p className="text-muted-foreground mb-8">Please sign in to manage your preaching sessions.</p>
-        <Button asChild size="lg">
-          <Link href="/login">Sign In</Link>
-        </Button>
+        <h1 className="text-4xl font-bold mb-4 text-primary">PreachPoint</h1>
+        <p className="text-muted-foreground mb-8 text-lg">The professional tool for preaching time management, rewards, and fines.</p>
+        <div className="flex justify-center gap-4">
+          <Button asChild size="lg" className="px-8">
+            <Link href="/login">Sign In</Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="px-8">
+            <Link href="/signup">Create Account</Link>
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-headline font-bold text-foreground">Overview</h1>
-        <p className="text-muted-foreground">Welcome back, {user.displayName || user.email}.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-headline font-bold text-foreground">Dashboard</h1>
+            {isAdmin && (
+              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 flex gap-1 items-center h-6">
+                <ShieldCheck className="h-3 w-3" /> System Admin
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground">Welcome back, {userData?.name || user.displayName || user.email}.</p>
+        </div>
+        <div className="flex gap-3">
+           <Card className="bg-primary/5 border-primary/10 px-4 py-2 flex items-center gap-3">
+              <Award className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground leading-none mb-1">Your Points</p>
+                <p className="text-xl font-bold text-primary leading-none">{stats.myPoints}</p>
+              </div>
+           </Card>
+           <Card className="bg-destructive/5 border-destructive/10 px-4 py-2 flex items-center gap-3">
+              <Gavel className="h-5 w-5 text-destructive" />
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground leading-none mb-1">Your Fines</p>
+                <p className="text-xl font-bold text-destructive leading-none">₱{stats.myFines.toFixed(2)}</p>
+              </div>
+           </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -96,26 +152,26 @@ export default function Dashboard() {
           title="Your Sessions" 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Sessions accessible to you"
+          description="Sessions you created or joined"
         />
         <StatCard 
           title="Active Now" 
           value={stats.activeSessions.toString()} 
           icon={<TrendingUp className="h-5 w-5" />}
-          description="In progress"
+          description="Sessions currently in progress"
           variant="accent"
         />
         <StatCard 
-          title="System Preachers" 
+          title="Total Preachers" 
           value={stats.totalParticipants.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Total registered"
+          description="Total registered in the system"
         />
         <StatCard 
           title="Your Groups" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Teams you belong to"
+          description="Teams you are currently in"
         />
       </div>
 
@@ -126,7 +182,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle>Recent Sessions</CardTitle>
-                  <CardDescription>The latest sessions you're involved in.</CardDescription>
+                  <CardDescription>Quick access to your most recent preaching events.</CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
                   <Link href="/sessions">
@@ -144,16 +200,16 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   {recentSessions.map((session) => (
                     <Link key={session.id} href={`/sessions/${session.id}`}>
-                      <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors cursor-pointer">
+                      <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors cursor-pointer group">
                         <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2 rounded-full">
-                            <Mic2 className="h-5 w-5 text-primary" />
+                          <div className="bg-primary/10 p-2 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                            <Mic2 className="h-5 w-5" />
                           </div>
                           <div>
                             <p className="font-semibold">{session.title || 'Untitled Session'}</p>
                             <div className="flex items-center text-xs text-muted-foreground gap-2">
                               <Clock className="h-3 w-3" />
-                              <span>{session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
+                              <span>{session.sessionDate || 'Recent'}</span>
                               <span className="capitalize">• {session.sessionType}</span>
                             </div>
                           </div>
@@ -166,56 +222,63 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  No sessions found. Create your first one to get started!
+                <div className="text-center py-14 border-2 border-dashed rounded-lg">
+                  <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
+                  <p className="text-muted-foreground mb-4">You haven't participated in any sessions yet.</p>
+                  <Button asChild>
+                    <Link href="/sessions/new">Create Your First Session</Link>
+                  </Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="shadow-sm">
+            <Card className="shadow-sm border-none bg-card">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Star className="h-5 w-5 text-yellow-500" />
-                  Top Individuals
+                  Individual Rankings
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {topIndividuals.map((p, i) => (
-                    <div key={p.id} className="flex items-center justify-between">
+                    <div key={p.id} className={cn(
+                      "flex items-center justify-between p-2 rounded-lg transition-colors",
+                      p.id === user.uid ? "bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/50"
+                    )}>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-muted-foreground">#{i+1}</span>
-                        <span className="font-medium">{p.name}</span>
+                        <span className="text-sm font-bold text-muted-foreground w-6">#{i+1}</span>
+                        <span className="font-medium">{p.name} {p.id === user.uid && "(You)"}</span>
                       </div>
                       <span className="text-sm font-bold text-accent">{p.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topIndividuals.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No data yet.</p>}
+                  {topIndividuals.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No point data yet.</p>}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm">
+            <Card className="shadow-sm border-none bg-card">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-primary" />
-                  Top Groups
+                  Group Rankings
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {topGroups.map((g, i) => (
-                    <div key={g.id} className="flex items-center justify-between">
+                    <div key={g.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-muted-foreground">#{i+1}</span>
+                        <span className="text-sm font-bold text-muted-foreground w-6">#{i+1}</span>
                         <span className="font-medium">{g.name}</span>
                       </div>
                       <span className="text-sm font-bold text-primary">{g.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topGroups.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No data yet.</p>}
+                  {topGroups.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No group data yet.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -223,29 +286,46 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-6">
-          <Card className="shadow-md">
+          <Card className="shadow-md border-primary/10">
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks you might want to do.</CardDescription>
+              <CardDescription>Commonly used management tools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full justify-start" variant="outline" asChild>
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/sessions/new">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Create a Session
+                  <PlusCircle className="mr-3 h-5 w-5 text-primary" />
+                  New Preaching Session
                 </Link>
               </Button>
-              <Button className="w-full justify-start" variant="outline" asChild>
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/participants">
-                  <Users className="mr-2 h-4 w-4" />
-                  Add Participants
+                  <Users className="mr-3 h-5 w-5 text-primary" />
+                  Participant Roster
                 </Link>
               </Button>
-              <Button className="w-full justify-start" variant="outline" asChild>
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/configurations">
-                  <Award className="mr-2 h-4 w-4" />
-                  Manage Rule Sets
+                  <Settings2 className="mr-3 h-5 w-5 text-primary" />
+                  Rule Set Templates
                 </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl border-none">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white">
+                <Sparkles className="h-5 w-5" />
+                Need help?
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm opacity-90 mb-4">
+                Use the AI assistant in the <strong>Rules</strong> section to generate custom timing and fine configurations with just a description.
+              </p>
+              <Button variant="secondary" size="sm" asChild className="w-full font-bold">
+                <Link href="/configurations/new">Try AI Generator</Link>
               </Button>
             </CardContent>
           </Card>
@@ -257,9 +337,9 @@ export default function Dashboard() {
 
 function StatCard({ title, value, icon, description, variant = 'primary' }: any) {
   return (
-    <Card className="shadow-sm border-none bg-card">
+    <Card className="shadow-sm border-none bg-card hover:shadow-md transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
           {title}
         </CardTitle>
         <div className={cn(
@@ -270,7 +350,7 @@ function StatCard({ title, value, icon, description, variant = 'primary' }: any)
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold font-headline">{value}</div>
+        <div className="text-3xl font-bold font-headline">{value}</div>
         <p className="text-xs text-muted-foreground mt-1">
           {description}
         </p>
@@ -278,3 +358,4 @@ function StatCard({ title, value, icon, description, variant = 'primary' }: any)
     </Card>
   );
 }
+import { Sparkles as SparklesIcon, Settings2 as Settings2Icon } from 'lucide-react';
