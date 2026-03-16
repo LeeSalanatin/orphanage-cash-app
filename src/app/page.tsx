@@ -19,7 +19,8 @@ import {
   ShieldCheck, 
   Gavel,
   Settings2,
-  Sparkles
+  Sparkles,
+  Vote as VoteIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -218,26 +219,34 @@ export default function Dashboard() {
               ) : recentSessions && recentSessions.length > 0 ? (
                 <div className="space-y-4">
                   {recentSessions.map((session) => (
-                    <Link key={session.id} href={`/sessions/${session.id}`}>
-                      <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors cursor-pointer group">
-                        <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                            <Mic2 className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <p className="font-semibold">{session.title || 'Untitled Session'}</p>
-                            <div className="flex items-center text-xs text-muted-foreground gap-2">
-                              <Clock className="h-3 w-3" />
-                              <span>{session.sessionDate || 'Recent'}</span>
-                              <span className="capitalize">• {session.sessionType}</span>
-                            </div>
+                    <div key={session.id} className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors group gap-4">
+                      <Link href={`/sessions/${session.id}`} className="flex items-center gap-4 flex-grow cursor-pointer">
+                        <div className="bg-primary/10 p-2 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                          <Mic2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold">{session.title || 'Untitled Session'}</p>
+                          <div className="flex items-center text-xs text-muted-foreground gap-2">
+                            <Clock className="h-3 w-3" />
+                            <span>{session.sessionDate || 'Recent'}</span>
+                            <span className="capitalize">• {session.sessionType}</span>
                           </div>
                         </div>
+                      </Link>
+                      <div className="flex items-center gap-3">
                         <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
                           {session.status}
                         </Badge>
+                        {session.status === 'completed' && session.votingConfig?.enabled && (
+                          <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
+                            <Link href={`/sessions/${session.id}/voting`}>
+                              <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />
+                              Vote
+                            </Link>
+                          </Button>
+                        )}
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               ) : (
