@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -27,7 +26,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [activeType, setActiveType] = useState<'individual' | 'group' | null>(null);
   const [timer, setTimer] = useState(0);
 
-  // Edit States for Rules Menu
+  // Edit States for Menu
   const [editTitle, setEditTitle] = useState('');
   const [editMaxTime, setEditMaxTime] = useState('');
   const [editFineAmount, setEditFineAmount] = useState('');
@@ -77,7 +76,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         setEditFineAmount(session.fineRules[0].amount.toString());
         setEditFineType(session.fineRules[0].type);
       }
-      setEditVotingEnabled(session.votingConfig?.enabled || false);
+      setVotingEnabled(session.votingConfig?.enabled || false);
       setEditPointsEnabled(session.pointDistribution?.enabled || false);
       setEditTopN(session.votingConfig?.topIndividualsToVoteFor?.toString() || '3');
       setEditPointsAmount(session.pointDistribution?.pointsPerTopIndividual?.toString() || '100');
@@ -193,7 +192,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Session Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
   }
 
-  function handleSaveRules() {
+  function handleSaveSettings() {
     if (!session || !firestore) return;
 
     const finalRules = {
@@ -220,7 +219,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     };
 
     updateDocumentNonBlocking(doc(firestore, 'sessions', id), finalRules);
-    toast({ title: "Rules Updated", description: "Session configuration has been saved." });
+    toast({ title: "Settings Updated", description: "The session menu has been updated." });
   }
 
   function toggleSessionStatus() {
@@ -260,7 +259,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </div>
         <div className="flex gap-2">
           {session.votingConfig?.enabled && (
-            <Button variant="outline" asChild shadow-md="true">
+            <Button variant="outline" asChild className="shadow-sm">
               <Link href={`/sessions/${id}/voting`}>
                 <Vote className="mr-2 h-4 w-4" /> Voting
               </Link>
@@ -276,12 +275,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <Tabs defaultValue="live" className="w-full">
-            <TabsList className="mb-6 grid w-full grid-cols-2 max-w-[400px]">
+            <TabsList className="mb-6 grid w-full grid-cols-3 max-w-[600px]">
               <TabsTrigger value="live" className="flex items-center gap-2">
                 <History className="h-4 w-4" /> Dashboard
               </TabsTrigger>
-              <TabsTrigger value="rules" className="flex items-center gap-2">
-                <Settings2 className="h-4 w-4" /> Rules & Incentives
+              <TabsTrigger value="timing" className="flex items-center gap-2">
+                <Clock className="h-4 w-4" /> Timing & Fines
+              </TabsTrigger>
+              <TabsTrigger value="incentives" className="flex items-center gap-2">
+                <Trophy className="h-4 w-4" /> Incentives
               </TabsTrigger>
             </TabsList>
 
@@ -358,98 +360,133 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Card>
             </TabsContent>
 
-            <TabsContent value="rules" className="animate-in fade-in slide-in-from-bottom-2">
+            {/* NEW MENU: Timing & Fines */}
+            <TabsContent value="timing" className="animate-in fade-in slide-in-from-bottom-2">
               <Card className="shadow-md border-primary/10">
                 <CardHeader>
                   <CardTitle className="text-xl flex items-center gap-2">
-                    <Settings2 className="h-6 w-6 text-primary" />
-                    Fine & Incentive Rules
+                    <Clock className="h-6 w-6 text-primary" />
+                    Menu: Timing & Fines
                   </CardTitle>
                   <CardDescription>
-                    Configure the criteria for fines and points for this session.
+                    Configure the time limits and fine penalties for this session.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="editTitle">Session Title</Label>
-                    <Input id="editTitle" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-                  </div>
-
-                  <div className="border-t pt-6">
-                    <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Timing & Fines</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="editMaxTime">Max Time (Minutes)</Label>
-                        <Input id="editMaxTime" type="number" value={editMaxTime} onChange={(e) => setEditMaxTime(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="editFineAmount">Fine Amount ($)</Label>
-                        <Input id="editFineAmount" type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="editMaxTime">Max Time (Minutes)</Label>
+                      <Input 
+                        id="editMaxTime" 
+                        type="number" 
+                        placeholder="e.g. 15" 
+                        value={editMaxTime} 
+                        onChange={(e) => setEditMaxTime(e.target.value)} 
+                      />
                     </div>
-
-                    <div className="mt-4 space-y-3">
-                      <Label>Fine Model</Label>
-                      <RadioGroup 
-                        value={editFineType} 
-                        onValueChange={(v: any) => setEditFineType(v)}
-                        disabled={session.sessionType === 'sunday preaching'}
-                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                      >
-                        <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
-                          <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
-                          <Label htmlFor="edit-per-min" className="flex-grow cursor-pointer font-normal">Per Minute Over-time</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
-                          <RadioGroupItem value="fixed" id="edit-fixed" />
-                          <Label htmlFor="edit-fixed" className="flex-grow cursor-pointer font-normal">Fixed Amount (If over)</Label>
-                        </div>
-                      </RadioGroup>
+                    <div className="space-y-2">
+                      <Label htmlFor="editFineAmount">Fine Amount ($)</Label>
+                      <Input 
+                        id="editFineAmount" 
+                        type="number" 
+                        placeholder="e.g. 10" 
+                        value={editFineAmount} 
+                        onChange={(e) => setEditFineAmount(e.target.value)} 
+                      />
                     </div>
                   </div>
 
-                  <div className="border-t pt-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <Vote className="h-4 w-4 text-muted-foreground" />
-                          <Label className="text-base">Enable Voting</Label>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Allow participants to vote for top performers.</p>
-                      </div>
-                      <Switch checked={editVotingEnabled} onCheckedChange={setEditVotingEnabled} />
-                    </div>
-
-                    {editVotingEnabled && (
-                      <div className="pl-6 space-y-4 border-l-2 border-primary/20">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <Trophy className="h-4 w-4 text-muted-foreground" />
-                              <Label className="text-base">Enable Point Rewards</Label>
-                            </div>
-                            <p className="text-xs text-muted-foreground">Automatically award points based on votes.</p>
-                          </div>
-                          <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Vote for Top N</Label>
-                            <Input type="number" value={editTopN} onChange={(e) => setEditTopN(e.target.value)} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Points to Award</Label>
-                            <Input type="number" value={editPointsAmount} onChange={(e) => setEditPointsAmount(e.target.value)} />
-                          </div>
+                  <div className="space-y-3">
+                    <Label>Fine Calculation Model</Label>
+                    <RadioGroup 
+                      value={editFineType} 
+                      onValueChange={(v: any) => setEditFineType(v)}
+                      disabled={session.sessionType === 'sunday preaching'}
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                    >
+                      <div className="flex items-center space-x-2 rounded-md border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
+                        <div className="flex-grow cursor-pointer">
+                          <Label htmlFor="edit-per-min" className="font-semibold block">Per Minute Overage</Label>
+                          <span className="text-xs text-muted-foreground">Charge ${editFineAmount || '0'} for every minute over.</span>
                         </div>
                       </div>
+                      <div className="flex items-center space-x-2 rounded-md border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <RadioGroupItem value="fixed" id="edit-fixed" />
+                        <div className="flex-grow cursor-pointer">
+                          <Label htmlFor="edit-fixed" className="font-semibold block">Fixed Rate</Label>
+                          <span className="text-xs text-muted-foreground">One-time ${editFineAmount || '0'} fee if time is exceeded.</span>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                    {session.sessionType === 'sunday preaching' && (
+                      <p className="text-xs text-primary bg-primary/5 p-2 rounded italic">
+                        * Sunday Service defaults to a Fixed Rate fine.
+                      </p>
                     )}
                   </div>
                 </CardContent>
                 <CardFooter className="bg-muted/5 border-t py-4">
-                  <Button className="w-full shadow-lg" onClick={handleSaveRules}>
-                    Save Changes
+                  <Button className="w-full shadow-md" onClick={handleSaveSettings}>
+                    Save Timing & Fine Rules
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+
+            {/* NEW MENU: Incentives & Voting */}
+            <TabsContent value="incentives" className="animate-in fade-in slide-in-from-bottom-2">
+              <Card className="shadow-md border-primary/10">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Trophy className="h-6 w-6 text-primary" />
+                    Menu: Incentives & Voting
+                  </CardTitle>
+                  <CardDescription>
+                    Manage how participants are rewarded and how voting is conducted.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between p-4 border rounded-md">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <Vote className="h-4 w-4 text-primary" />
+                        <Label className="text-base font-semibold">Allow Voting</Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Enable participants to vote for their favorite preachers.</p>
+                    </div>
+                    <Switch checked={editVotingEnabled} onCheckedChange={setEditVotingEnabled} />
+                  </div>
+
+                  {editVotingEnabled && (
+                    <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between p-4 border rounded-md bg-primary/5 border-primary/20">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-4 w-4 text-primary" />
+                            <Label className="text-base font-semibold">Point Distribution</Label>
+                          </div>
+                          <p className="text-sm text-muted-foreground">Automatically award points to the top voted candidates.</p>
+                        </div>
+                        <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-4 border-l-2 border-primary/20">
+                        <div className="space-y-2">
+                          <Label>Number of Winners (Top N)</Label>
+                          <Input type="number" value={editTopN} onChange={(e) => setEditTopN(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Points per Winner</Label>
+                          <Input type="number" value={editPointsAmount} onChange={(e) => setEditPointsAmount(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="bg-muted/5 border-t py-4">
+                  <Button className="w-full shadow-md" onClick={handleSaveSettings}>
+                    Save Incentive Settings
                   </Button>
                 </CardFooter>
               </Card>
@@ -511,7 +548,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
           <Card className="shadow-md bg-primary/5 border-primary/10">
             <CardHeader>
-              <CardTitle className="text-sm uppercase tracking-wider text-primary">Summary of Rules</CardTitle>
+              <CardTitle className="text-sm uppercase tracking-wider text-primary flex items-center gap-2">
+                <Gavel className="h-4 w-4" /> Current Rules
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-4">
               <div className="flex justify-between border-b border-primary/10 pb-2">
@@ -519,15 +558,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <span className="font-medium capitalize">{session.sessionType}</span>
               </div>
               <div className="flex justify-between border-b border-primary/10 pb-2">
-                <span className="text-muted-foreground">Limit:</span>
+                <span className="text-muted-foreground">Time Limit:</span>
                 <span className="font-medium">{session.maxPreachingTimeMinutes || 'Unlimited'} mins</span>
               </div>
               <div className="space-y-2">
-                <span className="text-muted-foreground block mb-1">Active Fine:</span>
+                <span className="text-muted-foreground block mb-1">Active Penalties:</span>
                 {session.fineRules?.map((rule: any, i: number) => (
-                  <div key={i} className="bg-background p-2 rounded text-[10px] border border-primary/10">
-                    <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Variable'} ({rule.appliesTo}):</span>
-                    <span className="ml-2 font-bold text-destructive">${rule.amount} {rule.type === 'per-minute-overage' ? '/ min' : ''}</span>
+                  <div key={i} className="bg-background p-2 rounded text-[10px] border border-primary/10 flex justify-between items-center">
+                    <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Variable'} ({rule.appliesTo})</span>
+                    <span className="font-bold text-destructive">${rule.amount} {rule.type === 'per-minute-overage' ? '/ min' : ''}</span>
                   </div>
                 ))}
               </div>
