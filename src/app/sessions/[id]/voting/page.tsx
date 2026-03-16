@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useState, use } from 'react';
-import { doc, getDoc, collection, getDocs, addDoc, query, where, serverTimestamp, increment, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { doc, getDoc, collection, getDocs, addDoc, serverTimestamp, increment, updateDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Award, Star, Trophy, ArrowLeft, Loader2 } from 'lucide-react';
+import { Award, Star, Trophy, ArrowLeft, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
 
 export default function VotingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const db = useFirestore();
   const { toast } = useToast();
   const [session, setSession] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -27,6 +27,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => {
     async function fetchData() {
+      if (!db) return;
       try {
         const sSnap = await getDoc(doc(db, 'sessions', id));
         if (sSnap.exists()) {
@@ -48,25 +49,21 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       }
     }
     fetchData();
-  }, [id]);
+  }, [id, db]);
 
   async function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled) return;
+    if (!session?.votingConfig?.enabled || !db) return;
     
     setIsSubmitting(true);
     try {
-      // Save vote record
       await addDoc(collection(db, 'votes'), {
         sessionId: id,
         voteData: votes,
         createdAt: serverTimestamp()
       });
 
-      // Distribute points based on session pointDistribution rules
-      // (Simplified logic: award points to chosen candidates for this demo)
       const dist = session.pointDistribution;
       if (dist.enabled) {
-        // Individual votes (Top 3 in UI, but logic here awards points per vote cast)
         for (const pId of votes.individual) {
           if (pId) {
             await updateDoc(doc(db, 'participants', pId), {
@@ -75,17 +72,14 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           }
         }
         
-        // Group vote
         if (votes.group) {
           await updateDoc(doc(db, 'groups', votes.group), {
             totalPoints: increment(dist.pointsPerTopGroup || 50)
           });
           
-          // Divid points among members as per proposal
-          // "each member group that TOP in voting divide the points"
           const group = groups.find(g => g.id === votes.group);
           if (group && group.members?.length > 0) {
-            const split = (dist.pointsPerTopGroup || 50) / group.members.length;
+            const split = Math.floor((dist.pointsPerTopGroup || 50) / group.members.length);
             for (const memberId of group.members) {
               await updateDoc(doc(db, 'participants', memberId), {
                 totalPoints: increment(split)
@@ -105,7 +99,12 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     }
   }
 
-  if (loading) return <div className="p-20 text-center">Loading voting...</div>;
+  if (loading) return (
+    <div className="flex h-[80vh] items-center justify-center">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+    </div>
+  );
+
   if (!session) return <div className="p-20 text-center">Session not found.</div>;
 
   const topLimit = session.votingConfig?.topIndividualsToVoteFor || 3;
@@ -118,12 +117,12 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Session
           </Link>
         </Button>
-        <h1 className="text-3xl font-headline font-bold">Cast Your Vote</h1>
+        <h1 className="text-3xl font-headline font-bold text-primary">Cast Your Vote</h1>
         <p className="text-muted-foreground">Select the best performers from "{session.title}".</p>
       </div>
 
       {!session.votingConfig?.enabled ? (
-        <Card className="text-center py-20">
+        <Card className="text-center py-20 border-dashed">
           <CardContent>
             <Trophy className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-xl font-bold">Voting Disabled</h3>
@@ -133,7 +132,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       ) : (
         <div className="space-y-8">
           {(session.sessionType === 'individual' || session.sessionType === 'group') && (
-            <Card>
+            <Card className="shadow-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Star className="h-5 w-5 text-accent fill-accent" />
@@ -168,7 +167,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           )}
 
           {session.sessionType === 'group' && (
-            <Card>
+            <Card className="shadow-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
@@ -179,9 +178,9 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
               <CardContent>
                 <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
                   {groups.map((g) => (
-                    <div key={g.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted cursor-pointer border mb-2">
+                    <div key={g.id} className="flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-colors">
                       <RadioGroupItem value={g.id} id={g.id} />
-                      <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer">{g.name}</Label>
+                      <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer text-lg">{g.name}</Label>
                     </div>
                   ))}
                 </RadioGroup>
@@ -190,18 +189,18 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           )}
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="w-full max-w-md h-14 text-lg font-bold shadow-lg shadow-primary/20" 
+            <Button size="lg" className="w-full max-w-md h-16 text-xl font-bold shadow-xl shadow-primary/20" 
               onClick={handleSubmitVote}
               disabled={isSubmitting || (votes.individual.length === 0 && !votes.group)}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <Loader2 className="mr-2 h-6 w-6 animate-spin" />
                   Submitting Votes...
                 </>
               ) : (
                 <>
-                  <Trophy className="mr-2 h-6 w-6" />
+                  <Trophy className="mr-2 h-7 w-7" />
                   Submit All Votes
                 </>
               )}

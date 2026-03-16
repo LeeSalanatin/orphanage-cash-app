@@ -3,20 +3,20 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { useFirestore } from '@/firebase';
 import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Wand2, Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 export default function NewSession() {
   const router = useRouter();
+  const db = useFirestore();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [description, setDescription] = useState('');
@@ -46,7 +46,7 @@ export default function NewSession() {
       toast({
         variant: "destructive",
         title: "Generation Failed",
-        description: "Could not generate rules from your description. Try being more specific.",
+        description: "Could not generate rules. Try being more descriptive.",
       });
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ export default function NewSession() {
   }
 
   async function handleSaveSession() {
-    if (!title.trim() || !generatedRules) return;
+    if (!title.trim() || !generatedRules || !db) return;
 
     setLoading(true);
     try {
@@ -90,16 +90,16 @@ export default function NewSession() {
             Back to Sessions
           </Link>
         </Button>
-        <h1 className="text-3xl font-headline font-bold">Create New Session</h1>
+        <h1 className="text-3xl font-headline font-bold text-primary">Create New Session</h1>
         <p className="text-muted-foreground">Define your preaching session rules using AI or manually.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-8">
         <Card className="shadow-md">
           <CardHeader>
-            <CardTitle>Session Description</CardTitle>
+            <CardTitle>Session Intent</CardTitle>
             <CardDescription>
-              Tell the AI what kind of session you want (e.g., "A Sunday preaching session with a fixed $50 fine for the preacher if they go over 45 mins").
+              Describe your session (e.g., "A Sunday preaching session with a fixed $50 fine for the preacher if they go over 45 mins").
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -124,8 +124,8 @@ export default function NewSession() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => setDescription('')}>Clear</Button>
-            <Button onClick={handleGenerateRules} disabled={loading || !description}>
+            <Button variant="outline" onClick={() => { setDescription(''); setGeneratedRules(null); }}>Clear</Button>
+            <Button onClick={handleGenerateRules} disabled={loading || !description.trim()}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
               Generate Rules
             </Button>
@@ -133,65 +133,67 @@ export default function NewSession() {
         </Card>
 
         {generatedRules && (
-          <Card className="shadow-lg border-primary/20 bg-primary/5">
+          <Card className="shadow-lg border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <CardHeader>
-              <CardTitle>Generated Session Configuration</CardTitle>
-              <CardDescription>AI-parsed rules based on your description.</CardDescription>
+              <CardTitle className="text-primary">Parsed Configuration</CardTitle>
+              <CardDescription>Review the rules identified by the AI.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-background rounded-lg border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-background rounded-lg border shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase font-semibold">Session Type</p>
-                  <p className="text-lg font-bold capitalize">{generatedRules.sessionType}</p>
+                  <p className="text-xl font-bold capitalize text-primary">{generatedRules.sessionType}</p>
                 </div>
-                <div className="p-4 bg-background rounded-lg border">
+                <div className="p-4 bg-background rounded-lg border shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase font-semibold">Max Time</p>
-                  <p className="text-lg font-bold">{generatedRules.maxPreachingTimeMinutes || 'Unlimited'} mins</p>
+                  <p className="text-xl font-bold text-primary">{generatedRules.maxPreachingTimeMinutes || 'Unlimited'} mins</p>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <p className="text-sm font-semibold">Fine Rules</p>
-                {generatedRules.fineRules.map((rule: any, idx: number) => (
-                  <div key={idx} className="p-3 bg-background rounded-md border text-sm flex justify-between items-center">
-                    <span>{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'} ({rule.appliesTo})</span>
-                    <span className="font-bold text-destructive">${rule.amount}</span>
-                  </div>
-                ))}
+                <div className="grid gap-2">
+                  {generatedRules.fineRules.map((rule: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-background rounded-md border text-sm flex justify-between items-center shadow-sm">
+                      <span className="font-medium">{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'} ({rule.appliesTo})</span>
+                      <span className="font-bold text-destructive">${rule.amount}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold">Voting</p>
-                  <div className="p-3 bg-background rounded-md border text-xs">
+                  <p className="text-sm font-semibold">Voting Configuration</p>
+                  <div className="p-3 bg-background rounded-md border text-xs shadow-sm min-h-[60px]">
                     {generatedRules.votingConfig.enabled ? (
                       <ul className="space-y-1">
-                        <li>Top Individuals: {generatedRules.votingConfig.topIndividualsToVoteFor}</li>
-                        <li>Top Groups: {generatedRules.votingConfig.topGroupsToVoteFor}</li>
+                        <li>• Top Individuals: {generatedRules.votingConfig.topIndividualsToVoteFor}</li>
+                        <li>• Top Groups: {generatedRules.votingConfig.topGroupsToVoteFor}</li>
                       </ul>
                     ) : (
-                      "Disabled"
+                      <span className="text-muted-foreground">Voting is disabled for this session.</span>
                     )}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Points Distribution</p>
-                  <div className="p-3 bg-background rounded-md border text-xs">
+                  <div className="p-3 bg-background rounded-md border text-xs shadow-sm min-h-[60px]">
                     {generatedRules.pointDistribution.enabled ? (
                       <ul className="space-y-1">
-                        <li>Per Top Indiv: {generatedRules.pointDistribution.pointsPerTopIndividual}</li>
-                        <li>Per Top Group: {generatedRules.pointDistribution.pointsPerTopGroup}</li>
+                        <li>• Individual Reward: {generatedRules.pointDistribution.pointsPerTopIndividual} pts</li>
+                        <li>• Group Reward: {generatedRules.pointDistribution.pointsPerTopGroup} pts</li>
                       </ul>
                     ) : (
-                      "No Points"
+                      <span className="text-muted-foreground">No points will be awarded.</span>
                     )}
                   </div>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full" size="lg" onClick={handleSaveSession} disabled={loading || !title}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              <Button className="w-full h-12 text-lg font-bold" size="lg" onClick={handleSaveSession} disabled={loading || !title.trim()}>
+                {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
                 Save & Initialize Session
               </Button>
             </CardFooter>

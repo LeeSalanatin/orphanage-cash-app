@@ -2,21 +2,20 @@
 
 import { useEffect, useState, use } from 'react';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, serverTimestamp, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useFirestore } from '@/firebase';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mic2, Clock, CheckCircle, Play, StopCircle, UserPlus, FileText, AlertTriangle, Vote } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
 
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const db = useFirestore();
   const { toast } = useToast();
   const [session, setSession] = useState<any>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
   const [availableParticipants, setAvailableParticipants] = useState<any[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +24,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     async function fetchData() {
+      if (!db) return;
       try {
         const docRef = doc(db, 'sessions', id);
         const docSnap = await getDoc(docRef);
@@ -45,7 +45,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
     fetchData();
-  }, [id]);
+  }, [id, db]);
 
   useEffect(() => {
     let interval: any;
@@ -65,7 +65,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }
 
   async function handleStopPreaching() {
-    if (!activePreacher || !session) return;
+    if (!activePreacher || !session || !db) return;
     
     const durationSeconds = timer;
     const durationMinutes = durationSeconds / 60;
@@ -77,7 +77,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const rule = session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
     
     if (session.sessionType === 'sunday preaching') {
-      // In proposal: "in sunday fine is fix rate"
       fineAmount = rule.amount;
     } else {
       if (rule.type === 'fixed' && overage > 0) {
@@ -89,7 +88,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const participant = availableParticipants.find(p => p.id === activePreacher);
     
-    // GenAI explanation
     let explanation = "No fine incurred.";
     if (fineAmount > 0) {
       try {
@@ -131,15 +129,30 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     }
   }
 
-  if (loading) return <div className="p-20 text-center">Loading session...</div>;
-  if (!session) return <div className="p-20 text-center">Session not found.</div>;
+  if (loading) return (
+    <div className="flex h-[80vh] items-center justify-center">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+    </div>
+  );
+
+  if (!session) return (
+    <div className="p-20 text-center">
+      <Card className="max-w-md mx-auto py-10">
+        <CardTitle>Session Not Found</CardTitle>
+        <CardDescription>The requested session could not be located.</CardDescription>
+        <Button asChild className="mt-4">
+          <Link href="/sessions">Back to Sessions</Link>
+        </Button>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-headline font-bold">{session.title}</h1>
+            <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
             <Badge className="capitalize">{session.status}</Badge>
           </div>
           <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 'N/A'} min</p>
@@ -151,6 +164,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </Link>
           </Button>
           <Button onClick={async () => {
+             if (!db) return;
              const docRef = doc(db, 'sessions', id);
              await updateDoc(docRef, { status: session.status === 'active' ? 'completed' : 'active' });
              setSession({ ...session, status: session.status === 'active' ? 'completed' : 'active' });
@@ -174,21 +188,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </CardHeader>
               <CardContent className="flex flex-col items-center py-8">
                 <p className="text-lg font-medium mb-2">Currently Preaching:</p>
-                <p className="text-3xl font-bold font-headline mb-6">
+                <p className="text-3xl font-bold font-headline mb-6 text-primary">
                   {availableParticipants.find(p => p.id === activePreacher)?.name}
                 </p>
-                <div className="text-6xl font-mono font-bold tracking-tighter tabular-nums mb-8">
+                <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
                   {Math.floor(timer / 60).toString().padStart(2, '0')}:
                   {(timer % 60).toString().padStart(2, '0')}
                 </div>
-                <Button size="lg" variant="destructive" className="w-full max-w-xs" onClick={handleStopPreaching}>
-                  <StopCircle className="mr-2 h-5 w-5" /> Stop & Record
+                <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold" onClick={handleStopPreaching}>
+                  <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          <Card>
+          <Card className="shadow-md">
             <CardHeader>
               <CardTitle>Session History</CardTitle>
               <CardDescription>Recorded preaching durations and calculated fines.</CardDescription>
@@ -197,21 +211,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               {records.length > 0 ? (
                 <div className="space-y-4">
                   {records.map((record) => (
-                    <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4">
+                    <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/50 transition-colors">
                       <div className="space-y-1">
-                        <p className="font-bold">{record.participantName}</p>
-                        <div className="flex gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {record.durationMinutes} min</span>
+                        <p className="font-bold text-lg">{record.participantName}</p>
+                        <div className="flex gap-3 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.durationMinutes} min</span>
                           {record.fineAmount > 0 && (
-                            <span className="flex items-center gap-1 text-destructive font-medium">
-                              <AlertTriangle className="h-3 w-3" /> Fine: ${record.fineAmount.toFixed(2)}
+                            <span className="flex items-center gap-1 text-destructive font-semibold">
+                              <AlertTriangle className="h-4 w-4" /> Fine: ${record.fineAmount.toFixed(2)}
                             </span>
                           )}
                         </div>
                         {record.explanation && (
-                          <p className="text-xs italic text-muted-foreground mt-2 border-l-2 pl-3 py-1">
+                          <div className="mt-3 p-3 bg-muted/50 rounded-md border-l-4 border-primary/20 italic text-sm text-muted-foreground">
                             {record.explanation}
-                          </p>
+                          </div>
                         )}
                       </div>
                       <Badge variant={record.fineAmount > 0 ? "destructive" : "default"}>
@@ -221,7 +235,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-10 text-muted-foreground">
+                <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
                   No records yet for this session.
                 </div>
               )}
@@ -230,14 +244,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </div>
 
         <div className="space-y-8">
-          <Card>
+          <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Participants</CardTitle>
+              <CardTitle>Preachers</CardTitle>
               <CardDescription>Select a participant to start tracking.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {availableParticipants.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted transition-colors">
+              {availableParticipants.length > 0 ? availableParticipants.map((p) => (
+                <div key={p.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border">
                   <span className="font-medium">{p.name}</span>
                   <Button 
                     size="sm" 
@@ -245,36 +259,39 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     disabled={!!activePreacher || session.status !== 'active'}
                     onClick={() => handleStartPreaching(p.id)}
                   >
-                    <Play className="h-3 w-3 mr-1" /> Preach
+                    <Play className="h-3 w-3 mr-1" /> Start
                   </Button>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No participants found.</p>
+              )}
               <Button variant="ghost" className="w-full mt-4" asChild>
                 <Link href="/participants">
-                  <UserPlus className="mr-2 h-4 w-4" /> Manage People
+                  <UserPlus className="mr-2 h-4 w-4" /> Add Participants
                 </Link>
               </Button>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Rules Applied</CardTitle>
+              <CardTitle>Session Rules</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-4">
               <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Type:</span>
+                <span className="text-muted-foreground">Session Type:</span>
                 <span className="font-medium capitalize">{session.sessionType}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Max Time:</span>
-                <span className="font-medium">{session.maxPreachingTimeMinutes || 'N/A'} mins</span>
+                <span className="text-muted-foreground">Max Duration:</span>
+                <span className="font-medium">{session.maxPreachingTimeMinutes || 'Unlimited'} mins</span>
               </div>
-              <div className="space-y-1">
-                <span className="text-muted-foreground">Fine Calculation:</span>
+              <div className="space-y-2">
+                <span className="text-muted-foreground block mb-1">Fine Calculation:</span>
                 {session.fineRules?.map((rule: any, i: number) => (
-                  <div key={i} className="bg-muted p-2 rounded text-xs">
-                    {rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Overage'}: <span className="font-bold">${rule.amount}</span>
+                  <div key={i} className="bg-muted p-2 rounded text-xs border">
+                    <span className="font-semibold">{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'}:</span>
+                    <span className="ml-2 font-bold text-destructive">${rule.amount}</span>
                   </div>
                 ))}
               </div>
