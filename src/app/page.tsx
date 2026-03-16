@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
-import { collection, query, limit, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, limit, where, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,8 @@ import {
   Gavel,
   Settings2,
   Sparkles,
-  Vote as VoteIcon
+  Vote as VoteIcon,
+  History
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -57,10 +59,21 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
+  // Query events across all sessions where the user is a member
+  const eventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collectionGroup(firestore, 'preaching_events'),
+      where(`sessionMembers.${user.uid}`, '!=', null),
+      limit(100)
+    );
+  }, [firestore, user]);
+
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
+  const { data: allEvents, isLoading: eventsLoading } = useCollection(eventsQuery);
 
   // Check admin status
   useEffect(() => {
@@ -105,6 +118,16 @@ export default function Dashboard() {
       .slice(0, 5);
   }, [allGroups]);
 
+  const participationBySession = useMemo(() => {
+    if (!allEvents) return {};
+    const grouped: Record<string, any[]> = {};
+    allEvents.forEach(event => {
+      if (!grouped[event.sessionId]) grouped[event.sessionId] = [];
+      grouped[event.sessionId].push(event);
+    });
+    return grouped;
+  }, [allEvents]);
+
   const stats = {
     totalSessions: rawSessions?.length || 0,
     activeSessions: rawSessions?.filter((s: any) => s.status === 'active').length || 0,
@@ -114,7 +137,7 @@ export default function Dashboard() {
     myFines: userData?.totalFines || 0
   };
 
-  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading;
+  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || eventsLoading;
 
   if (!user) {
     return (
@@ -218,36 +241,80 @@ export default function Dashboard() {
                 </div>
               ) : recentSessions && recentSessions.length > 0 ? (
                 <div className="space-y-4">
-                  {recentSessions.map((session) => (
-                    <div key={session.id} className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors group gap-4">
-                      <Link href={`/sessions/${session.id}`} className="flex items-center gap-4 flex-grow cursor-pointer">
-                        <div className="bg-primary/10 p-2 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                          <Mic2 className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">{session.title || 'Untitled Session'}</p>
-                          <div className="flex items-center text-xs text-muted-foreground gap-2">
-                            <Clock className="h-3 w-3" />
-                            <span>{session.sessionDate || 'Recent'}</span>
-                            <span className="capitalize">• {session.sessionType}</span>
+                  {recentSessions.map((session) => {
+                    const sessionEvents = participationBySession[session.id] || [];
+                    const myEvent = sessionEvents.find(e => e.participantId === user.uid);
+                    
+                    return (
+                      <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <Link href={`/sessions/${session.id}`} className="flex items-center gap-4 flex-grow cursor-pointer">
+                            <div className="bg-primary/10 p-2 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                              <Mic2 className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-semibold">{session.title || 'Untitled Session'}</p>
+                              <div className="flex items-center text-xs text-muted-foreground gap-2">
+                                <Clock className="h-3 w-3" />
+                                <span>{session.sessionDate || 'Recent'}</span>
+                                <span className="capitalize">• {session.sessionType}</span>
+                              </div>
+                            </div>
+                          </Link>
+                          <div className="flex items-center gap-3">
+                            <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
+                              {session.status}
+                            </Badge>
+                            {session.status === 'completed' && session.votingConfig?.enabled && (
+                              <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
+                                <Link href={`/sessions/${session.id}/voting`}>
+                                  <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />
+                                  Vote
+                                </Link>
+                              </Button>
+                            )}
                           </div>
                         </div>
-                      </Link>
-                      <div className="flex items-center gap-3">
-                        <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
-                          {session.status}
-                        </Badge>
-                        {session.status === 'completed' && session.votingConfig?.enabled && (
-                          <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
-                            <Link href={`/sessions/${session.id}/voting`}>
-                              <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />
-                              Vote
-                            </Link>
-                          </Button>
+
+                        {/* Participation Summary */}
+                        {myEvent && (
+                          <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
+                            <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
+                              <History className="h-3 w-3" /> Your Performance
+                            </p>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex justify-between items-center bg-background p-2 rounded border border-primary/10 shadow-sm">
+                                <span className="text-xs font-semibold text-primary">Your Time</span>
+                                <span className="font-mono font-bold text-sm">{myEvent.actualDurationFormatted}</span>
+                              </div>
+                              
+                              {myEvent.preachingGroupId && (
+                                <div className="pl-3 border-l-2 border-accent/40 py-1">
+                                  <p className="text-[9px] text-muted-foreground font-bold mb-2 flex items-center gap-1">
+                                    <Users className="h-2.5 w-2.5" /> Teammates in {allGroups?.find(g => g.id === myEvent.preachingGroupId)?.name || 'Team'}:
+                                  </p>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                                    {sessionEvents
+                                      .filter(e => e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid)
+                                      .map(teammateEvent => (
+                                        <div key={teammateEvent.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
+                                          <span className="truncate max-w-[120px]">{teammateEvent.participantName.split(' - ').pop()}</span>
+                                          <span className="font-mono opacity-80 font-semibold">{teammateEvent.actualDurationFormatted}</span>
+                                        </div>
+                                      ))
+                                    }
+                                    {sessionEvents.filter(e => e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid).length === 0 && (
+                                      <p className="text-[9px] text-muted-foreground italic">No other teammate records found.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
