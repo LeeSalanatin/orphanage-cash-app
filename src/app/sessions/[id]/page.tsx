@@ -870,7 +870,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <Button 
               variant="destructive" 
               className="sm:mr-auto"
-              onClick={() => setRecordToDelete(editingRecord.id)}
+              onClick={() => {
+                setRecordToDelete(editingRecord.id);
+                setEditingRecord(null); // Close the edit dialog so only the alert shows
+              }}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Record
@@ -907,4 +910,3 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     </div>
   );
 }
-
