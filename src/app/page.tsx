@@ -201,11 +201,13 @@ export default function Dashboard() {
                   <CardTitle>Recent Sessions</CardTitle>
                   <CardDescription>Quick access to your most recent preaching events.</CardDescription>
                 </div>
-                <Button variant="ghost" asChild>
-                  <Link href="/sessions">
-                    View All <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
+                {isAdmin && (
+                  <Button variant="ghost" asChild>
+                    <Link href="/sessions">
+                      View All <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -311,26 +313,32 @@ export default function Dashboard() {
               <CardDescription>Commonly used management tools.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isAdmin && (
-                <Button className="w-full justify-start h-12" variant="outline" asChild>
-                  <Link href="/sessions/new">
-                    <PlusCircle className="mr-3 h-5 w-5 text-primary" />
-                    New Preaching Session
-                  </Link>
-                </Button>
+              {isAdmin ? (
+                <>
+                  <Button className="w-full justify-start h-12" variant="outline" asChild>
+                    <Link href="/sessions/new">
+                      <PlusCircle className="mr-3 h-5 w-5 text-primary" />
+                      New Preaching Session
+                    </Link>
+                  </Button>
+                  <Button className="w-full justify-start h-12" variant="outline" asChild>
+                    <Link href="/participants">
+                      <Users className="mr-3 h-5 w-5 text-primary" />
+                      Participant Roster
+                    </Link>
+                  </Button>
+                  <Button className="w-full justify-start h-12" variant="outline" asChild>
+                    <Link href="/configurations">
+                      <Settings2 className="mr-3 h-5 w-5 text-primary" />
+                      Rule Set Templates
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <div className="py-4 text-center">
+                  <p className="text-sm text-muted-foreground italic">No administrative actions available.</p>
+                </div>
               )}
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/participants">
-                  <Users className="mr-3 h-5 w-5 text-primary" />
-                  Participant Roster
-                </Link>
-              </Button>
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/configurations">
-                  <Settings2 className="mr-3 h-5 w-5 text-primary" />
-                  Rule Set Templates
-                </Link>
-              </Button>
             </CardContent>
           </Card>
 
@@ -338,16 +346,13 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Sparkles className="h-5 w-5" />
-                Need help?
+                Personal Growth
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 mb-4">
-                Use the AI assistant in the <strong>Rules</strong> section to generate custom timing and fine configurations with just a description.
+                Keep track of your preaching points and fines. Aim for the top of the leaderboard through faithful participation!
               </p>
-              <Button variant="secondary" size="sm" asChild className="w-full font-bold">
-                <Link href="/configurations/new">Try AI Generator</Link>
-              </Button>
             </CardContent>
           </Card>
         </div>

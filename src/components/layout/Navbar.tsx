@@ -7,7 +7,7 @@ import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut, Settings2 } fr
 import { useUser, useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
@@ -39,12 +39,16 @@ export function Navbar() {
     checkAdmin();
   }, [firestore, user]);
 
-  const links = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/sessions', label: 'Sessions', icon: Mic2 },
-    { href: '/configurations', label: 'Rules', icon: Settings2 },
-    { href: '/participants', label: 'Participants', icon: Users },
+  const allLinks = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
+    { href: '/sessions', label: 'Sessions', icon: Mic2, adminOnly: true },
+    { href: '/configurations', label: 'Rules', icon: Settings2, adminOnly: true },
+    { href: '/participants', label: 'Participants', icon: Users, adminOnly: true },
   ];
+
+  const visibleLinks = useMemo(() => {
+    return allLinks.filter(link => !link.adminOnly || isAdmin);
+  }, [isAdmin]);
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -59,7 +63,7 @@ export function Navbar() {
             </span>
           </Link>
           <div className="hidden md:flex gap-6">
-            {links.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
