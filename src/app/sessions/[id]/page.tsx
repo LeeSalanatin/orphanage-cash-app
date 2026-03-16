@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, where, increment } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
@@ -350,6 +350,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     }
   }
 
+  function handleDeleteRecord(recordId: string) {
+    if (!firestore || !window.confirm('Are you sure you want to delete this record? This action cannot be undone.')) return;
+    
+    deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordId));
+    toast({ title: "Record Deleted" });
+  }
+
   function handleSaveSettings() {
     if (!session || !firestore) return;
 
@@ -550,18 +557,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                           <span className="font-mono font-bold">{m.duration}</span>
                                         </div>
                                         {user?.uid === session.ownerId && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
-                                            onClick={() => {
-                                              setEditingRecord(m.originalRecord);
-                                              setNewMin(Math.floor(m.originalRecord.actualDurationSeconds / 60).toString());
-                                              setNewSec((m.originalRecord.actualDurationSeconds % 60).toString());
-                                            }}
-                                          >
-                                            <Edit2 className="h-3.5 w-3.5" />
-                                          </Button>
+                                          <div className="flex items-center gap-1">
+                                            <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
+                                              onClick={() => {
+                                                setEditingRecord(m.originalRecord);
+                                                setNewMin(Math.floor(m.originalRecord.actualDurationSeconds / 60).toString());
+                                                setNewSec((m.originalRecord.actualDurationSeconds % 60).toString());
+                                              }}
+                                            >
+                                              <Edit2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="h-7 w-7 opacity-50 hover:opacity-100 hover:text-destructive hover:bg-background" 
+                                              onClick={() => handleDeleteRecord(m.originalRecord.id)}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </div>
                                         )}
                                       </div>
                                     ))}
@@ -570,18 +587,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                   <div className="flex items-center justify-between text-xs bg-muted/40 p-2 rounded">
                                     <span className="font-mono font-bold">{item.formatted}</span>
                                     {user?.uid === session.ownerId && (
-                                      <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
-                                        onClick={() => {
-                                          setEditingRecord(item.originalRecord);
-                                          setNewMin(Math.floor(item.originalRecord.actualDurationSeconds / 60).toString());
-                                          setNewSec((item.originalRecord.actualDurationSeconds % 60).toString());
-                                        }}
-                                      >
-                                        <Edit2 className="h-3.5 w-3.5" />
-                                      </Button>
+                                      <div className="flex items-center gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
+                                          onClick={() => {
+                                            setEditingRecord(item.originalRecord);
+                                            setNewMin(Math.floor(item.originalRecord.actualDurationSeconds / 60).toString());
+                                            setNewSec((item.originalRecord.actualDurationSeconds % 60).toString());
+                                          }}
+                                        >
+                                          <Edit2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7 opacity-50 hover:opacity-100 hover:text-destructive hover:bg-background" 
+                                          onClick={() => handleDeleteRecord(item.originalRecord.id)}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
                                     )}
                                   </div>
                                 )}
