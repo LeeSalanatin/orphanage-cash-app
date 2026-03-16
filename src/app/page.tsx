@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
@@ -6,7 +5,22 @@ import { collection, query, limit, where, doc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle, Loader2, Award, Trophy, Star, ShieldCheck, Gavel } from 'lucide-react';
+import { 
+  Mic2, 
+  Users, 
+  TrendingUp, 
+  Clock, 
+  ArrowRight, 
+  PlusCircle, 
+  Loader2, 
+  Award, 
+  Trophy, 
+  Star, 
+  ShieldCheck, 
+  Gavel,
+  Settings2,
+  Sparkles
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useMemo, useState, useEffect } from 'react';
@@ -55,9 +69,6 @@ export default function Dashboard() {
         setIsAdmin(true);
         return;
       }
-      // We could fetch the roles_admin doc here, but for dashboard simplicity 
-      // we check if they are in the hardcoded list or if they have admin access 
-      // via the participants page.
     };
     checkAdmin();
   }, [firestore, user]);
@@ -358,4 +369,3 @@ function StatCard({ title, value, icon, description, variant = 'primary' }: any)
     </Card>
   );
 }
-import { Sparkles as SparklesIcon, Settings2 as Settings2Icon } from 'lucide-react';
