@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
@@ -13,12 +14,13 @@ export default function Dashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Memoize queries for owned sessions
+  // Query sessions where the user is a member (includes being an owner)
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'sessions'),
-      where('ownerId', '==', user.uid),
+      where(`members.${user.uid}`, '!=', null),
+      orderBy(`members.${user.uid}`), // Needed for '!=' queries with orderBy
       orderBy('createdAt', 'desc'),
       limit(5)
     );
@@ -33,7 +35,7 @@ export default function Dashboard() {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'groups'),
-      where('ownerId', '==', user.uid)
+      where(`members.${user.uid}`, '!=', null)
     );
   }, [firestore, user]);
 
@@ -74,7 +76,7 @@ export default function Dashboard() {
           title="Your Sessions" 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Sessions created by you"
+          description="Sessions accessible to you"
         />
         <StatCard 
           title="Active Now" 
@@ -93,7 +95,7 @@ export default function Dashboard() {
           title="Your Groups" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Teams you manage"
+          description="Teams you belong to"
         />
       </div>
 
@@ -103,7 +105,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle>Recent Sessions</CardTitle>
-                <CardDescription>The latest sessions you've managed.</CardDescription>
+                <CardDescription>The latest sessions you're involved in.</CardDescription>
               </div>
               <Button variant="ghost" asChild>
                 <Link href="/sessions">

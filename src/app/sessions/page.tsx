@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser } from '@/firebase';
@@ -12,12 +13,13 @@ export default function SessionsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Memoize query to satisfy security rules (must filter by ownerId or members)
+  // Query sessions where the user is a member or owner
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'sessions'),
-      where('ownerId', '==', user.uid),
+      where(`members.${user.uid}`, '!=', null),
+      orderBy(`members.${user.uid}`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
@@ -88,7 +90,7 @@ function SessionCard({ session }: { session: any }) {
       <Card className="hover:shadow-xl transition-all border-none shadow-sm h-full flex flex-col cursor-pointer group hover:-translate-y-1 duration-300 bg-card">
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start mb-2">
-            <Badge className="capitalize" variant={session.status === 'active' ? 'active' : 'secondary'}>
+            <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>
               {session.status}
             </Badge>
             <Badge variant="outline" className="capitalize text-[10px] font-bold">

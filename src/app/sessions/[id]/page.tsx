@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, query, orderBy, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,13 +32,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }, [firestore]);
 
   const preachingEventsRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    // According to backend.json, preaching events are subcollections of sessions
+    if (!firestore || !user) return null;
+    // Filter by sessionMembers to satisfy security rules
     return query(
       collection(firestore, 'sessions', id, 'preaching_events'),
+      where(`sessionMembers.${user.uid}`, '!=', null),
+      orderBy(`sessionMembers.${user.uid}`),
       orderBy('startTime', 'desc')
     );
-  }, [firestore, id]);
+  }, [firestore, id, user]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
@@ -113,15 +116,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       endTime: new Date().toISOString(),
       fineAmount,
       explanation,
-      // Denormalized auth data for security rules 'authorization independence'
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
-    // Store in the correct subcollection as defined in backend.json
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
-    // Also store a fine record if needed
     if (fineAmount > 0) {
       const fineData = {
         sessionId: id,

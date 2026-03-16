@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useMemoFirebase, useCollection, useFirestore, useUser, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useMemoFirebase, useCollection, useFirestore, useUser, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,16 +20,15 @@ export default function ParticipantsPage() {
 
   const participantsRef = useMemoFirebase(() => {
     if (!firestore) return null;
-    // Participants can be viewed by all signed-in users according to rules
     return collection(firestore, 'participants');
   }, [firestore]);
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Groups must be filtered by ownership or membership to satisfy security rules
+    // Filter by members map to satisfy security rules
     return query(
       collection(firestore, 'groups'),
-      where('ownerId', '==', user.uid)
+      where(`members.${user.uid}`, '!=', null)
     );
   }, [firestore, user]);
 
@@ -38,13 +38,14 @@ export default function ParticipantsPage() {
   function handleAddParticipant() {
     if (!newName.trim() || !firestore || !user) return;
     
-    addDocumentNonBlocking(collection(firestore, 'participants'), {
+    // Use user.uid as doc ID to satisfy 'isOwner(participantId)' rule
+    setDocumentNonBlocking(doc(firestore, 'participants', user.uid), {
       name: newName,
       userId: user.uid,
       totalPoints: 0,
       totalFines: 0,
       dateJoined: new Date().toISOString()
-    });
+    }, { merge: true });
     setNewName('');
   }
 
@@ -85,8 +86,8 @@ export default function ParticipantsPage() {
         <TabsContent value="individuals" className="space-y-8">
           <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Add New Participant</CardTitle>
-              <CardDescription>Register individuals for preaching sessions.</CardDescription>
+              <CardTitle>Register as Participant</CardTitle>
+              <CardDescription>Enter your name to join the preaching roster.</CardDescription>
             </CardHeader>
             <CardContent className="flex gap-4">
               <div className="flex-grow space-y-1">
@@ -101,7 +102,7 @@ export default function ParticipantsPage() {
               <div className="flex items-end">
                 <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Add
+                  Save
                 </Button>
               </div>
             </CardContent>
@@ -139,9 +140,11 @@ export default function ParticipantsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
-                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
-                        </Button>
+                        {user?.uid === p.id && (
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
+                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -192,9 +195,11 @@ export default function ParticipantsPage() {
               <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-lg text-primary">{g.name}</CardTitle>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
-                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                  </Button>
+                  {user?.uid === g.ownerId && (
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between text-sm mb-4">
@@ -209,7 +214,7 @@ export default function ParticipantsPage() {
             ))}
             {!groupsLoading && (!groups || groups.length === 0) && (
               <div className="col-span-full text-center py-10 text-muted-foreground">
-                No groups found that you own or belong to.
+                No groups found that you belong to.
               </div>
             )}
           </div>
