@@ -27,11 +27,13 @@ export interface UseCollectionResult<T> {
 }
 
 interface InternalQuery {
-  _query: {
-    path: {
-      canonicalString: () => string;
+  _query?: {
+    path?: {
+      toString: () => string;
+      canonicalString?: () => string;
     }
-  }
+  };
+  path?: string;
 }
 
 /**
@@ -81,13 +83,15 @@ export function useCollection<T = any>(
       },
       (error: FirestoreError) => {
         // Safe path extraction for reporting
-        let path: string = 'collectionGroupQuery';
+        let path: string = 'unknown';
         try {
-          const internal = memoizedTargetRefOrQuery as any;
+          const internal = memoizedTargetRefOrQuery as any as InternalQuery;
           if (memoizedTargetRefOrQuery instanceof CollectionReference) {
             path = memoizedTargetRefOrQuery.path;
           } else if (internal._query?.path) {
             path = internal._query.path.toString();
+          } else if (internal.path) {
+            path = internal.path;
           }
         } catch (e) {
           // Fallback to default path indicator
@@ -95,7 +99,7 @@ export function useCollection<T = any>(
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path,
+          path: path || 'collectionGroupQuery',
         })
 
         setError(contextualError)
