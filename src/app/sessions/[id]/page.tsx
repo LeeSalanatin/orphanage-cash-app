@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
@@ -47,6 +48,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [newMin, setNewMin] = useState('');
   const [newSec, setNewSec] = useState('');
   const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -351,10 +353,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }
 
   function handleDeleteRecord(recordId: string) {
-    if (!firestore || !window.confirm('Are you sure you want to delete this record? This action cannot be undone.')) return;
-    
+    if (!firestore) return;
     deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordId));
     toast({ title: "Record Deleted" });
+    setRecordToDelete(null);
+    setEditingRecord(null);
   }
 
   function handleSaveSettings() {
@@ -570,14 +573,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                             >
                                               <Edit2 className="h-3.5 w-3.5" />
                                             </Button>
-                                            <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-7 w-7 opacity-50 hover:opacity-100 hover:text-destructive hover:bg-background" 
-                                              onClick={() => handleDeleteRecord(m.originalRecord.id)}
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
                                           </div>
                                         )}
                                       </div>
@@ -599,14 +594,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                           }}
                                         >
                                           <Edit2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-7 w-7 opacity-50 hover:opacity-100 hover:text-destructive hover:bg-background" 
-                                          onClick={() => handleDeleteRecord(item.originalRecord.id)}
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
                                       </div>
                                     )}
@@ -879,7 +866,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Input type="number" min="0" max="59" value={newSec} onChange={(e) => setNewSec(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="destructive" 
+              className="sm:mr-auto"
+              onClick={() => setRecordToDelete(editingRecord.id)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Record
+            </Button>
             <Button variant="outline" onClick={() => setEditingRecord(null)}>Cancel</Button>
             <Button onClick={handleSaveEditedRecord} disabled={isSavingRecord}>
               {isSavingRecord ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -888,6 +883,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={!!recordToDelete} onOpenChange={(o) => !o && setRecordToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the preaching record and its associated fine.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => recordToDelete && handleDeleteRecord(recordToDelete)}
+            >
+              Confirm Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
