@@ -1,85 +1,99 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
+import { collection, query, limit, orderBy, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle } from 'lucide-react';
+import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function Dashboard() {
-  const db = useFirestore();
-  const [stats, setStats] = useState({
-    totalSessions: 0,
-    activeSessions: 0,
-    totalParticipants: 0,
-    totalGroups: 0
-  });
+  const { user } = useUser();
+  const firestore = useFirestore();
 
-  const [recentSessions, setRecentSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Memoize queries for owned sessions
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'sessions'),
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+  }, [firestore, user]);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!db) return;
-      try {
-        const sessionsSnap = await getDocs(query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(5)));
-        const participantsSnap = await getDocs(collection(db, 'participants'));
-        const groupsSnap = await getDocs(collection(db, 'groups'));
+  const participantsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'participants');
+  }, [firestore]);
 
-        const sessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        setRecentSessions(sessions);
-        setStats({
-          totalSessions: sessions.length,
-          activeSessions: sessions.filter((s: any) => s.status === 'active').length,
-          totalParticipants: participantsSnap.size,
-          totalGroups: groupsSnap.size
-        });
-      } catch (e) {
-        console.error("Error loading dashboard data", e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [db]);
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'groups'),
+      where('ownerId', '==', user.uid)
+    );
+  }, [firestore, user]);
+
+  const { data: recentSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
+  const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
+  const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
+
+  const stats = {
+    totalSessions: recentSessions?.length || 0,
+    activeSessions: recentSessions?.filter((s: any) => s.status === 'active').length || 0,
+    totalParticipants: participants?.length || 0,
+    totalGroups: groups?.length || 0
+  };
+
+  const loading = sessionsLoading || participantsLoading || groupsLoading;
+
+  if (!user) {
+    return (
+      <div className="container mx-auto py-20 px-4 text-center">
+        <h1 className="text-3xl font-bold mb-4">Welcome to PreachPoint</h1>
+        <p className="text-muted-foreground mb-8">Please sign in to manage your preaching sessions.</p>
+        <Button asChild size="lg">
+          <Link href="/login">Sign In</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-headline font-bold text-foreground">Overview</h1>
-        <p className="text-muted-foreground">Welcome back to PreachPoint. Manage your preaching sessions effectively.</p>
+        <p className="text-muted-foreground">Welcome back, {user.displayName || user.email}. Manage your preaching sessions effectively.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Total Sessions" 
+          title="Your Sessions" 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Sessions created"
+          description="Sessions created by you"
         />
         <StatCard 
-          title="Active Sessions" 
+          title="Active Now" 
           value={stats.activeSessions.toString()} 
           icon={<TrendingUp className="h-5 w-5" />}
-          description="Currently running"
+          description="In progress"
           variant="accent"
         />
         <StatCard 
-          title="Participants" 
+          title="All Participants" 
           value={stats.totalParticipants.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Registered preachers"
+          description="System-wide preachers"
         />
         <StatCard 
-          title="Groups" 
+          title="Your Groups" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Teams configured"
+          description="Teams you manage"
         />
       </div>
 
@@ -89,7 +103,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle>Recent Sessions</CardTitle>
-                <CardDescription>The latest sessions managed on PreachPoint.</CardDescription>
+                <CardDescription>The latest sessions you've managed.</CardDescription>
               </div>
               <Button variant="ghost" asChild>
                 <Link href="/sessions">
@@ -100,14 +114,14 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted animate-pulse rounded-md" />)}
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : recentSessions.length > 0 ? (
+            ) : recentSessions && recentSessions.length > 0 ? (
               <div className="space-y-4">
                 {recentSessions.map((session) => (
                   <Link key={session.id} href={`/sessions/${session.id}`}>
-                    <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors cursor-pointer mb-3">
+                    <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 transition-colors cursor-pointer">
                       <div className="flex items-center gap-4">
                         <div className="bg-primary/10 p-2 rounded-full">
                           <Mic2 className="h-5 w-5 text-primary" />

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, use } from 'react';
-import { doc, getDoc, updateDoc, collection, addDoc, getDocs, serverTimestamp, query, where } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { doc, collection, query, where, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,42 +9,35 @@ import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2 }
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
+import { useState, useEffect, use } from 'react';
 
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const db = useFirestore();
+  const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
-  const [session, setSession] = useState<any>(null);
-  const [availableParticipants, setAvailableParticipants] = useState<any[]>([]);
-  const [records, setRecords] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [activePreacher, setActivePreacher] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!db) return;
-      try {
-        const docRef = doc(db, 'sessions', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setSession({ id: docSnap.id, ...docSnap.data() });
-        }
+  const sessionRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'sessions', id);
+  }, [firestore, id]);
 
-        const participantsSnap = await getDocs(collection(db, 'participants'));
-        const allParticipants = participantsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAvailableParticipants(allParticipants);
+  const participantsRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'participants');
+  }, [firestore]);
 
-        const recordsSnap = await getDocs(query(collection(db, 'preaching_records'), where('sessionId', '==', id)));
-        setRecords(recordsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [id, db]);
+  const recordsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'preaching_records'), where('sessionId', '==', id));
+  }, [firestore, id]);
+
+  const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
+  const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
+  const { data: records, isLoading: recordsLoading } = useCollection(recordsQuery);
 
   useEffect(() => {
     let interval: any;
@@ -59,13 +51,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return () => clearInterval(interval);
   }, [activePreacher]);
 
-  async function handleStartPreaching(participantId: string) {
+  function handleStartPreaching(participantId: string) {
     setActivePreacher(participantId);
     toast({ title: "Recording Started", description: "Tracking preaching time now." });
   }
 
   async function handleStopPreaching() {
-    if (!activePreacher || !session || !db) return;
+    if (!activePreacher || !session || !firestore) return;
     
     const durationSeconds = timer;
     const durationMinutes = durationSeconds / 60;
@@ -86,7 +78,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const participant = availableParticipants.find(p => p.id === activePreacher);
+    const participant = availableParticipants?.find(p => p.id === activePreacher);
     
     let explanation = "No fine incurred.";
     if (fineAmount > 0) {
@@ -118,18 +110,19 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       createdAt: serverTimestamp()
     };
 
-    try {
-      const docRef = await addDoc(collection(db, 'preaching_records'), newRecord);
-      setRecords([...records, { id: docRef.id, ...newRecord }]);
-      setActivePreacher(null);
-      toast({ title: "Preaching Recorded", description: fineAmount > 0 ? `Fine of $${fineAmount.toFixed(2)} calculated.` : "No fines incurred." });
-    } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Record Failed", description: "Failed to save record to Firebase." });
-    }
+    addDocumentNonBlocking(collection(firestore, 'preaching_records'), newRecord);
+    setActivePreacher(null);
+    toast({ title: "Preaching Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
   }
 
-  if (loading) return (
+  function toggleSessionStatus() {
+    if (!session || !firestore) return;
+    const newStatus = session.status === 'active' ? 'completed' : 'active';
+    updateDocumentNonBlocking(doc(firestore, 'sessions', id), { status: newStatus });
+    toast({ title: `Session ${newStatus}` });
+  }
+
+  if (sessionLoading || participantsLoading || recordsLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
@@ -163,13 +156,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Vote className="mr-2 h-4 w-4" /> Voting
             </Link>
           </Button>
-          <Button onClick={async () => {
-             if (!db) return;
-             const docRef = doc(db, 'sessions', id);
-             await updateDoc(docRef, { status: session.status === 'active' ? 'completed' : 'active' });
-             setSession({ ...session, status: session.status === 'active' ? 'completed' : 'active' });
-             toast({ title: "Status Updated" });
-          }}>
+          <Button onClick={toggleSessionStatus}>
             {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {session.status === 'active' ? 'End Session' : 'Start Session'}
           </Button>
@@ -189,7 +176,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <CardContent className="flex flex-col items-center py-8">
                 <p className="text-lg font-medium mb-2">Currently Preaching:</p>
                 <p className="text-3xl font-bold font-headline mb-6 text-primary">
-                  {availableParticipants.find(p => p.id === activePreacher)?.name}
+                  {availableParticipants?.find(p => p.id === activePreacher)?.name}
                 </p>
                 <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
                   {Math.floor(timer / 60).toString().padStart(2, '0')}:
@@ -208,7 +195,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <CardDescription>Recorded preaching durations and calculated fines.</CardDescription>
             </CardHeader>
             <CardContent>
-              {records.length > 0 ? (
+              {records && records.length > 0 ? (
                 <div className="space-y-4">
                   {records.map((record) => (
                     <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/50 transition-colors">
@@ -250,7 +237,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <CardDescription>Select a participant to start tracking.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {availableParticipants.length > 0 ? availableParticipants.map((p) => (
+              {availableParticipants && availableParticipants.length > 0 ? availableParticipants.map((p) => (
                 <div key={p.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border">
                   <span className="font-medium">{p.name}</span>
                   <Button 

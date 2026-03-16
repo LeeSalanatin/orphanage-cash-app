@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { collection, serverTimestamp, doc } from 'firebase/firestore';
+import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import Link from 'next/link';
 export default function NewSession() {
   const router = useRouter();
   const db = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [description, setDescription] = useState('');
@@ -54,28 +55,33 @@ export default function NewSession() {
   }
 
   async function handleSaveSession() {
-    if (!title.trim() || !generatedRules || !db) return;
+    if (!title.trim() || !generatedRules || !db || !user) return;
 
     setLoading(true);
     try {
-      const docRef = await addDoc(collection(db, 'sessions'), {
+      // Use addDocumentNonBlocking for better error handling/UX
+      // Though it doesn't return the ID immediately, we can use a generated ID if we need to redirect immediately
+      // For simplicity in a 'new' form, standard addDoc is often awaited, but we'll follow the guideline
+      // and redirect after the local initiation if we really wanted to, 
+      // but usually for "New" screens, we want to know the ID.
+      // Let's use the standard Firestore pattern but wrapped for contextual errors.
+      const colRef = collection(db, 'sessions');
+      const data = {
         title,
         ...generatedRules,
+        ownerId: user.uid,
         status: 'pending',
         createdAt: serverTimestamp(),
-      });
+      };
+
+      addDocumentNonBlocking(colRef, data);
       toast({
-        title: "Session Created",
-        description: "Redirecting to your new session...",
+        title: "Session Initiated",
+        description: "Your session is being created. You can find it in your sessions list.",
       });
-      router.push(`/sessions/${docRef.id}`);
+      router.push('/sessions');
     } catch (e) {
       console.error(e);
-      toast({
-        variant: "destructive",
-        title: "Save Failed",
-        description: "Failed to save the session to Firebase.",
-      });
     } finally {
       setLoading(false);
     }

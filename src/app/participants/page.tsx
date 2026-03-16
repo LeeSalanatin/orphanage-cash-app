@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useMemoFirebase, useCollection, useFirestore, useUser, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,90 +9,62 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserPlus, Users, Trash2, Award, DollarSign, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 export default function ParticipantsPage() {
-  const db = useFirestore();
-  const { toast } = useToast();
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useUser();
+  const firestore = useFirestore();
   const [newName, setNewName] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (db) {
-      fetchData();
-    }
-  }, [db]);
+  const participantsRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'participants');
+  }, [firestore]);
 
-  async function fetchData() {
-    if (!db) return;
-    setLoading(true);
-    try {
-      const pSnap = await getDocs(collection(db, 'participants'));
-      setParticipants(pSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
-      const gSnap = await getDocs(collection(db, 'groups'));
-      setGroups(gSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+  const groupsRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'groups');
+  }, [firestore]);
+
+  const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
+  const { data: groups, isLoading: groupsLoading } = useCollection(groupsRef);
+
+  function handleAddParticipant() {
+    if (!newName.trim() || !firestore || !user) return;
+    
+    addDocumentNonBlocking(collection(firestore, 'participants'), {
+      name: newName,
+      userId: user.uid, // Tie to current user if needed, though rules allow global read
+      totalPoints: 0,
+      totalFines: 0,
+      dateJoined: new Date().toISOString()
+    });
+    setNewName('');
   }
 
-  async function addParticipant() {
-    if (!newName.trim() || !db) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'participants'), {
-        name: newName,
-        totalPoints: 0,
-        totalFines: 0,
-        groupId: null,
-        dateJoined: new Date().toISOString()
-      });
-      setNewName('');
-      fetchData();
-      toast({ title: "Participant Added" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Failed to add" });
-    } finally {
-      setIsSubmitting(false);
-    }
+  function handleAddGroup() {
+    if (!newGroupName.trim() || !firestore || !user) return;
+    
+    addDocumentNonBlocking(collection(firestore, 'groups'), {
+      name: newGroupName,
+      ownerId: user.uid,
+      totalPoints: 0,
+      totalFines: 0,
+      members: [],
+      createdAt: new Date().toISOString()
+    });
+    setNewGroupName('');
   }
 
-  async function addGroup() {
-    if (!newGroupName.trim() || !db) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'groups'), {
-        name: newGroupName,
-        totalPoints: 0,
-        totalFines: 0,
-        members: []
-      });
-      setNewGroupName('');
-      fetchData();
-      toast({ title: "Group Created" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Failed to add" });
-    } finally {
-      setIsSubmitting(false);
-    }
+  function handleDeleteParticipant(id: string) {
+    if (!firestore) return;
+    deleteDocumentNonBlocking(doc(firestore, 'participants', id));
   }
 
-  async function deleteEntry(type: 'participants' | 'groups', id: string) {
-    if (!db) return;
-    try {
-      await deleteDoc(doc(db, type, id));
-      fetchData();
-      toast({ title: "Entry Deleted" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Failed to delete" });
-    }
+  function handleDeleteGroup(id: string) {
+    if (!firestore) return;
+    deleteDocumentNonBlocking(doc(firestore, 'groups', id));
   }
 
   return (
@@ -120,12 +91,11 @@ export default function ParticipantsPage() {
                   value={newName} 
                   onChange={(e) => setNewName(e.target.value)} 
                   placeholder="John Doe"
-                  disabled={isSubmitting}
                 />
               </div>
               <div className="flex items-end">
-                <Button onClick={addParticipant} disabled={isSubmitting || !newName.trim()}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
+                  <UserPlus className="mr-2 h-4 w-4" />
                   Add
                 </Button>
               </div>
@@ -144,13 +114,13 @@ export default function ParticipantsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading ? (
+                  {participantsLoading ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-10">
                         <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ) : participants.map((p) => (
+                  ) : participants && participants.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell>
@@ -164,13 +134,13 @@ export default function ParticipantsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => deleteEntry('participants', p.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
                           <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!loading && participants.length === 0 && (
+                  {!participantsLoading && (!participants || participants.length === 0) && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
                         No participants registered yet.
@@ -197,12 +167,11 @@ export default function ParticipantsPage() {
                   value={newGroupName} 
                   onChange={(e) => setNewGroupName(e.target.value)} 
                   placeholder="Worship Team A"
-                  disabled={isSubmitting}
                 />
               </div>
               <div className="flex items-end">
-                <Button onClick={addGroup} disabled={isSubmitting || !newGroupName.trim()}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                <Button onClick={handleAddGroup} disabled={!newGroupName.trim()}>
+                  <Users className="mr-2 h-4 w-4" />
                   Create
                 </Button>
               </div>
@@ -210,15 +179,15 @@ export default function ParticipantsPage() {
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {loading ? (
+            {groupsLoading ? (
               <div className="col-span-full py-20 text-center">
                 <Loader2 className="h-10 w-10 animate-spin mx-auto text-muted-foreground" />
               </div>
-            ) : groups.map((g) => (
+            ) : groups && groups.map((g) => (
               <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-lg text-primary">{g.name}</CardTitle>
-                  <Button variant="ghost" size="icon" onClick={() => deleteEntry('groups', g.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
                     <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                   </Button>
                 </CardHeader>
@@ -233,6 +202,11 @@ export default function ParticipantsPage() {
                 </CardContent>
               </Card>
             ))}
+            {!groupsLoading && (!groups || groups.length === 0) && (
+              <div className="col-span-full text-center py-10 text-muted-foreground">
+                No groups created yet.
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
