@@ -9,13 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UserPlus, Users, Trash2, Award, DollarSign, Loader2 } from 'lucide-react';
+import { UserPlus, Users, Trash2, Award, DollarSign, Loader2, Mail } from 'lucide-react';
 import { useState } from 'react';
 
 export default function ParticipantsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
 
   const participantsRef = useMemoFirebase(() => {
@@ -25,7 +26,6 @@ export default function ParticipantsPage() {
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Filter by members map to satisfy security rules
     return query(
       collection(firestore, 'groups'),
       where(`members.${user.uid}`, '!=', null)
@@ -38,15 +38,18 @@ export default function ParticipantsPage() {
   function handleAddParticipant() {
     if (!newName.trim() || !firestore || !user) return;
     
-    // Use user.uid as doc ID to satisfy 'isOwner(participantId)' rule
-    setDocumentNonBlocking(doc(firestore, 'participants', user.uid), {
+    // Create an orphan record that can be claimed later if user logs in with this email
+    addDocumentNonBlocking(collection(firestore, 'participants'), {
       name: newName,
-      userId: user.uid,
+      email: newEmail.trim().toLowerCase(),
+      userId: null,
       totalPoints: 0,
       totalFines: 0,
       dateJoined: new Date().toISOString()
-    }, { merge: true });
+    });
+    
     setNewName('');
+    setNewEmail('');
   }
 
   function handleAddGroup() {
@@ -86,11 +89,11 @@ export default function ParticipantsPage() {
         <TabsContent value="individuals" className="space-y-8">
           <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Register as Participant</CardTitle>
-              <CardDescription>Enter your name to join the preaching roster.</CardDescription>
+              <CardTitle>Add Participant</CardTitle>
+              <CardDescription>Register a new preacher. If they sign up later with this email, their accounts will link automatically.</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-4">
-              <div className="flex-grow space-y-1">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="space-y-1">
                 <Label htmlFor="name">Full Name</Label>
                 <Input 
                   id="name" 
@@ -99,12 +102,20 @@ export default function ParticipantsPage() {
                   placeholder="John Doe"
                 />
               </div>
-              <div className="flex items-end">
-                <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Save
-                </Button>
+              <div className="space-y-1">
+                <Label htmlFor="email">Email (Optional for auto-link)</Label>
+                <Input 
+                  id="email" 
+                  type="email"
+                  value={newEmail} 
+                  onChange={(e) => setNewEmail(e.target.value)} 
+                  placeholder="john@example.com"
+                />
               </div>
+              <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add to Roster
+              </Button>
             </CardContent>
           </Card>
 
@@ -114,6 +125,7 @@ export default function ParticipantsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Points</TableHead>
                     <TableHead>Fines Paid</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -122,13 +134,19 @@ export default function ParticipantsPage() {
                 <TableBody>
                   {participantsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10">
+                      <TableCell colSpan={5} className="text-center py-10">
                         <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : participants && participants.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {p.name}
+                          {p.userId && <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">Registered</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{p.email || '—'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-accent font-semibold">
                           <Award className="h-4 w-4" /> {p.totalPoints || 0}
@@ -136,21 +154,19 @@ export default function ParticipantsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 text-destructive font-semibold">
-                          <DollarSign className="h-4 w-4" /> {p.totalFines || 0}
+                          ₱ {p.totalFines || 0}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {user?.uid === p.id && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
-                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
-                          </Button>
-                        )}
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
+                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                   {!participantsLoading && (!participants || participants.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
                         No participants registered yet.
                       </TableCell>
                     </TableRow>

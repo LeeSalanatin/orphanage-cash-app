@@ -31,8 +31,12 @@ service cloud.firestore {
 
     match /participants/{participantId} {
       allow get, list: if isSignedIn();
-      allow create: if isOwner(participantId);
-      allow update: if isExistingOwner(participantId);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || 
+        request.auth.uid == participantId ||
+        (resource.data.userId == null && request.auth.token.email == resource.data.email)
+      );
     }
 
     match /session_configurations/{configId} {
@@ -42,7 +46,6 @@ service cloud.firestore {
     }
 
     match /groups/{groupId} {
-      // Allow all signed-in users to list/get groups so session owners can identify winners
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.members);

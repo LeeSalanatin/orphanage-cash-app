@@ -1,8 +1,10 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { ParticipantSync } from '@/components/ParticipantSync';
 
 export const metadata: Metadata = {
   title: 'PreachPoint - Preaching Time Management',
@@ -23,6 +25,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background text-foreground flex flex-col min-h-screen">
         <FirebaseClientProvider>
+          <ParticipantSync />
           <Navbar />
           <main className="flex-grow">
             {children}
