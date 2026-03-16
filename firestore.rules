@@ -32,7 +32,7 @@ service cloud.firestore {
     match /{path=**}/preaching_events/{eventId} {
       allow list: if isSignedIn() && (
         isAdmin() || 
-        (resource != null && resource.data.sessionMembers != null && resource.data.sessionMembers[request.auth.uid] != null)
+        (resource.data.get('sessionMembers', {})[request.auth.uid] != null)
       );
       allow get: if isSignedIn();
       allow create: if isSignedIn();
@@ -52,7 +52,7 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId || 
         request.auth.uid == participantId ||
         isAdmin() ||
-        (resource.data.userId == null && request.auth.token.email == resource.data.email)
+        (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', ''))
       );
       allow delete: if isAdmin();
     }
@@ -66,12 +66,12 @@ service cloud.firestore {
     match /groups/{groupId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.members) || isAdmin();
+      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.get('members', {})) || isAdmin();
       allow delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
 
     match /sessions/{sessionId} {
-      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members) || isAdmin());
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
 
