@@ -28,7 +28,7 @@ const SUGGESTIONS = [
   },
   { 
     label: "Sunday Service", 
-    text: "Sunday preaching session. Preacher gets a fixed fine of ₱25 if they don't follow the theme. No voting." 
+    text: "Sunday preaching session. 20 minute limit. Fixed fine of ₱50 if they exceed the time. No voting." 
   }
 ];
 
@@ -65,7 +65,7 @@ export default function NewConfiguration() {
   const [simSec, setSimSec] = useState('');
   const [simResult, setSimResult] = useState<number | null>(null);
 
-  // Handle Sunday Preaching specific logic
+  // Handle Sunday Preaching specific logic: Fixed fine only
   useEffect(() => {
     if (sessionType === 'sunday preaching') {
       setFineType('fixed');
@@ -104,7 +104,8 @@ export default function NewConfiguration() {
       setMaxTimeSec(rules.maxPreachingTimeSeconds?.toString() || '0');
       if (rules.fineRules?.[0]) {
         setFineAmount(rules.fineRules[0].amount.toString());
-        setFineType(rules.fineRules[0].type);
+        // AI flow should already respect Sunday = fixed, but we force it here too
+        setFineType(rules.sessionType === 'sunday preaching' ? 'fixed' : rules.fineRules[0].type);
       }
       setVotingEnabled(rules.votingConfig?.enabled || false);
       setPointsEnabled(rules.pointDistribution?.enabled || false);
@@ -133,14 +134,14 @@ export default function NewConfiguration() {
         fineRules: [
           {
             appliesTo: sessionType === 'group' ? 'group' : 'individual',
-            type: fineType,
+            type: sessionType === 'sunday preaching' ? 'fixed' : fineType,
             amount: parseFloat(fineAmount) || 0,
             gracePeriodMinutes: 0
           }
         ],
         votingConfig: {
           enabled: votingEnabled,
-          topIndividualsToVoteFor: 3, // Standard
+          topIndividualsToVoteFor: 3,
           topGroupsToVoteFor: sessionType === 'group' ? 1 : 0
         },
         pointDistribution: {
@@ -294,7 +295,7 @@ export default function NewConfiguration() {
                     <Input type="number" min="0" max="59" value={maxTimeSec} onChange={(e) => setMaxTimeSec(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Fine Amount (₱)</Label>
+                    <Label>{sessionType === 'sunday preaching' ? 'Fixed Fine Amount (₱)' : 'Fine Amount (₱ per Min)'}</Label>
                     <Input type="number" value={fineAmount} onChange={(e) => setFineAmount(e.target.value)} />
                   </div>
                 </div>
@@ -303,7 +304,11 @@ export default function NewConfiguration() {
                   <Info className="h-5 w-5 text-accent mt-0.5" />
                   <div className="text-xs text-muted-foreground">
                     <p className="font-bold text-foreground mb-1">Fine Calculation Tip:</p>
-                    <p>To set the fine as <strong>half of total excess seconds</strong>, enter <strong>30</strong> as the Fine Amount (₱30/min = ₱0.50 per second).</p>
+                    {sessionType === 'sunday preaching' ? (
+                      <p>Sunday Service uses a <strong>fixed fine</strong>. Any overage will result in the full amount specified above being applied once.</p>
+                    ) : (
+                      <p>To set the fine as <strong>half of total excess seconds</strong>, enter <strong>30</strong> as the Fine Amount (₱30/min = ₱0.50 per second).</p>
+                    )}
                   </div>
                 </div>
 
@@ -319,6 +324,9 @@ export default function NewConfiguration() {
                       <Label htmlFor="fixed" className="flex-grow cursor-pointer">Fixed</Label>
                     </div>
                   </RadioGroup>
+                  {sessionType === 'sunday preaching' && (
+                    <p className="text-[10px] text-muted-foreground mt-2">Sunday Service sessions are restricted to Fixed Fines only.</p>
+                  )}
                 </div>
               </div>
 
@@ -341,7 +349,6 @@ export default function NewConfiguration() {
                     
                     {pointsEnabled && (
                       <>
-                        {/* Individual Rewards */}
                         <div className="space-y-4">
                           <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
                             <User className="h-4 w-4" /> Individual Rewards
@@ -362,7 +369,6 @@ export default function NewConfiguration() {
                           </div>
                         </div>
 
-                        {/* Group Rewards */}
                         {sessionType === 'group' && (
                           <div className="space-y-4 pt-4 border-t">
                             <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">

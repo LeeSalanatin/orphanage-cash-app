@@ -40,11 +40,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editRewardTop3, setEditRewardTop3] = useState('25');
   const [editRewardGroupTop1, setEditRewardGroupTop1] = useState('100');
 
-  // Simulator State
-  const [simMin, setSimMin] = useState('');
-  const [simSec, setSimSec] = useState('');
-  const [simResult, setSimResult] = useState<number | null>(null);
-
   const sessionRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return doc(firestore, 'sessions', id);
@@ -90,7 +85,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       setEditMaxTimeSec(session.maxPreachingTimeSeconds?.toString() || '0');
       if (session.fineRules?.[0]) {
         setEditFineAmount(session.fineRules[0].amount.toString());
-        setEditFineType(session.fineRules[0].type);
+        setEditFineType(session.sessionType === 'sunday preaching' ? 'fixed' : session.fineRules[0].type);
       }
       setEditVotingEnabled(session.votingConfig?.enabled || false);
       setEditPointsEnabled(session.pointDistribution?.enabled || false);
@@ -195,9 +190,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     let fineCalculationDetails = "";
 
     if (overageSeconds > 0) {
+      // FORCE FIXED logic for Sunday Service always
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
         totalFineAmount = rule.amount;
-        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage.`;
+        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage. No computation applied.`;
       } else {
         const ratePerSecond = rule.amount / 60;
         totalFineAmount = overageSeconds * ratePerSecond;
@@ -220,7 +216,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min (half of seconds)`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
           overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
-          rulesSummary: `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
+          rulesSummary: session.sessionType === 'sunday preaching' 
+            ? `Fixed fine of ₱${rule.amount} for any overage beyond ${formatDuration(maxSeconds)}.` 
+            : `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
         });
         explanation = aiResponse.explanation;
       } catch (e) {
@@ -532,10 +530,32 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <Input type="number" min="0" max="59" value={editMaxTimeSec} onChange={(e) => setEditMaxTimeSec(e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Fine Amount (₱ per Min)</Label>
+                      <Label>{session.sessionType === 'sunday preaching' ? 'Fixed Fine Amount (₱)' : 'Fine Amount (₱ per Min)'}</Label>
                       <Input type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
                     </div>
                   </div>
+                  
+                  {session.sessionType !== 'sunday preaching' && (
+                    <div className="mt-4">
+                      <Label className="mb-3 block">Fine Model</Label>
+                      <RadioGroup value={editFineType} onValueChange={(v: any) => setEditFineType(v)} className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-2 border p-3 rounded-md">
+                          <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
+                          <Label htmlFor="edit-per-min" className="flex-grow cursor-pointer">Per Minute (Variable)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 border p-3 rounded-md">
+                          <RadioGroupItem value="fixed" id="edit-fixed" />
+                          <Label htmlFor="edit-fixed" className="flex-grow cursor-pointer">Fixed</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
+                  {session.sessionType === 'sunday preaching' && (
+                    <div className="p-3 bg-accent/5 border border-accent/20 rounded-lg text-xs text-muted-foreground">
+                      Sunday Preaching is strictly forced to <strong>Fixed Fines</strong>.
+                    </div>
+                  )}
+
                   <Button className="w-full" onClick={handleSaveSettings}>Save Timing Rules</Button>
                 </CardContent>
               </Card>

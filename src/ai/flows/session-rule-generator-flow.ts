@@ -17,7 +17,7 @@ export type GenerateSessionRulesInput = z.infer<typeof GenerateSessionRulesInput
 
 // Define the output schema for the structured session rules.
 const GenerateSessionRulesOutputSchema = z.object({
-  sessionType: z.enum(['individual', 'group', 'sunday preaching']).describe('The primary type of session: "individual" for single participants, "group" for multiple participants organized into teams, or "sunday preaching" for a general Sunday service preaching without specific individual time tracking for fines.').default('individual'),
+  sessionType: z.enum(['individual', 'group', 'sunday preaching']).describe('The primary type of session: "individual" for single participants, "group" for multiple participants organized into teams, or "sunday preaching" for a general Sunday service preaching.').default('individual'),
   maxPreachingTimeMinutes: z.number().int().min(0).nullable().describe('Optional maximum allowed preaching time in minutes for individual or group sessions. If exceeded, fines may apply.').default(null),
   maxPreachingTimeSeconds: z.number().int().min(0).max(59).nullable().describe('Optional maximum allowed preaching time in seconds (added to minutes).').default(0),
   fineRules: z.array(
@@ -52,14 +52,17 @@ const generateSessionRulesPrompt = ai.definePrompt({
 Your goal is to parse the user's request and output a JSON object conforming strictly to the provided JSON schema.
 If a specific detail is not mentioned, infer a sensible default or mark it as not applicable based on the session type.
 
+CRITICAL RULE FOR SUNDAY PREACHING:
+- Sunday preaching sessions MUST ALWAYS use 'fixed' fine types. There is NO per-minute computation for Sunday Service.
+
 Here are the possible session types:
 - 'individual': Sessions where participants preach individually. Fines and voting typically apply to individuals.
 - 'group': Sessions where participants are part of groups. Fines might apply to individuals or groups. Voting can be for top groups, top individuals within groups, or both.
-- 'sunday preaching': A general preaching session, often with fixed fines for the preacher (individual) but without a maximum time limit for each person, and usually with no voting.
+- 'sunday preaching': A general preaching session. If a time limit is set and exceeded, a FIXED fine is applied regardless of how many seconds they went over.
 
 Here are the possible fine types:
-- 'fixed': A set fine amount.
-- 'per-minute-overage': A fine charged per minute that a participant or group exceeds the 'maxPreachingTimeMinutes' and 'maxPreachingTimeSeconds'.
+- 'fixed': A set fine amount applied once if the limit is exceeded.
+- 'per-minute-overage': A fine charged per minute (and second) that a participant or group exceeds the limit.
 
 Example descriptions and expected JSON structure:
 
@@ -90,35 +93,24 @@ Example descriptions and expected JSON structure:
      }
    }
 
-2. Description: "A group session with fines for going over 10 minutes and 30 seconds for individuals, and a fixed fine of ₱50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
+2. Description: "A Sunday Service session with a 20 minute limit. If they exceed it, they pay a flat ₱50 fine. No voting."
    Expected Output:
    {
-     "sessionType": "group",
-     "maxPreachingTimeMinutes": 10,
-     "maxPreachingTimeSeconds": 30,
+     "sessionType": "sunday preaching",
+     "maxPreachingTimeMinutes": 20,
+     "maxPreachingTimeSeconds": 0,
      "fineRules": [
        {
          "appliesTo": "individual",
-         "type": "per-minute-overage",
-         "amount": 5,
-         "gracePeriodMinutes": 0
-       },
-       {
-         "appliesTo": "group",
          "type": "fixed",
          "amount": 50
        }
      ],
      "votingConfig": {
-       "enabled": true,
-       "topIndividualsToVoteFor": 0,
-       "topGroupsToVoteFor": 1,
-       "enableIndividualVotingInGroupSession": false
+       "enabled": false
      },
      "pointDistribution": {
-       "enabled": true,
-       "pointsPerTopIndividual": 0,
-       "pointsPerTopGroup": 500
+       "enabled": false
      }
    }
 
