@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Award, Star, Trophy, ArrowLeft, Loader2, Users } from 'lucide-react';
+import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 
@@ -37,17 +37,36 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'groups'),
-      where(`members.${user.uid}`, '!=', null)
-    );
+    return collection(firestore, 'groups');
   }, [firestore, user]);
+
+  const eventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'sessions', id, 'preaching_events'),
+      where(`sessionMembers.${user.uid}`, '!=', null)
+    );
+  }, [firestore, id, user]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: events, isLoading: eventsLoading } = useCollection(eventsQuery);
 
-  const loading = sessionLoading || participantsLoading || groupsLoading;
+  const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading;
+
+  // Filter participants and groups to only those who actually preached
+  const filteredParticipants = useMemo(() => {
+    if (!participants || !events) return [];
+    const activeIds = new Set(events.map(e => e.participantId));
+    return participants.filter(p => activeIds.has(p.id));
+  }, [participants, events]);
+
+  const filteredGroups = useMemo(() => {
+    if (!allGroups || !events) return [];
+    const activeGroupIds = new Set(events.filter(e => e.preachingGroupId).map(e => e.preachingGroupId));
+    return allGroups.filter(g => activeGroupIds.has(g.id));
+  }, [allGroups, events]);
 
   function handleSubmitVote() {
     if (!session?.votingConfig?.enabled || !firestore || !user) return;
@@ -101,6 +120,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
         </Card>
       ) : (
         <div className="space-y-8">
+          {/* Individual Voting Section */}
           {(session.sessionType === 'individual' || session.sessionType === 'group') && (
             <Card className="shadow-md">
               <CardHeader>
@@ -108,33 +128,44 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <Star className="h-5 w-5 text-accent fill-accent" />
                   Top Performers (Select up to {topLimit})
                 </CardTitle>
+                <CardDescription>Only preachers who recorded time in this session are listed.</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {participants?.map((p) => {
-                  const isSelected = votes.individual.includes(p.id);
-                  return (
-                    <div 
-                      key={p.id}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all flex items-center justify-between ${
-                        isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                      }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setVotes({ ...votes, individual: votes.individual.filter((id: string) => id !== p.id) });
-                        } else if (votes.individual.length < topLimit) {
-                          setVotes({ ...votes, individual: [...votes.individual, p.id] });
-                        }
-                      }}
-                    >
-                      <span className="font-medium">{p.name}</span>
-                      {isSelected && <Award className="h-5 w-5 text-primary" />}
-                    </div>
-                  );
-                })}
+              <CardContent>
+                {filteredParticipants.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {filteredParticipants.map((p) => {
+                      const isSelected = votes.individual.includes(p.id);
+                      return (
+                        <div 
+                          key={p.id}
+                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all flex items-center justify-between ${
+                            isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                          }`}
+                          onClick={() => {
+                            if (isSelected) {
+                              setVotes({ ...votes, individual: votes.individual.filter((id: string) => id !== p.id) });
+                            } else if (votes.individual.length < topLimit) {
+                              setVotes({ ...votes, individual: [...votes.individual, p.id] });
+                            }
+                          }}
+                        >
+                          <span className="font-medium">{p.name}</span>
+                          {isSelected && <Award className="h-5 w-5 text-primary" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-muted/20 rounded-lg border border-dashed flex flex-col items-center gap-2">
+                    <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">No individual preaching records found for this session.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
 
+          {/* Group Voting Section */}
           {session.sessionType === 'group' && (
             <Card className="shadow-md">
               <CardHeader>
@@ -142,16 +173,24 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <Users className="h-5 w-5 text-primary" />
                   Top Group
                 </CardTitle>
+                <CardDescription>Select the best performing team from this session.</CardDescription>
               </CardHeader>
               <CardContent>
-                <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
-                  {groups?.map((g) => (
-                    <div key={g.id} className="flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-colors">
-                      <RadioGroupItem value={g.id} id={g.id} />
-                      <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer text-lg">{g.name}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
+                {filteredGroups.length > 0 ? (
+                  <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
+                    {filteredGroups.map((g) => (
+                      <div key={g.id} className="flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-colors">
+                        <RadioGroupItem value={g.id} id={g.id} />
+                        <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer text-lg">{g.name}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                ) : (
+                  <div className="text-center py-8 bg-muted/20 rounded-lg border border-dashed flex flex-col items-center gap-2">
+                    <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">No group preaching records found for this session.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
