@@ -29,8 +29,9 @@ export default function SessionsPage() {
   const sessions = useMemo(() => {
     if (!rawSessions) return [];
     return [...rawSessions].sort((a, b) => {
-      const dateA = a.createdAt?.seconds || 0;
-      const dateB = b.createdAt?.seconds || 0;
+      // Prioritize sessionDate for sorting, fallback to createdAt
+      const dateA = a.sessionDate ? new Date(a.sessionDate).getTime() : (a.createdAt?.seconds || 0) * 1000;
+      const dateB = b.sessionDate ? new Date(b.sessionDate).getTime() : (b.createdAt?.seconds || 0) * 1000;
       return dateB - dateA;
     });
   }, [rawSessions]);
@@ -92,7 +93,9 @@ export default function SessionsPage() {
 }
 
 function SessionCard({ session }: { session: any }) {
-  const dateStr = session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'Just Created';
+  const displayDate = session.sessionDate 
+    ? new Date(session.sessionDate).toLocaleDateString() 
+    : (session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'Just Created');
   
   return (
     <Link href={`/sessions/${session.id}`}>
@@ -108,14 +111,14 @@ function SessionCard({ session }: { session: any }) {
           </div>
           <CardTitle className="line-clamp-1 group-hover:text-primary transition-colors">{session.title || 'Untitled Session'}</CardTitle>
           <CardDescription className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" /> {dateStr}
+            <Calendar className="h-3 w-3" /> {displayDate}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-grow pt-2">
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center text-muted-foreground">
               <span>Time Limit:</span>
-              <span className="font-semibold text-foreground">{session.maxPreachingTimeMinutes || 'None'} min</span>
+              <span className="font-semibold text-foreground">{session.maxPreachingTimeMinutes || '0'}m {session.maxPreachingTimeSeconds || '0'}s</span>
             </div>
             <div className="flex justify-between items-center text-muted-foreground">
               <span>Fine Model:</span>

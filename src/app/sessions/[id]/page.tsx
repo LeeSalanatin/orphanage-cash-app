@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -11,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator, Star, CheckCircle2, User } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator, Star, CheckCircle2, User, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -190,7 +191,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     let fineCalculationDetails = "";
 
     if (overageSeconds > 0) {
-      // FORCE FIXED logic for Sunday Service always
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
         totalFineAmount = rule.amount;
         fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage. No computation applied.`;
@@ -361,6 +361,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!session) return null;
 
+  const displayDate = session.sessionDate 
+    ? new Date(session.sessionDate).toLocaleDateString() 
+    : (session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'N/A');
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -369,7 +373,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
             <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
           </div>
-          <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 0}m {session.maxPreachingTimeSeconds || 0}s</p>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1 capitalize"><Mic2 className="h-3.5 w-3.5" /> {session.sessionType} Session</span>
+            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {displayDate}</span>
+            <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Max: {session.maxPreachingTimeMinutes || 0}m {session.maxPreachingTimeSeconds || 0}s</span>
+          </div>
         </div>
         <div className="flex gap-2">
           {session.votingConfig?.enabled && (

@@ -1,16 +1,16 @@
 
 "use client";
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { collection, serverTimestamp, query, where, doc } from 'firebase/firestore';
+import { collection, serverTimestamp, query, where } from 'firebase/firestore';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Save, ArrowLeft, Settings2, AlertCircle, PlusCircle } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, AlertCircle, PlusCircle, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -24,8 +24,15 @@ function NewSessionContent() {
   const initialConfigId = searchParams.get('configId') || '';
   
   const [title, setTitle] = useState('');
+  const [sessionDate, setSessionDate] = useState('');
   const [selectedConfigId, setSelectedConfigId] = useState(initialConfigId);
   const [loading, setLoading] = useState(false);
+
+  // Set default date to today on mount
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setSessionDate(today);
+  }, []);
 
   const configsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -47,6 +54,7 @@ function NewSessionContent() {
 
       const data = {
         title,
+        sessionDate,
         sessionType: config.sessionType,
         maxPreachingTimeMinutes: config.maxPreachingTimeMinutes || 0,
         maxPreachingTimeSeconds: config.maxPreachingTimeSeconds || 0,
@@ -80,7 +88,7 @@ function NewSessionContent() {
           </Link>
         </Button>
         <h1 className="text-3xl font-headline font-bold text-primary">Start New Session</h1>
-        <p className="text-muted-foreground">Pick a name and select your rules.</p>
+        <p className="text-muted-foreground">Pick a name, date, and select your rules.</p>
       </div>
 
       <Card className="shadow-lg">
@@ -97,6 +105,20 @@ function NewSessionContent() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="date">Session Date</Label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input 
+                id="date" 
+                type="date"
+                className="pl-10"
+                value={sessionDate}
+                onChange={(e) => setSessionDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -139,7 +161,7 @@ function NewSessionContent() {
                 <div key={c.id} className="text-xs space-y-1 text-muted-foreground">
                   <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
                   <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
-                  <p>• Fine: ${c.fineRules?.[0]?.amount} ({c.fineRules?.[0]?.type})</p>
+                  <p>• Fine: ₱{c.fineRules?.[0]?.amount} ({c.fineRules?.[0]?.type})</p>
                 </div>
               ))}
             </div>
