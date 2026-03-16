@@ -19,9 +19,9 @@ export default function ParticipantsPage() {
   const [newGroupName, setNewGroupName] = useState('');
 
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'participants');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;

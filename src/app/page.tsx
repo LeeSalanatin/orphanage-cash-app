@@ -25,14 +25,14 @@ export default function Dashboard() {
   }, [firestore, user]);
 
   const participantsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'participants');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const groupsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'groups');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
@@ -169,7 +169,7 @@ export default function Dashboard() {
                 <div className="text-center py-10 text-muted-foreground">
                   No sessions found. Create your first one to get started!
                 </div>
-              )} vacation
+              )}
             </CardContent>
           </Card>
 

@@ -42,19 +42,19 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editRewardGroupTop1, setEditRewardGroupTop1] = useState('100');
 
   const sessionRef = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return doc(firestore, 'sessions', id);
-  }, [firestore, id]);
+  }, [firestore, id, user]);
 
   const participantsRef = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'participants');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const allGroupsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'groups');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;

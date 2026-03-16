@@ -26,14 +26,14 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sessionRef = useMemo(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return doc(firestore, 'sessions', id);
-  }, [firestore, id]);
+  }, [firestore, id, user]);
 
   const participantsRef = useMemo(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, 'participants');
-  }, [firestore]);
+  }, [firestore, user]);
 
   const groupsQuery = useMemo(() => {
     if (!firestore || !user) return null;
