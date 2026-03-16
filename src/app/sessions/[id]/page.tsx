@@ -25,8 +25,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeType, setActiveType] = useState<'individual' | 'group' | null>(null);
+  const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
 
   // Edit States for Menu
@@ -155,7 +155,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     let interval: any;
-    if (activeId) {
+    if (activeParticipantId) {
       interval = setInterval(() => {
         setTimer(t => t + 1);
       }, 1000);
@@ -163,7 +163,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       setTimer(0);
     }
     return () => clearInterval(interval);
-  }, [activeId]);
+  }, [activeParticipantId]);
 
   function formatDuration(seconds: number) {
     const m = Math.floor(seconds / 60);
@@ -171,29 +171,29 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  function handleStartTracking(targetId: string, type: 'individual' | 'group') {
-    if (activeId) return;
-    setActiveId(targetId);
-    setActiveType(type);
-    toast({ title: "Stopwatch Started", description: "Time is now being recorded." });
+  function handleStartTracking(participantId: string, groupId: string | null = null) {
+    if (activeParticipantId) return;
+    setActiveParticipantId(participantId);
+    setActiveGroupId(groupId);
+    toast({ title: "Timer Started", description: "Time is now being recorded for this participant." });
   }
 
   function handleCancelTracking() {
-    setActiveId(null);
-    setActiveType(null);
+    setActiveParticipantId(null);
+    setActiveGroupId(null);
     setTimer(0);
     toast({ title: "Tracking Cancelled", description: "No record was saved." });
   }
 
   async function handleStopTracking() {
-    if (!activeId || !session || !firestore || !user) return;
+    if (!activeParticipantId || !session || !firestore || !user) return;
     
     const durationSeconds = timer;
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
     
     const rule = session.fineRules?.find((r: any) => 
-      activeType === 'individual' ? r.appliesTo === 'individual' : r.appliesTo === 'group'
+      activeGroupId ? r.appliesTo === 'group' : r.appliesTo === 'individual'
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 30 };
     
     let totalFineAmount = 0;
@@ -210,16 +210,16 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const targetGroup = activeType === 'group' ? allGroups?.find(g => g.id === activeId) : null;
-    const targetParticipant = activeType === 'individual' ? availableParticipants?.find(p => p.id === activeId) : null;
-    const targetName = activeType === 'individual' ? targetParticipant?.name : targetGroup?.name;
+    const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
+    const targetGroupName = activeGroupId ? allGroups?.find(g => g.id === activeGroupId)?.name : null;
+    const displayName = targetGroupName ? `${targetGroupName} - ${targetParticipant?.name}` : targetParticipant?.name;
     
     let explanation = "No fine incurred.";
     if (totalFineAmount > 0) {
       try {
         const aiResponse = await generateFineExplanation({
           sessionType: session.sessionType,
-          participantName: targetName || 'Target',
+          participantName: targetParticipant?.name || 'Target',
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min`,
@@ -235,17 +235,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    let perMemberFine = totalFineAmount;
-    if (activeType === 'group' && targetGroup && targetGroup.members) {
-      const memberCount = Object.keys(targetGroup.members).filter(k => k !== 'owner').length;
-      perMemberFine = totalFineAmount / (memberCount || 1);
-    }
-
     const eventData = {
       sessionId: id,
-      participantId: activeType === 'individual' ? activeId : null,
-      preachingGroupId: activeType === 'group' ? activeId : null,
-      participantName: targetName || 'Unknown',
+      participantId: activeParticipantId,
+      preachingGroupId: activeGroupId,
+      participantName: displayName || 'Unknown',
       actualDurationSeconds: durationSeconds,
       actualDurationFormatted: formatDuration(durationSeconds),
       overageSeconds: overageSeconds,
@@ -262,10 +256,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (totalFineAmount > 0) {
       const fineData = {
         sessionId: id,
-        targetParticipantId: activeType === 'individual' ? activeId : null,
-        targetGroupId: activeType === 'group' ? activeId : null,
+        targetParticipantId: activeParticipantId,
+        targetGroupId: activeGroupId,
         amount: totalFineAmount,
-        perMemberAmount: perMemberFine,
         calculationDetails: fineCalculationDetails,
         explanation,
         status: 'ISSUED',
@@ -276,8 +269,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       addDocumentNonBlocking(collection(firestore, 'sessions', id, 'fines'), fineData);
     }
 
-    setActiveId(null);
-    setActiveType(null);
+    setActiveParticipantId(null);
+    setActiveGroupId(null);
     toast({ title: "Preaching Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "Duration logged." });
   }
 
@@ -315,6 +308,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const dist = session.pointDistribution;
     if (!dist || !dist.enabled) return;
 
+    // Distribute Individual Rewards
     leaderboard.individuals.forEach(item => {
       let reward = 0;
       if (item.rank === 1) reward = dist.rewardTop1;
@@ -328,28 +322,42 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     });
 
+    // Distribute Group Rewards (Split ONLY among participating members)
     leaderboard.groups.forEach(item => {
       if (item.rank === 1) {
         const reward = dist.rewardGroupTop1;
-        updateDocumentNonBlocking(doc(firestore, 'groups', item.id), {
-          totalPoints: increment(reward)
-        });
+        
+        // Find participants who actually preached in this group for this session
+        const participatingMemberIds = new Set(
+          records
+            .filter(r => r.preachingGroupId === item.id)
+            .map(r => r.participantId)
+        );
 
-        const group = allGroups?.find(g => g.id === item.id);
-        if (group && group.members) {
-          const memberIds = Object.keys(group.members).filter(k => k !== 'owner');
-          const split = Math.floor(reward / (memberIds.length || 1));
-          memberIds.forEach(mId => {
-            updateDocumentNonBlocking(doc(firestore, 'participants', mId), {
-              totalPoints: increment(split)
-            });
+        if (participatingMemberIds.size > 0) {
+          const splitReward = Math.floor(reward / participatingMemberIds.size);
+          
+          // Update group total points
+          updateDocumentNonBlocking(doc(firestore, 'groups', item.id), {
+            totalPoints: increment(reward)
           });
+
+          // Award each active member
+          participatingMemberIds.forEach(mId => {
+            if (mId) {
+              updateDocumentNonBlocking(doc(firestore, 'participants', mId), {
+                totalPoints: increment(splitReward)
+              });
+            }
+          });
+          
+          toast({ title: "Group Reward Split", description: `₱${reward} split among ${participatingMemberIds.size} active members of ${item.name}.` });
         }
       }
     });
 
     updateDocumentNonBlocking(doc(firestore, 'sessions', id), { rewardsDistributed: true });
-    toast({ title: "Rewards Distributed", description: "Points awarded to winners." });
+    toast({ title: "Rewards Distributed", description: "Points awarded to active winners." });
   }
 
   function toggleSessionStatus() {
@@ -407,7 +415,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </TabsList>
 
             <TabsContent value="live" className="space-y-8">
-              {activeId && (
+              {activeParticipantId && (
                 <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in duration-300">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center text-accent">
@@ -420,9 +428,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   </CardHeader>
                   <CardContent className="flex flex-col items-center py-8">
                     <p className="text-3xl font-bold font-headline mb-6 text-primary text-center">
-                      {activeType === 'individual' 
-                        ? availableParticipants?.find(p => p.id === activeId)?.name 
-                        : allGroups?.find(g => g.id === activeId)?.name}
+                      {activeGroupId && <span className="block text-sm text-muted-foreground mb-1">{allGroups?.find(g => g.id === activeGroupId)?.name}</span>}
+                      {availableParticipants?.find(p => p.id === activeParticipantId)?.name}
                     </p>
                     <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8">
                       {formatDuration(timer)}
@@ -589,6 +596,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <div className="space-y-2">
                             <Label className="text-xs">Top Group Reward</Label>
                             <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
+                            <p className="text-[10px] text-muted-foreground">Reward split ONLY among group members who record preaching time in this session.</p>
                           </div>
                         </div>
                       )}
@@ -606,10 +614,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <Card>
             <CardHeader>
               <CardTitle>Stopwatch Roster</CardTitle>
-              <CardDescription>Track time for participants.</CardDescription>
+              <CardDescription>Track time for active participants.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <Tabs defaultValue="individuals">
+              <Tabs defaultValue={session.sessionType === 'group' ? 'groups' : 'individuals'}>
                 <TabsList className="w-full grid grid-cols-2 rounded-none">
                   <TabsTrigger value="individuals">Individuals</TabsTrigger>
                   <TabsTrigger value="groups">Groups</TabsTrigger>
@@ -618,60 +626,73 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   {availableParticipants?.map((p) => (
                     <div key={p.id} className={cn(
                       "flex items-center justify-between p-3 border rounded-lg transition-all",
-                      activeId === p.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
+                      activeParticipantId === p.id && !activeGroupId ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
                     )}>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">{p.name}</span>
-                        {activeId === p.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1"><Mic2 className="h-2 w-2" /> LIVE PREACHING</span>}
+                        {activeParticipantId === p.id && !activeGroupId && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1"><Mic2 className="h-2 w-2" /> LIVE PREACHING</span>}
                       </div>
                       <div className="flex items-center gap-2">
-                        {activeId === p.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
+                        {activeParticipantId === p.id && !activeGroupId && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
                         <Button 
                           size="sm" 
-                          variant={activeId === p.id ? "destructive" : "outline"} 
+                          variant={activeParticipantId === p.id && !activeGroupId ? "destructive" : "outline"} 
                           className="h-8 px-2"
-                          disabled={(activeId !== null && activeId !== p.id) || session.status !== 'active'} 
-                          onClick={() => activeId === p.id ? handleStopTracking() : handleStartTracking(p.id, 'individual')}
+                          disabled={(activeParticipantId !== null && (activeParticipantId !== p.id || activeGroupId)) || session.status !== 'active'} 
+                          onClick={() => activeParticipantId === p.id ? handleStopTracking() : handleStartTracking(p.id)}
                         >
-                          {activeId === p.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          <span className="ml-1 text-[10px]">{activeId === p.id ? 'Stop' : 'Start'}</span>
+                          {activeParticipantId === p.id && !activeGroupId ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          <span className="ml-1 text-[10px]">{activeParticipantId === p.id && !activeGroupId ? 'Stop' : 'Start'}</span>
                         </Button>
                       </div>
                     </div>
                   ))}
                 </TabsContent>
-                <TabsContent value="groups" className="p-4 space-y-4">
+                <TabsContent value="groups" className="p-4 space-y-6">
                   {allGroups?.map((g) => {
                     const memberIds = Object.keys(g.members || {}).filter(k => k !== 'owner');
-                    const memberNames = memberIds
-                      .map(mId => availableParticipants?.find(p => p.id === mId || p.userId === mId)?.name)
-                      .filter(Boolean)
-                      .join(', ');
+                    const members = memberIds
+                      .map(mId => availableParticipants?.find(p => p.id === mId || p.userId === mId))
+                      .filter(Boolean);
 
                     return (
-                      <div key={g.id} className={cn(
-                        "flex flex-col p-3 border rounded-lg transition-all gap-3",
-                        activeId === g.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
-                      )}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-primary">{g.name}</span>
-                            <span className="text-[10px] text-muted-foreground line-clamp-1">{memberNames || 'No members assigned'}</span>
-                            {activeId === g.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1 mt-1"><Mic2 className="h-2 w-2" /> LIVE GROUP PREACHING</span>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {activeId === g.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
-                            <Button 
-                              size="sm" 
-                              variant={activeId === g.id ? "destructive" : "outline"} 
-                              className="h-8 px-2"
-                              disabled={(activeId !== null && activeId !== g.id) || session.status !== 'active'} 
-                              onClick={() => activeId === g.id ? handleStopTracking() : handleStartTracking(g.id, 'group')}
-                            >
-                              {activeId === g.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                              <span className="ml-1 text-[10px]">{activeId === g.id ? 'Stop' : 'Start'}</span>
-                            </Button>
-                          </div>
+                      <div key={g.id} className="space-y-3">
+                        <div className="flex items-center justify-between border-b pb-2">
+                          <span className="font-bold text-primary text-sm uppercase tracking-wider">{g.name}</span>
+                          <Badge variant="outline" className="text-[9px]">{members.length} Members</Badge>
+                        </div>
+                        <div className="space-y-2 pl-2">
+                          {members.map((m: any) => (
+                            <div key={m.id} className={cn(
+                              "flex items-center justify-between p-2 border rounded-md transition-all",
+                              activeParticipantId === m.id && activeGroupId === g.id ? "border-accent bg-accent/5 ring-1 ring-accent" : "hover:bg-muted/50"
+                            )}>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-medium">{m.name}</span>
+                                {activeParticipantId === m.id && activeGroupId === g.id && (
+                                  <span className="text-[8px] text-accent animate-pulse font-bold flex items-center gap-1 mt-0.5">
+                                    <Mic2 className="h-2 w-2" /> LIVE
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {activeParticipantId === m.id && activeGroupId === g.id && (
+                                  <span className="font-mono text-xs font-bold text-accent">{formatDuration(timer)}</span>
+                                )}
+                                <Button 
+                                  size="sm" 
+                                  variant={activeParticipantId === m.id && activeGroupId === g.id ? "destructive" : "ghost"} 
+                                  className="h-7 px-2"
+                                  disabled={(activeParticipantId !== null && (activeParticipantId !== m.id || activeGroupId !== g.id)) || session.status !== 'active'} 
+                                  onClick={() => activeParticipantId === m.id ? handleStopTracking() : handleStartTracking(m.id, g.id)}
+                                >
+                                  {activeParticipantId === m.id && activeGroupId === g.id ? <StopCircle className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                                  <span className="ml-1 text-[9px]">{activeParticipantId === m.id && activeGroupId === g.id ? 'Stop' : 'Start'}</span>
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          {members.length === 0 && <p className="text-[10px] text-muted-foreground italic">No members assigned to this group.</p>}
                         </div>
                       </div>
                     );
