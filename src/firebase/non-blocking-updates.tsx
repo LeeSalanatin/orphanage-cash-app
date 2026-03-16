@@ -8,6 +8,8 @@ import {
   CollectionReference,
   DocumentReference,
   SetOptions,
+  doc,
+  Firestore
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import {FirestorePermissionError} from '@/firebase/errors';
@@ -22,19 +24,17 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
       'permission-error',
       new FirestorePermissionError({
         path: docRef.path,
-        operation: 'write', // or 'create'/'update' based on options
+        operation: 'write',
         requestResourceData: data,
       })
     )
   })
-  // Execution continues immediately
 }
 
 
 /**
  * Initiates an addDoc operation for a collection reference.
  * Does NOT await the write operation internally.
- * Returns the Promise for the new doc ref, but typically not awaited by caller.
  */
 export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
   const promise = addDoc(colRef, data)
@@ -86,4 +86,27 @@ export function deleteDocumentNonBlocking(docRef: DocumentReference) {
         })
       )
     });
+}
+
+/**
+ * Sets or removes an admin role for a specific user.
+ */
+export function setAdminRoleNonBlocking(firestore: Firestore, targetUserId: string, isAdmin: boolean) {
+  const docRef = doc(firestore, 'roles_admin', targetUserId);
+  if (isAdmin) {
+    setDoc(docRef, { assignedAt: new Date().toISOString() }).catch(error => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'create',
+        requestResourceData: { assignedAt: '...' }
+      }));
+    });
+  } else {
+    deleteDoc(docRef).catch(error => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'delete'
+      }));
+    });
+  }
 }

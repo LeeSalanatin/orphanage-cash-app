@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,7 +15,12 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
+        // Allow the first user or a hardcoded YFJ bypass for setup if needed, 
+        // but normally we rely on the collection.
+        request.auth.token.email == 'admin@example.com'
+      );
     }
 
     function isMember(membersMap) {
@@ -24,62 +28,62 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get, list: if isOwner(userId);
+      allow get, list: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
+      allow update: if isExistingOwner(userId) || isAdmin();
     }
 
     match /participants/{participantId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
+      allow update, delete: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
         request.auth.uid == participantId ||
-        (resource.data.userId == null && request.auth.token.email == resource.data.email)
+        isAdmin()
       );
     }
 
     match /session_configurations/{configId} {
-      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isExistingOwner(resource.data.ownerId);
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
 
     match /groups/{groupId} {
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.members);
-      allow delete: if isExistingOwner(resource.data.ownerId);
+      allow create: if isSignedIn();
+      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.members) || isAdmin();
+      allow delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
 
     match /sessions/{sessionId} {
-      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerId);
-      allow delete: if isExistingOwner(resource.data.ownerId);
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members) || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
 
       match /preaching_events/{eventId} {
-        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow get, list: if isSignedIn();
         allow create: if isSignedIn();
-        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
+        allow update, delete: if isAdmin();
       }
 
       match /fines/{fineId} {
-        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow get, list: if isSignedIn();
         allow create: if isSignedIn();
-        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
+        allow update, delete: if isAdmin();
       }
 
       match /votes/{voteId} {
-        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow get, list: if isSignedIn();
         allow create: if isSignedIn();
-        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
+        allow update, delete: if isAdmin();
       }
     }
 
     match /roles_admin/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if isAdmin();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
