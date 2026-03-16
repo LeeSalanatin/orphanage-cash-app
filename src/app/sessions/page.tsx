@@ -2,29 +2,38 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useMemo } from 'react';
 
 export default function SessionsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Query sessions where the user is a member or owner
+  // Query sessions where the user is a member
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'sessions'),
-      where(`members.${user.uid}`, '!=', null),
-      orderBy(`members.${user.uid}`),
-      orderBy('createdAt', 'desc')
+      where(`members.${user.uid}`, '!=', null)
     );
   }, [firestore, user]);
 
-  const { data: sessions, isLoading } = useCollection(sessionsQuery);
+  const { data: rawSessions, isLoading } = useCollection(sessionsQuery);
+
+  // Sort in memory to avoid complex/impossible dynamic composite indexes
+  const sessions = useMemo(() => {
+    if (!rawSessions) return [];
+    return [...rawSessions].sort((a, b) => {
+      const dateA = a.createdAt?.seconds || 0;
+      const dateB = b.createdAt?.seconds || 0;
+      return dateB - dateA;
+    });
+  }, [rawSessions]);
 
   return (
     <div className="container mx-auto py-8 px-4">

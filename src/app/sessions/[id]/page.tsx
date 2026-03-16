@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, orderBy, where } from 'firebase/firestore';
+import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,7 @@ import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2 }
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useMemo } from 'react';
 
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -33,18 +33,25 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Filter by sessionMembers to satisfy security rules
     return query(
       collection(firestore, 'sessions', id, 'preaching_events'),
-      where(`sessionMembers.${user.uid}`, '!=', null),
-      orderBy(`sessionMembers.${user.uid}`),
-      orderBy('startTime', 'desc')
+      where(`sessionMembers.${user.uid}`, '!=', null)
     );
   }, [firestore, id, user]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: records, isLoading: recordsLoading } = useCollection(preachingEventsRef);
+  const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
+
+  // Sort records in memory
+  const records = useMemo(() => {
+    if (!rawRecords) return [];
+    return [...rawRecords].sort((a, b) => {
+      const startA = a.startTime ? new Date(a.startTime).getTime() : 0;
+      const startB = b.startTime ? new Date(b.startTime).getTime() : 0;
+      return startB - startA;
+    });
+  }, [rawRecords]);
 
   useEffect(() => {
     let interval: any;

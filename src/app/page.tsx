@@ -2,27 +2,28 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, limit, orderBy, where } from 'firebase/firestore';
+import { collection, query, limit, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Mic2, Users, TrendingUp, Clock, ArrowRight, PlusCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useMemo } from 'react';
 
 export default function Dashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Query sessions where the user is a member (includes being an owner)
+  // Query sessions where the user is a member
+  // Note: We removed orderBy here because ordering by a dynamic field (members.UID) 
+  // requires a composite index that cannot be pre-defined for all users.
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'sessions'),
       where(`members.${user.uid}`, '!=', null),
-      orderBy(`members.${user.uid}`), // Needed for '!=' queries with orderBy
-      orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(20) // Get a reasonable batch to sort in memory
     );
   }, [firestore, user]);
 
@@ -39,13 +40,25 @@ export default function Dashboard() {
     );
   }, [firestore, user]);
 
-  const { data: recentSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
+  const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
 
+  // Sort sessions in memory since we can't use server-side orderBy with dynamic fields
+  const recentSessions = useMemo(() => {
+    if (!rawSessions) return [];
+    return [...rawSessions]
+      .sort((a, b) => {
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateB - dateA;
+      })
+      .slice(0, 5);
+  }, [rawSessions]);
+
   const stats = {
-    totalSessions: recentSessions?.length || 0,
-    activeSessions: recentSessions?.filter((s: any) => s.status === 'active').length || 0,
+    totalSessions: rawSessions?.length || 0,
+    activeSessions: rawSessions?.filter((s: any) => s.status === 'active').length || 0,
     totalParticipants: participants?.length || 0,
     totalGroups: groups?.length || 0
   };

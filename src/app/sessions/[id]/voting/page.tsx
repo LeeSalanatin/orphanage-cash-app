@@ -1,8 +1,9 @@
+
 "use client";
 
-import { useEffect, useState, use } from 'react';
-import { doc, getDoc, collection, getDocs, addDoc, serverTimestamp, increment, updateDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useState, useMemo } from 'react';
+import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { doc, collection, query, where, increment, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -10,93 +11,94 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Award, Star, Trophy, ArrowLeft, Loader2, Users } from 'lucide-react';
 import Link from 'next/link';
+import { use } from 'react';
 
 export default function VotingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const db = useFirestore();
+  const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
-  const [session, setSession] = useState<any>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [votes, setVotes] = useState<any>({
     individual: [],
     group: null
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!db) return;
-      try {
-        const sSnap = await getDoc(doc(db, 'sessions', id));
-        if (sSnap.exists()) {
-          const sData = { id: sSnap.id, ...sSnap.data() };
-          setSession(sData);
+  const sessionRef = useMemo(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'sessions', id);
+  }, [firestore, id]);
 
-          const pSnap = await getDocs(collection(db, 'participants'));
-          setParticipants(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+  const participantsRef = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'participants');
+  }, [firestore]);
 
-          if (sData.sessionType === 'group') {
-            const gSnap = await getDocs(collection(db, 'groups'));
-            setGroups(gSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [id, db]);
+  // Only list groups the user belongs to
+  const groupsQuery = useMemo(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'groups'),
+      where(`members.${user.uid}`, '!=', null)
+    );
+  }, [firestore, user]);
 
-  async function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled || !db) return;
+  const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
+  const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
+  const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
+
+  const loading = sessionLoading || participantsLoading || groupsLoading;
+
+  function handleSubmitVote() {
+    if (!session?.votingConfig?.enabled || !firestore || !user) return;
     
     setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'votes'), {
-        sessionId: id,
-        voteData: votes,
-        createdAt: serverTimestamp()
-      });
+    
+    const voteData = {
+      sessionId: id,
+      voteData: votes,
+      voterParticipantId: user.uid,
+      timestamp: new Date().toISOString(),
+      sessionOwnerId: session.ownerId,
+      sessionMembers: session.members || { [user.uid]: 'owner' }
+    };
 
-      const dist = session.pointDistribution;
-      if (dist.enabled) {
-        for (const pId of votes.individual) {
-          if (pId) {
-            await updateDoc(doc(db, 'participants', pId), {
-              totalPoints: increment(dist.pointsPerTopIndividual || 10)
+    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
+
+    const dist = session.pointDistribution;
+    if (dist && dist.enabled) {
+      // Award individual points
+      for (const pId of votes.individual) {
+        if (pId) {
+          updateDocumentNonBlocking(doc(firestore, 'participants', pId), {
+            totalPoints: increment(dist.pointsPerTopIndividual || 10)
+          });
+        }
+      }
+      
+      // Award group points
+      if (votes.group) {
+        updateDocumentNonBlocking(doc(firestore, 'groups', votes.group), {
+          totalPoints: increment(dist.pointsPerTopGroup || 50)
+        });
+        
+        const group = groups?.find(g => g.id === votes.group);
+        if (group && group.members) {
+          const memberIds = Object.keys(group.members);
+          const split = Math.floor((dist.pointsPerTopGroup || 50) / memberIds.length);
+          for (const memberId of memberIds) {
+            updateDocumentNonBlocking(doc(firestore, 'participants', memberId), {
+              totalPoints: increment(split)
             });
           }
         }
-        
-        if (votes.group) {
-          await updateDoc(doc(db, 'groups', votes.group), {
-            totalPoints: increment(dist.pointsPerTopGroup || 50)
-          });
-          
-          const group = groups.find(g => g.id === votes.group);
-          if (group && group.members?.length > 0) {
-            const split = Math.floor((dist.pointsPerTopGroup || 50) / group.members.length);
-            for (const memberId of group.members) {
-              await updateDoc(doc(db, 'participants', memberId), {
-                totalPoints: increment(split)
-              });
-            }
-          }
-        }
       }
-
-      toast({ title: "Votes Cast Successfully!", description: "Points have been distributed to the winners." });
-      setVotes({ individual: [], group: null });
-    } catch (e) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Voting Failed", description: "Failed to submit your vote." });
-    } finally {
-      setIsSubmitting(false);
     }
+
+    toast({ title: "Votes Cast Successfully!", description: "Points have been distributed." });
+    setVotes({ individual: [], group: null });
+    setIsSubmitting(false);
   }
 
   if (loading) return (
@@ -141,7 +143,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                 <CardDescription>Choose up to {topLimit} participants who preached exceptionally well.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {participants.map((p) => {
+                {participants?.map((p) => {
                   const isSelected = votes.individual.includes(p.id);
                   return (
                     <div 
@@ -177,7 +179,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
               </CardHeader>
               <CardContent>
                 <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
-                  {groups.map((g) => (
+                  {groups?.map((g) => (
                     <div key={g.id} className="flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-colors">
                       <RadioGroupItem value={g.id} id={g.id} />
                       <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer text-lg">{g.name}</Label>
