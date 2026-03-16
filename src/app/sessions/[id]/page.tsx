@@ -10,9 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
@@ -29,7 +29,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
 
-  // Edit States for Menu
+  // Edit States for Session Settings
   const [editTitle, setEditTitle] = useState('');
   const [editMaxTimeMin, setEditMaxTimeMin] = useState('');
   const [editMaxTimeSec, setEditMaxTimeSec] = useState('0');
@@ -41,6 +41,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editRewardTop2, setEditRewardTop2] = useState('50');
   const [editRewardTop3, setEditRewardTop3] = useState('25');
   const [editRewardGroupTop1, setEditRewardGroupTop1] = useState('100');
+
+  // Edit State for specific record
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [newMin, setNewMin] = useState('');
+  const [newSec, setNewSec] = useState('');
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -124,7 +130,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         name: r.participantName,
         totalDuration: r.actualDurationSeconds,
         formatted: r.actualDurationFormatted,
-        totalFine: r.totalFineAmount || 0
+        totalFine: r.totalFineAmount || 0,
+        originalRecord: r
       }));
     }
 
@@ -147,22 +154,22 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       groups[gId].totalFine += (r.totalFineAmount || 0);
       
       if (r.preachingGroupId) {
-        // Extract participant name from "Group - Name" if possible
         const cleanName = r.participantName.includes(' - ') 
           ? r.participantName.split(' - ').slice(1).join(' - ') 
           : r.participantName;
           
         groups[gId].members.push({
+          id: r.id,
           name: cleanName,
-          duration: r.actualDurationFormatted
+          duration: r.actualDurationFormatted,
+          originalRecord: r
         });
+      } else {
+        groups[gId].originalRecord = r;
       }
     });
 
-    return Object.values(groups).sort((a: any, b: any) => {
-       // Just sort by their appearance order (roughly reversed by Firestore query)
-       return 0; 
-    });
+    return Object.values(groups);
   }, [records, session, allGroups]);
 
   const leaderboard = useMemo(() => {
@@ -237,15 +244,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Tracking Cancelled" });
   }
 
-  async function handleStopTracking() {
-    if (!activeParticipantId || !session || !firestore || !user) return;
-    
-    const durationSeconds = timer;
+  async function calculateFineForRecord(durationSeconds: number, isGroup: boolean) {
+    if (!session) return { totalFineAmount: 0, explanation: "", overageSeconds: 0 };
+
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
     
     const rule = session.fineRules?.find((r: any) => 
-      activeGroupId ? r.appliesTo === 'group' : r.appliesTo === 'individual'
+      isGroup ? r.appliesTo === 'group' : r.appliesTo === 'individual'
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 30 };
     
     let totalFineAmount = 0;
@@ -262,16 +268,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
-    const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
-    const displayName = targetGroup ? `${targetGroup.name} - ${targetParticipant?.name}` : targetParticipant?.name;
-    
     let explanation = "No fine incurred.";
     if (totalFineAmount > 0) {
       try {
         const aiResponse = await generateFineExplanation({
           sessionType: session.sessionType,
-          participantName: targetParticipant?.name || 'Target',
+          participantName: "Participant",
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min`,
@@ -287,13 +289,25 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
+    return { totalFineAmount, explanation, overageSeconds };
+  }
+
+  async function handleStopTracking() {
+    if (!activeParticipantId || !session || !firestore || !user) return;
+    
+    const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(timer, !!activeGroupId);
+
+    const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
+    const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
+    const displayName = targetGroup ? `${targetGroup.name} - ${targetParticipant?.name}` : targetParticipant?.name;
+    
     const eventData = {
       sessionId: id,
       participantId: activeParticipantId,
       preachingGroupId: activeGroupId,
       participantName: displayName || 'Unknown',
-      actualDurationSeconds: durationSeconds,
-      actualDurationFormatted: formatDuration(durationSeconds),
+      actualDurationSeconds: timer,
+      actualDurationFormatted: formatDuration(timer),
       overageSeconds: overageSeconds,
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
@@ -305,25 +319,34 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
-    if (totalFineAmount > 0) {
-      const fineData = {
-        sessionId: id,
-        targetParticipantId: activeParticipantId,
-        targetGroupId: activeGroupId,
-        amount: totalFineAmount,
-        calculationDetails: fineCalculationDetails,
-        explanation,
-        status: 'ISSUED',
-        issuedDateTime: new Date().toISOString(),
-        sessionOwnerId: session.ownerId,
-        sessionMembers: session.members || { [user.uid]: 'owner' }
-      };
-      addDocumentNonBlocking(collection(firestore, 'sessions', id, 'fines'), fineData);
-    }
-
     setActiveParticipantId(null);
     setActiveGroupId(null);
     toast({ title: "Preaching Recorded" });
+  }
+
+  async function handleSaveEditedRecord() {
+    if (!editingRecord || !firestore) return;
+    
+    setIsSavingRecord(true);
+    try {
+      const durationSeconds = (parseInt(newMin) || 0) * 60 + (parseInt(newSec) || 0);
+      const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, !!editingRecord.preachingGroupId);
+
+      updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id), {
+        actualDurationSeconds: durationSeconds,
+        actualDurationFormatted: formatDuration(durationSeconds),
+        overageSeconds,
+        totalFineAmount,
+        explanation
+      });
+
+      toast({ title: "Record Updated", description: "Time and fine have been recalculated." });
+      setEditingRecord(null);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Could not update record." });
+    } finally {
+      setIsSavingRecord(false);
+    }
   }
 
   function handleSaveSettings() {
@@ -360,7 +383,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const dist = session.pointDistribution;
     if (!dist || !dist.enabled) return;
 
-    // Distribute Individual Rewards
     leaderboard.individuals.forEach(item => {
       let reward = 0;
       if (item.rank === 1) reward = dist.rewardTop1;
@@ -374,7 +396,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     });
 
-    // Distribute Group Rewards (Split ONLY among participating members)
     leaderboard.groups.forEach(item => {
       if (item.rank === 1) {
         const reward = dist.rewardGroupTop1;
@@ -399,8 +420,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               });
             }
           });
-          
-          toast({ title: "Group Reward Split", description: `₱${reward} split among ${participatingMemberIds.size} active members.` });
         }
       }
     });
@@ -459,7 +478,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <TabsList className="mb-6 grid w-full grid-cols-4 max-w-[800px]">
               <TabsTrigger value="live"><History className="h-4 w-4 mr-2" /> Live</TabsTrigger>
               <TabsTrigger value="results"><Trophy className="h-4 w-4 mr-2" /> Results</TabsTrigger>
-              <TabsTrigger value="timing"><Clock className="h-4 w-4 mr-2" /> Timing</TabsTrigger>
+              <TabsTrigger value="timing"><Settings2 className="h-4 w-4 mr-2" /> Rules</TabsTrigger>
               <TabsTrigger value="incentives"><Star className="h-4 w-4 mr-2" /> Rewards</TabsTrigger>
             </TabsList>
 
@@ -505,16 +524,51 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                 {item.type === 'group' ? <UsersIcon className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-muted-foreground" />}
                                 {item.name} 
                                 <span className="text-muted-foreground font-normal ml-1">= {formatDuration(item.totalDuration)}</span>
+                                {!item.preachingGroupId && user?.uid === session.ownerId && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 ml-2" 
+                                    onClick={() => {
+                                      setEditingRecord(item.originalRecord);
+                                      setNewMin(Math.floor(item.originalRecord.actualDurationSeconds / 60).toString());
+                                      setNewSec((item.originalRecord.actualDurationSeconds % 60).toString());
+                                    }}
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                )}
                               </p>
                               {item.type === 'group' && (
-                                <p className="text-sm text-muted-foreground italic">
-                                  ({item.members.map((m: any) => `${m.name} ${m.duration}`).join(' and ')})
+                                <p className="text-sm text-muted-foreground italic flex flex-wrap gap-x-2">
+                                  {item.members.map((m: any, idx: number) => (
+                                    <span key={m.id} className="flex items-center">
+                                      {m.name} {m.duration}
+                                      {user?.uid === session.ownerId && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-4 w-4 ml-1" 
+                                          onClick={() => {
+                                            setEditingRecord(m.originalRecord);
+                                            setNewMin(Math.floor(m.originalRecord.actualDurationSeconds / 60).toString());
+                                            setNewSec((m.originalRecord.actualDurationSeconds % 60).toString());
+                                          }}
+                                        >
+                                          <Edit2 className="h-2 w-2" />
+                                        </Button>
+                                      )}
+                                      {idx < item.members.length - 1 && <span className="ml-2">and</span>}
+                                    </span>
+                                  ))}
                                 </p>
                               )}
                             </div>
-                            <Badge variant={item.totalFine > 0 ? "destructive" : "default"}>
-                              {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'Clear'}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge variant={item.totalFine > 0 ? "destructive" : "default"}>
+                                {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'Clear'}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -590,7 +644,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <TabsContent value="timing" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Menu: Timing & Fines</CardTitle>
+                  <CardTitle>Timing & Fines</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -603,11 +657,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <Input type="number" min="0" max="59" value={editMaxTimeSec} onChange={(e) => setEditMaxTimeSec(e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>{session.sessionType === 'sunday preaching' ? 'Fixed Fine Amount (₱)' : 'Fine Amount (₱ per Min)'}</Label>
+                      <Label>{session.sessionType === 'sunday preaching' ? 'Fixed Fine (₱)' : 'Fine (₱ per Min)'}</Label>
                       <Input type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
                     </div>
                   </div>
-                  
                   <Button className="w-full" onClick={handleSaveSettings}>Save Timing Rules</Button>
                 </CardContent>
               </Card>
@@ -616,7 +669,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <TabsContent value="incentives" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Menu: Rewards Configuration</CardTitle>
+                  <CardTitle>Rewards Configuration</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex items-center justify-between">
@@ -625,7 +678,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   </div>
                   
                   {editPointsEnabled && (
-                    <>
+                    <div className="space-y-6">
                       <div className="space-y-4">
                         <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground border-b pb-2">
                           <User className="h-4 w-4" /> Individual Rewards
@@ -654,13 +707,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <div className="space-y-2">
                             <Label className="text-xs">Top Group Reward</Label>
                             <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
-                            <p className="text-[10px] text-muted-foreground">Reward split ONLY among group members who record preaching time in this session.</p>
+                            <p className="text-[10px] text-muted-foreground">Reward split ONLY among active members.</p>
                           </div>
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
-                  
                   <Button className="w-full h-12" onClick={handleSaveSettings}>Save Reward Settings</Button>
                 </CardContent>
               </Card>
@@ -761,6 +813,36 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           </Card>
         </div>
       </div>
+
+      {/* Edit Record Dialog */}
+      <Dialog open={!!editingRecord} onOpenChange={(o) => !o && setEditingRecord(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Recorded Time</DialogTitle>
+            <DialogDescription>
+              Adjust the preaching duration for <strong>{editingRecord?.participantName}</strong>. 
+              The fine will be recalculated automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Minutes</Label>
+              <Input type="number" value={newMin} onChange={(e) => setNewMin(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Seconds</Label>
+              <Input type="number" min="0" max="59" value={newSec} onChange={(e) => setNewSec(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRecord(null)}>Cancel</Button>
+            <Button onClick={handleSaveEditedRecord} disabled={isSavingRecord}>
+              {isSavingRecord ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Update Record
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
