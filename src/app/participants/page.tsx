@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2 } from 'lucide-react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,6 +24,7 @@ export default function ParticipantsPage() {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<{id: string, name: string} | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
@@ -54,10 +55,7 @@ export default function ParticipantsPage() {
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'groups'),
-      where(`members.${user.uid}`, '!=', null)
-    );
+    return collection(firestore, 'groups');
   }, [firestore, user]);
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
@@ -99,6 +97,7 @@ export default function ParticipantsPage() {
     
     addDocumentNonBlocking(collection(firestore, 'groups'), {
       name: newGroupName,
+      description: newGroupDescription.trim(),
       ownerId: user.uid,
       totalPoints: 0,
       totalFines: 0,
@@ -106,6 +105,7 @@ export default function ParticipantsPage() {
       createdAt: new Date().toISOString()
     });
     setNewGroupName('');
+    setNewGroupDescription('');
     toast({ title: "Group Created", description: `${newGroupName} is ready for sessions.` });
   }
 
@@ -159,7 +159,7 @@ export default function ParticipantsPage() {
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle>Add Participant</CardTitle>
-              <CardDescription>Register a new preacher. You can now edit their name at any time.</CardDescription>
+              <CardDescription>Register a new preacher. You can edit their name later.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="space-y-1">
@@ -289,22 +289,31 @@ export default function ParticipantsPage() {
               <CardTitle>Create New Group</CardTitle>
               <CardDescription>Organize participants into teams for group sessions.</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-4">
-              <div className="flex-grow space-y-1">
-                <Label htmlFor="groupName">Group Name</Label>
-                <Input 
-                  id="groupName" 
-                  value={newGroupName} 
-                  onChange={(e) => setNewGroupName(e.target.value)} 
-                  placeholder="Worship Team A"
-                />
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="groupName">Group Code (e.g., CCBB)</Label>
+                  <Input 
+                    id="groupName" 
+                    value={newGroupName} 
+                    onChange={(e) => setNewGroupName(e.target.value)} 
+                    placeholder="CCBB"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="groupDescription">Description (e.g., Center, CDO...)</Label>
+                  <Input 
+                    id="groupDescription" 
+                    value={newGroupDescription} 
+                    onChange={(e) => setNewGroupDescription(e.target.value)} 
+                    placeholder="Center, CDO, Bohol and Butuan"
+                  />
+                </div>
               </div>
-              <div className="flex items-end">
-                <Button onClick={handleAddGroup} disabled={!newGroupName.trim()}>
-                  <Users className="mr-2 h-4 w-4" />
-                  Create
-                </Button>
-              </div>
+              <Button onClick={handleAddGroup} disabled={!newGroupName.trim()} className="w-full">
+                <Users className="mr-2 h-4 w-4" />
+                Create Group
+              </Button>
             </CardContent>
           </Card>
 
@@ -315,8 +324,15 @@ export default function ParticipantsPage() {
               </div>
             ) : groups && groups.map((g) => (
               <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-lg text-primary">{g.name}</CardTitle>
+                <CardHeader className="flex flex-row items-start justify-between pb-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-xl font-bold text-primary">{g.name}</CardTitle>
+                    {g.description && (
+                      <CardDescription className="text-xs flex items-center gap-1">
+                        <Info className="h-3 w-3" /> {g.description}
+                      </CardDescription>
+                    )}
+                  </div>
                   {(user?.uid === g.ownerId || isAdmin) && (
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
                       <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
@@ -326,9 +342,10 @@ export default function ParticipantsPage() {
                 <CardContent>
                   <div className="flex justify-between text-sm mb-4">
                     <span className="text-muted-foreground">Team Points:</span>
-                    <span className="font-bold text-accent">{g.totalPoints || 0}</span>
+                    <span className="font-bold text-accent">₱{g.totalPoints || 0}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                  <div className="text-[10px] text-muted-foreground bg-muted p-2 rounded flex items-center gap-2">
+                    <Users className="h-3 w-3" />
                     Members: {Object.keys(g.members || {}).length}
                   </div>
                 </CardContent>
@@ -336,7 +353,7 @@ export default function ParticipantsPage() {
             ))}
             {!groupsLoading && (!groups || groups.length === 0) && (
               <div className="col-span-full text-center py-10 text-muted-foreground">
-                No groups found that you belong to.
+                No groups found.
               </div>
             )}
           </div>
