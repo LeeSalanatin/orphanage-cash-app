@@ -56,13 +56,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return collection(firestore, 'participants');
   }, [firestore]);
 
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'groups'),
-      where(`members.${user.uid}`, '!=', null)
-    );
-  }, [firestore, user]);
+  const allGroupsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    // Fetch all groups so session owner can distribute rewards properly
+    return collection(firestore, 'groups');
+  }, [firestore]);
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -82,7 +80,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: userGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(allGroupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
   const { data: votes, isLoading: votesLoading } = useCollection(votesRef);
 
@@ -122,13 +120,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const grpCounts: Record<string, number> = {};
 
     votes.forEach(v => {
-      // Individual votes
       if (v.voteData?.individual) {
         v.voteData.individual.forEach((id: string) => {
           indCounts[id] = (indCounts[id] || 0) + 1;
         });
       }
-      // Group votes
       if (v.voteData?.group) {
         grpCounts[v.voteData.group] = (grpCounts[v.voteData.group] || 0) + 1;
       }
@@ -138,7 +134,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const sorted = Object.entries(counts)
         .map(([id, count]) => ({
           id,
-          name: dataPool?.find(d => d.id === id)?.name || 'Unknown',
+          name: dataPool?.find(d => d.id === id)?.name || 'Unknown Group',
           votes: count
         }))
         .sort((a, b) => b.votes - a.votes);
@@ -159,9 +155,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     return {
       individuals: rankList(indCounts, availableParticipants || []),
-      groups: rankList(grpCounts, userGroups || [])
+      groups: rankList(grpCounts, allGroups || [])
     };
-  }, [votes, availableParticipants, userGroups]);
+  }, [votes, availableParticipants, allGroups]);
 
   useEffect(() => {
     let interval: any;
@@ -230,7 +226,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const targetGroup = activeType === 'group' ? userGroups?.find(g => g.id === activeId) : null;
+    const targetGroup = activeType === 'group' ? allGroups?.find(g => g.id === activeId) : null;
     const targetParticipant = activeType === 'individual' ? availableParticipants?.find(p => p.id === activeId) : null;
     const targetName = activeType === 'individual' ? targetParticipant?.name : targetGroup?.name;
     
@@ -358,8 +354,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           totalPoints: increment(reward)
         });
 
-        // Also split among members
-        const group = userGroups?.find(g => g.id === item.id);
+        // Also split among members - find group in allGroups
+        const group = allGroups?.find(g => g.id === item.id);
         if (group && group.members) {
           const memberIds = Object.keys(group.members);
           const split = Math.floor(reward / (memberIds.length || 1));
@@ -441,7 +437,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <p className="text-3xl font-bold font-headline mb-6 text-primary text-center">
                       {activeType === 'individual' 
                         ? availableParticipants?.find(p => p.id === activeId)?.name 
-                        : userGroups?.find(g => g.id === activeId)?.name}
+                        : allGroups?.find(g => g.id === activeId)?.name}
                     </p>
                     <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8">
                       {formatDuration(timer)}
@@ -514,7 +510,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             <TableCell>{item.name}</TableCell>
                             <TableCell className="text-right font-mono">{item.votes}</TableCell>
                           </TableRow>
-                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>} housekeeper
+                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>}
                       </TableBody>
                     </Table>
                   </div>
@@ -633,7 +629,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   ))}
                 </TabsContent>
                 <TabsContent value="groups" className="p-4 space-y-2">
-                  {userGroups?.map((g) => (
+                  {allGroups?.map((g) => (
                     <div key={g.id} className="flex items-center justify-between p-2 border rounded hover:bg-muted">
                       <span className="text-sm">{g.name}</span>
                       <Button size="sm" variant="outline" disabled={!!activeId || session.status !== 'active'} onClick={() => handleStartTracking(g.id, 'group')}>

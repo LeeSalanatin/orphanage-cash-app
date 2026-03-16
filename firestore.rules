@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * PREACHPOINT SECURITY RULES
-     */
-
     function isSignedIn() {
       return request.auth != null;
     }
@@ -27,52 +23,36 @@ service cloud.firestore {
       return isSignedIn() && membersMap != null && membersMap[request.auth.uid] != null;
     }
 
-    function isMemberAdmin(membersMap) {
-      return isSignedIn() && membersMap != null && (membersMap[request.auth.uid] == 'owner' || membersMap[request.auth.uid] == 'admin');
-    }
-
     match /users/{userId} {
       allow get, list: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
-      allow delete: if false;
-    }
-
-    match /roles_admin/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
     }
 
     match /participants/{participantId} {
       allow get, list: if isSignedIn();
       allow create: if isOwner(participantId);
       allow update: if isExistingOwner(participantId);
-      allow delete: if isExistingOwner(participantId);
     }
 
-    match /session_types/{sessionTypeId} {
-      allow get, list: if isSignedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /session_configurations/{sessionConfigurationId} {
-      allow get, list: if isSignedIn();
+    match /session_configurations/{configId} {
+      allow get, list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if isExistingOwner(resource.data.ownerId);
     }
 
     match /groups/{groupId} {
-      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
+      // Allow all signed-in users to list/get groups so session owners can identify winners
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerId) || isMemberAdmin(resource.data.members);
+      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.members);
       allow delete: if isExistingOwner(resource.data.ownerId);
     }
 
     match /sessions/{sessionId} {
       allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerId) || isMemberAdmin(resource.data.members);
+      allow update: if isExistingOwner(resource.data.ownerId);
       allow delete: if isExistingOwner(resource.data.ownerId);
 
       match /preaching_events/{eventId} {
@@ -94,11 +74,9 @@ service cloud.firestore {
       }
     }
 
-    match /participant_scores/{participantId} {
-      allow get, list: if isSignedIn();
-      allow create: if isOwner(participantId);
-      allow update: if isExistingOwner(participantId);
-      allow delete: if false;
+    match /roles_admin/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isAdmin();
     }
   }
 }
