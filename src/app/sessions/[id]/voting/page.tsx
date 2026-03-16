@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, where, increment, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking } from '@/firebase';
+import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -35,7 +35,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     return collection(firestore, 'participants');
   }, [firestore]);
 
-  // Only list groups the user belongs to
   const groupsQuery = useMemo(() => {
     if (!firestore || !user) return null;
     return query(
@@ -66,37 +65,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
 
-    const dist = session.pointDistribution;
-    if (dist && dist.enabled) {
-      // Award individual points
-      for (const pId of votes.individual) {
-        if (pId) {
-          updateDocumentNonBlocking(doc(firestore, 'participants', pId), {
-            totalPoints: increment(dist.pointsPerTopIndividual || 10)
-          });
-        }
-      }
-      
-      // Award group points
-      if (votes.group) {
-        updateDocumentNonBlocking(doc(firestore, 'groups', votes.group), {
-          totalPoints: increment(dist.pointsPerTopGroup || 50)
-        });
-        
-        const group = groups?.find(g => g.id === votes.group);
-        if (group && group.members) {
-          const memberIds = Object.keys(group.members);
-          const split = Math.floor((dist.pointsPerTopGroup || 50) / memberIds.length);
-          for (const memberId of memberIds) {
-            updateDocumentNonBlocking(doc(firestore, 'participants', memberId), {
-              totalPoints: increment(split)
-            });
-          }
-        }
-      }
-    }
-
-    toast({ title: "Votes Cast Successfully!", description: "Points have been distributed." });
+    toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted." });
     setVotes({ individual: [], group: null });
     setIsSubmitting(false);
   }
@@ -128,7 +97,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           <CardContent>
             <Trophy className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-xl font-bold">Voting Disabled</h3>
-            <p className="text-muted-foreground">This session does not have voting enabled.</p>
           </CardContent>
         </Card>
       ) : (
@@ -138,9 +106,8 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Star className="h-5 w-5 text-accent fill-accent" />
-                  Top Performers (Select {topLimit})
+                  Top Performers (Select up to {topLimit})
                 </CardTitle>
-                <CardDescription>Choose up to {topLimit} participants who preached exceptionally well.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {participants?.map((p) => {
@@ -175,7 +142,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <Users className="h-5 w-5 text-primary" />
                   Top Group
                 </CardTitle>
-                <CardDescription>Which group stood out as the best collective team?</CardDescription>
               </CardHeader>
               <CardContent>
                 <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
@@ -191,21 +157,12 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           )}
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="w-full max-w-md h-16 text-xl font-bold shadow-xl shadow-primary/20" 
+            <Button size="lg" className="w-full max-w-md h-16 text-xl font-bold" 
               onClick={handleSubmitVote}
               disabled={isSubmitting || (votes.individual.length === 0 && !votes.group)}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                  Submitting Votes...
-                </>
-              ) : (
-                <>
-                  <Trophy className="mr-2 h-7 w-7" />
-                  Submit All Votes
-                </>
-              )}
+              {isSubmitting ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : <Trophy className="mr-2 h-7 w-7" />}
+              Submit All Votes
             </Button>
           </div>
         </div>

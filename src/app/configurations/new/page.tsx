@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -54,8 +54,10 @@ export default function NewConfiguration() {
   // Advanced Settings
   const [votingEnabled, setVotingEnabled] = useState(false);
   const [pointsEnabled, setPointsEnabled] = useState(false);
-  const [topN, setTopN] = useState('3');
-  const [pointsAmount, setPointsAmount] = useState('100');
+  const [rewardTop1, setRewardTop1] = useState('100');
+  const [rewardTop2, setRewardTop2] = useState('50');
+  const [rewardTop3, setRewardTop3] = useState('25');
+  const [rewardGroupTop1, setRewardGroupTop1] = useState('100');
 
   const [aiDescription, setAiDescription] = useState('');
 
@@ -107,8 +109,6 @@ export default function NewConfiguration() {
       }
       setVotingEnabled(rules.votingConfig?.enabled || false);
       setPointsEnabled(rules.pointDistribution?.enabled || false);
-      setTopN(rules.votingConfig?.topIndividualsToVoteFor?.toString() || '3');
-      setPointsAmount(rules.pointDistribution?.pointsPerTopIndividual?.toString() || '100');
       
       toast({ title: "Rules Generated", description: "AI has filled in the configuration based on your description." });
     } catch (e) {
@@ -141,13 +141,15 @@ export default function NewConfiguration() {
         ],
         votingConfig: {
           enabled: votingEnabled,
-          topIndividualsToVoteFor: parseInt(topN) || 0,
+          topIndividualsToVoteFor: 3, // Standard
           topGroupsToVoteFor: sessionType === 'group' ? 1 : 0
         },
         pointDistribution: {
           enabled: pointsEnabled,
-          pointsPerTopIndividual: parseInt(pointsAmount) || 0,
-          pointsPerTopGroup: sessionType === 'group' ? parseInt(pointsAmount) : 0
+          rewardTop1: parseInt(rewardTop1) || 0,
+          rewardTop2: parseInt(rewardTop2) || 0,
+          rewardTop3: parseInt(rewardTop3) || 0,
+          rewardGroupTop1: parseInt(rewardGroupTop1) || 0
         },
         ownerId: user.uid,
         createdAt: serverTimestamp(),
@@ -334,19 +336,29 @@ export default function NewConfiguration() {
                 {votingEnabled && (
                   <div className="pl-6 space-y-4 border-l-2 border-primary/20">
                     <div className="flex items-center justify-between">
-                      <Label>Enable Point Rewards</Label>
+                      <Label>Enable Reward System (Tally)</Label>
                       <Switch checked={pointsEnabled} onCheckedChange={setPointsEnabled} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-2">
-                        <Label>Top N Winners</Label>
-                        <Input type="number" value={topN} onChange={(e) => setTopN(e.target.value)} />
+                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-yellow-500" /> Top 1 Reward</Label>
+                        <Input type="number" value={rewardTop1} onChange={(e) => setRewardTop1(e.target.value)} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Points</Label>
-                        <Input type="number" value={pointsAmount} onChange={(e) => setPointsAmount(e.target.value)} />
+                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-slate-400" /> Top 2 Reward</Label>
+                        <Input type="number" value={rewardTop2} onChange={(e) => setRewardTop2(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-amber-600" /> Top 3 Reward</Label>
+                        <Input type="number" value={rewardTop3} onChange={(e) => setRewardTop3(e.target.value)} />
                       </div>
                     </div>
+                    {sessionType === 'group' && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label className="text-xs flex items-center gap-1"><Trophy className="h-3 w-3 text-primary" /> Top Group Reward</Label>
+                        <Input type="number" value={rewardGroupTop1} onChange={(e) => setRewardGroupTop1(e.target.value)} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
