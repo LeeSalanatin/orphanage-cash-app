@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -14,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator, Star } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator, Star, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -334,30 +333,49 @@ export default function NewConfiguration() {
                   <Switch checked={votingEnabled} onCheckedChange={setVotingEnabled} />
                 </div>
                 {votingEnabled && (
-                  <div className="pl-6 space-y-4 border-l-2 border-primary/20">
+                  <div className="pl-6 space-y-6 border-l-2 border-primary/20">
                     <div className="flex items-center justify-between">
-                      <Label>Enable Reward System (Tally)</Label>
+                      <Label className="font-bold">Enable Reward System (Points)</Label>
                       <Switch checked={pointsEnabled} onCheckedChange={setPointsEnabled} />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-yellow-500" /> Top 1 Reward</Label>
-                        <Input type="number" value={rewardTop1} onChange={(e) => setRewardTop1(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-slate-400" /> Top 2 Reward</Label>
-                        <Input type="number" value={rewardTop2} onChange={(e) => setRewardTop2(e.target.value)} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-amber-600" /> Top 3 Reward</Label>
-                        <Input type="number" value={rewardTop3} onChange={(e) => setRewardTop3(e.target.value)} />
-                      </div>
-                    </div>
-                    {sessionType === 'group' && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <Label className="text-xs flex items-center gap-1"><Trophy className="h-3 w-3 text-primary" /> Top Group Reward</Label>
-                        <Input type="number" value={rewardGroupTop1} onChange={(e) => setRewardGroupTop1(e.target.value)} />
-                      </div>
+                    
+                    {pointsEnabled && (
+                      <>
+                        {/* Individual Rewards */}
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                            <User className="h-4 w-4" /> Individual Rewards
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-yellow-500" /> Top 1 Reward</Label>
+                              <Input type="number" value={rewardTop1} onChange={(e) => setRewardTop1(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-slate-400" /> Top 2 Reward</Label>
+                              <Input type="number" value={rewardTop2} onChange={(e) => setRewardTop2(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs flex items-center gap-1"><Star className="h-3 w-3 text-amber-600" /> Top 3 Reward</Label>
+                              <Input type="number" value={rewardTop3} onChange={(e) => setRewardTop3(e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Group Rewards */}
+                        {sessionType === 'group' && (
+                          <div className="space-y-4 pt-4 border-t">
+                            <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                              <Trophy className="h-4 w-4" /> Group Reward
+                            </h4>
+                            <div className="space-y-2">
+                              <Label className="text-xs flex items-center gap-1"><Trophy className="h-3 w-3 text-primary" /> Top Group Reward</Label>
+                              <Input type="number" value={rewardGroupTop1} onChange={(e) => setRewardGroupTop1(e.target.value)} />
+                              <p className="text-[10px] text-muted-foreground">This reward will be split among members of the winning group.</p>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

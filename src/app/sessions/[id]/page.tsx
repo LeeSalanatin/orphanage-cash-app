@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -12,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator, Star, CheckCircle2 } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Calculator, Star, CheckCircle2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -58,7 +57,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const allGroupsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
-    // Fetch all groups so session owner can distribute rewards properly
     return collection(firestore, 'groups');
   }, [firestore]);
 
@@ -112,7 +110,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
   }, [rawRecords]);
 
-  // Calculate Leaderboard
   const leaderboard = useMemo(() => {
     if (!votes) return { individuals: [], groups: [] };
 
@@ -134,7 +131,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const sorted = Object.entries(counts)
         .map(([id, count]) => ({
           id,
-          name: dataPool?.find(d => d.id === id)?.name || 'Unknown Group',
+          name: dataPool?.find(d => d.id === id)?.name || 'Unknown',
           votes: count
         }))
         .sort((a, b) => b.votes - a.votes);
@@ -175,24 +172,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  function calculateSimulatedFine() {
-    const maxSeconds = (parseInt(editMaxTimeMin) || 0) * 60 + (parseInt(editMaxTimeSec) || 0);
-    const simSeconds = (parseInt(simMin) || 0) * 60 + (parseInt(simSec) || 0);
-    const overage = Math.max(0, simSeconds - maxSeconds);
-    
-    if (overage === 0) {
-      setSimResult(0);
-      return;
-    }
-
-    if (editFineType === 'fixed' || session?.sessionType === 'sunday preaching') {
-      setSimResult(parseFloat(editFineAmount) || 0);
-    } else {
-      const ratePerSecond = (parseFloat(editFineAmount) || 0) / 60;
-      setSimResult(overage * ratePerSecond);
-    }
   }
 
   function handleStartTracking(targetId: string, type: 'individual' | 'group') {
@@ -332,7 +311,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const dist = session.pointDistribution;
     if (!dist || !dist.enabled) return;
 
-    // Distribute individual points
     leaderboard.individuals.forEach(item => {
       let reward = 0;
       if (item.rank === 1) reward = dist.rewardTop1;
@@ -346,7 +324,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     });
 
-    // Distribute group points
     leaderboard.groups.forEach(item => {
       if (item.rank === 1) {
         const reward = dist.rewardGroupTop1;
@@ -354,7 +331,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           totalPoints: increment(reward)
         });
 
-        // Also split among members - find group in allGroups
         const group = allGroups?.find(g => g.id === item.id);
         if (group && group.members) {
           const memberIds = Object.keys(group.members);
@@ -387,8 +363,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!session) return null;
 
-  const maxLimitFormatted = `${session.maxPreachingTimeMinutes || 0}m ${session.maxPreachingTimeSeconds || 0}s`;
-
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -397,7 +371,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
             <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
           </div>
-          <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {maxLimitFormatted}</p>
+          <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 0}m {session.maxPreachingTimeSeconds || 0}s</p>
         </div>
         <div className="flex gap-2">
           {session.votingConfig?.enabled && (
@@ -510,7 +484,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             <TableCell>{item.name}</TableCell>
                             <TableCell className="text-right font-mono">{item.votes}</TableCell>
                           </TableRow>
-                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>}
+                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>} vacation
                       </TableBody>
                     </Table>
                   </div>
@@ -571,36 +545,52 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Card>
                 <CardHeader>
                   <CardTitle>Menu: Rewards Configuration</CardTitle>
-                  <CardDescription>Points to be awarded when tallying results.</CardDescription>
+                  <CardDescription>Configure point allocations for top performers.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <Label>Enable Points System</Label>
+                <CardContent className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold">Enable Reward System</Label>
                     <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} />
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-xs">Top 1 Individual Reward</Label>
-                      <Input type="number" value={editRewardTop1} onChange={(e) => setEditRewardTop1(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">Top 2 Individual Reward</Label>
-                      <Input type="number" value={editRewardTop2} onChange={(e) => setEditRewardTop2(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">Top 3 Individual Reward</Label>
-                      <Input type="number" value={editRewardTop3} onChange={(e) => setEditRewardTop3(e.target.value)} />
-                    </div>
-                  </div>
+                  {editPointsEnabled && (
+                    <>
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground border-b pb-2">
+                          <User className="h-4 w-4" /> Individual Rewards
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs">Top 1 Individual</Label>
+                            <Input type="number" value={editRewardTop1} onChange={(e) => setEditRewardTop1(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs">Top 2 Individual</Label>
+                            <Input type="number" value={editRewardTop2} onChange={(e) => setEditRewardTop2(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs">Top 3 Individual</Label>
+                            <Input type="number" value={editRewardTop3} onChange={(e) => setEditRewardTop3(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
 
-                  {session.sessionType === 'group' && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <Label className="text-xs">Top Group Reward</Label>
-                      <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
-                    </div>
+                      {session.sessionType === 'group' && (
+                        <div className="space-y-4 pt-4">
+                          <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground border-b pb-2">
+                            <Trophy className="h-4 w-4" /> Group Reward
+                          </h4>
+                          <div className="space-y-2">
+                            <Label className="text-xs">Top Group Reward</Label>
+                            <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
+                            <p className="text-[10px] text-muted-foreground">Points split among members of the top group.</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
-                  <Button className="w-full" onClick={handleSaveSettings}>Save Reward Settings</Button>
+                  
+                  <Button className="w-full h-12" onClick={handleSaveSettings}>Save Reward Settings</Button>
                 </CardContent>
               </Card>
             </TabsContent>
