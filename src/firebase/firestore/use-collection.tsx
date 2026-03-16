@@ -85,13 +85,15 @@ export function useCollection<T = any>(
         // Safe path extraction for reporting
         let path: string = 'unknown';
         try {
-          const internal = memoizedTargetRefOrQuery as any as InternalQuery;
           if (memoizedTargetRefOrQuery instanceof CollectionReference) {
             path = memoizedTargetRefOrQuery.path;
-          } else if (internal._query?.path) {
-            path = internal._query.path.toString();
-          } else if (internal.path) {
-            path = internal.path;
+          } else {
+            const internal = memoizedTargetRefOrQuery as any as InternalQuery;
+            if (internal._query?.path) {
+              path = internal._query.path.toString();
+            } else if (internal.path) {
+              path = internal.path;
+            }
           }
         } catch (e) {
           // Fallback to default path indicator

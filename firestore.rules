@@ -32,7 +32,7 @@ service cloud.firestore {
     }
 
     // Collection Group rule for preaching_events
-    // This MUST be outside of other blocks to reliably handle collectionGroup queries
+    // This MUST be outside of specific path blocks to reliably handle collectionGroup queries
     match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
