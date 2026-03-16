@@ -2,11 +2,16 @@
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2, Users } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -21,6 +26,16 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<'individual' | 'group' | null>(null);
   const [timer, setTimer] = useState(0);
+
+  // Edit States for Rules Menu
+  const [editTitle, setEditTitle] = useState('');
+  const [editMaxTime, setEditMaxTime] = useState('');
+  const [editFineAmount, setEditFineAmount] = useState('');
+  const [editFineType, setEditFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
+  const [editVotingEnabled, setEditVotingEnabled] = useState(false);
+  const [editPointsEnabled, setEditPointsEnabled] = useState(false);
+  const [editTopN, setEditTopN] = useState('3');
+  const [editPointsAmount, setEditPointsAmount] = useState('100');
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -52,6 +67,22 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
   const { data: userGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
+
+  // Initialize edit form when session loads
+  useEffect(() => {
+    if (session) {
+      setEditTitle(session.title || '');
+      setEditMaxTime(session.maxPreachingTimeMinutes?.toString() || '0');
+      if (session.fineRules?.[0]) {
+        setEditFineAmount(session.fineRules[0].amount.toString());
+        setEditFineType(session.fineRules[0].type);
+      }
+      setEditVotingEnabled(session.votingConfig?.enabled || false);
+      setEditPointsEnabled(session.pointDistribution?.enabled || false);
+      setEditTopN(session.votingConfig?.topIndividualsToVoteFor?.toString() || '3');
+      setEditPointsAmount(session.pointDistribution?.pointsPerTopIndividual?.toString() || '100');
+    }
+  }, [session]);
 
   const records = useMemo(() => {
     if (!rawRecords) return [];
@@ -93,7 +124,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
     
     let fineAmount = 0;
-    // Apply fine ONLY if there is an overage
     if (overage > 0) {
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
         fineAmount = rule.amount;
@@ -163,6 +193,36 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Session Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
   }
 
+  function handleSaveRules() {
+    if (!session || !firestore) return;
+
+    const finalRules = {
+      title: editTitle,
+      maxPreachingTimeMinutes: parseInt(editMaxTime) || 0,
+      fineRules: [
+        {
+          appliesTo: session.sessionType === 'group' ? 'group' : 'individual',
+          type: session.sessionType === 'sunday preaching' ? 'fixed' : editFineType,
+          amount: parseFloat(editFineAmount) || 0,
+          gracePeriodMinutes: 0
+        }
+      ],
+      votingConfig: {
+        enabled: editVotingEnabled,
+        topIndividualsToVoteFor: parseInt(editTopN) || 0,
+        topGroupsToVoteFor: session.sessionType === 'group' ? 1 : 0
+      },
+      pointDistribution: {
+        enabled: editPointsEnabled,
+        pointsPerTopIndividual: parseInt(editPointsAmount) || 0,
+        pointsPerTopGroup: session.sessionType === 'group' ? parseInt(editPointsAmount) : 0
+      }
+    };
+
+    updateDocumentNonBlocking(doc(firestore, 'sessions', id), finalRules);
+    toast({ title: "Rules Updated", description: "Session configuration has been saved." });
+  }
+
   function toggleSessionStatus() {
     if (!session || !firestore) return;
     const newStatus = session.status === 'active' ? 'completed' : 'active';
@@ -200,13 +260,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </div>
         <div className="flex gap-2">
           {session.votingConfig?.enabled && (
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild shadow-md="true">
               <Link href={`/sessions/${id}/voting`}>
                 <Vote className="mr-2 h-4 w-4" /> Voting
               </Link>
             </Button>
           )}
-          <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'}>
+          <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'} className="shadow-lg">
             {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {session.status === 'active' ? 'End Session' : 'Start Session'}
           </Button>
@@ -214,77 +274,187 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          {activeId && (
-            <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in fade-in zoom-in duration-300">
-              <CardHeader>
-                <CardTitle className="flex items-center text-accent">
-                  <div className="w-3 h-3 bg-accent rounded-full animate-pulse mr-2" />
-                  Live Tracking: {activeType === 'group' ? 'Group' : 'Individual'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-8">
-                <p className="text-lg font-medium mb-2">Currently Active:</p>
-                <p className="text-3xl font-bold font-headline mb-6 text-primary">
-                  {activeType === 'individual' 
-                    ? availableParticipants?.find(p => p.id === activeId)?.name 
-                    : userGroups?.find(g => g.id === activeId)?.name}
-                </p>
-                <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
-                  {Math.floor(timer / 60).toString().padStart(2, '0')}:
-                  {(timer % 60).toString().padStart(2, '0')}
-                </div>
-                <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold" onClick={handleStopTracking}>
-                  <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="live" className="w-full">
+            <TabsList className="mb-6 grid w-full grid-cols-2 max-w-[400px]">
+              <TabsTrigger value="live" className="flex items-center gap-2">
+                <History className="h-4 w-4" /> Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="rules" className="flex items-center gap-2">
+                <Settings2 className="h-4 w-4" /> Rules & Incentives
+              </TabsTrigger>
+            </TabsList>
 
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Session History</CardTitle>
-              <CardDescription>Recorded durations and calculated fines.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {records && records.length > 0 ? (
-                <div className="space-y-4">
-                  {records.map((record) => (
-                    <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/50 transition-colors">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-lg">{record.participantName}</p>
-                          <Badge variant="outline" className="text-[10px]">
-                            {record.participantId ? 'Individual' : 'Group'}
+            <TabsContent value="live" className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+              {activeId && (
+                <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in duration-300">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-accent">
+                      <div className="w-3 h-3 bg-accent rounded-full animate-pulse mr-2" />
+                      Live Tracking: {activeType === 'group' ? 'Group' : 'Individual'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center py-8">
+                    <p className="text-lg font-medium mb-2">Currently Active:</p>
+                    <p className="text-3xl font-bold font-headline mb-6 text-primary text-center">
+                      {activeType === 'individual' 
+                        ? availableParticipants?.find(p => p.id === activeId)?.name 
+                        : userGroups?.find(g => g.id === activeId)?.name}
+                    </p>
+                    <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
+                      {Math.floor(timer / 60).toString().padStart(2, '0')}:
+                      {(timer % 60).toString().padStart(2, '0')}
+                    </div>
+                    <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold shadow-lg" onClick={handleStopTracking}>
+                      <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="shadow-md">
+                <CardHeader>
+                  <CardTitle>Session History</CardTitle>
+                  <CardDescription>Recorded durations and calculated fines.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {records && records.length > 0 ? (
+                    <div className="space-y-4">
+                      {records.map((record) => (
+                        <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/50 transition-colors shadow-sm">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-lg">{record.participantName}</p>
+                              <Badge variant="outline" className="text-[10px]">
+                                {record.participantId ? 'Individual' : 'Group'}
+                              </Badge>
+                            </div>
+                            <div className="flex gap-3 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.actualDurationMinutes} min</span>
+                              {record.fineAmount > 0 && (
+                                <span className="flex items-center gap-1 text-destructive font-semibold">
+                                  <AlertTriangle className="h-4 w-4" /> Fine: ${record.fineAmount.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                            {record.explanation && (
+                              <div className="mt-3 p-3 bg-muted/50 rounded-md border-l-4 border-primary/20 italic text-sm text-muted-foreground">
+                                {record.explanation}
+                              </div>
+                            )}
+                          </div>
+                          <Badge variant={record.fineAmount > 0 ? "destructive" : "default"}>
+                            {record.fineAmount > 0 ? 'Fined' : 'Clear'}
                           </Badge>
                         </div>
-                        <div className="flex gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.actualDurationMinutes} min</span>
-                          {record.fineAmount > 0 && (
-                            <span className="flex items-center gap-1 text-destructive font-semibold">
-                              <AlertTriangle className="h-4 w-4" /> Fine: ${record.fineAmount.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        {record.explanation && (
-                          <div className="mt-3 p-3 bg-muted/50 rounded-md border-l-4 border-primary/20 italic text-sm text-muted-foreground">
-                            {record.explanation}
-                          </div>
-                        )}
-                      </div>
-                      <Badge variant={record.fineAmount > 0 ? "destructive" : "default"}>
-                        {record.fineAmount > 0 ? 'Fined' : 'Clear'}
-                      </Badge>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-                  No records yet for this session.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                      No records yet for this session.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="rules" className="animate-in fade-in slide-in-from-bottom-2">
+              <Card className="shadow-md border-primary/10">
+                <CardHeader>
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Settings2 className="h-6 w-6 text-primary" />
+                    Fine & Incentive Rules
+                  </CardTitle>
+                  <CardDescription>
+                    Configure the criteria for fines and points for this session.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="editTitle">Session Title</Label>
+                    <Input id="editTitle" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+                  </div>
+
+                  <div className="border-t pt-6">
+                    <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Timing & Fines</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="editMaxTime">Max Time (Minutes)</Label>
+                        <Input id="editMaxTime" type="number" value={editMaxTime} onChange={(e) => setEditMaxTime(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="editFineAmount">Fine Amount ($)</Label>
+                        <Input id="editFineAmount" type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      <Label>Fine Model</Label>
+                      <RadioGroup 
+                        value={editFineType} 
+                        onValueChange={(v: any) => setEditFineType(v)}
+                        disabled={session.sessionType === 'sunday preaching'}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                      >
+                        <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                          <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
+                          <Label htmlFor="edit-per-min" className="flex-grow cursor-pointer font-normal">Per Minute Over-time</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                          <RadioGroupItem value="fixed" id="edit-fixed" />
+                          <Label htmlFor="edit-fixed" className="flex-grow cursor-pointer font-normal">Fixed Amount (If over)</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-6 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Vote className="h-4 w-4 text-muted-foreground" />
+                          <Label className="text-base">Enable Voting</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Allow participants to vote for top performers.</p>
+                      </div>
+                      <Switch checked={editVotingEnabled} onCheckedChange={setEditVotingEnabled} />
+                    </div>
+
+                    {editVotingEnabled && (
+                      <div className="pl-6 space-y-4 border-l-2 border-primary/20">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <Trophy className="h-4 w-4 text-muted-foreground" />
+                              <Label className="text-base">Enable Point Rewards</Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Automatically award points based on votes.</p>
+                          </div>
+                          <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Vote for Top N</Label>
+                            <Input type="number" value={editTopN} onChange={(e) => setEditTopN(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Points to Award</Label>
+                            <Input type="number" value={editPointsAmount} onChange={(e) => setEditPointsAmount(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter className="bg-muted/5 border-t py-4">
+                  <Button className="w-full shadow-lg" onClick={handleSaveRules}>
+                    Save Changes
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
 
         <div className="space-y-8">
@@ -339,23 +509,23 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </CardContent>
           </Card>
 
-          <Card className="shadow-md">
+          <Card className="shadow-md bg-primary/5 border-primary/10">
             <CardHeader>
-              <CardTitle>Session Rules</CardTitle>
+              <CardTitle className="text-sm uppercase tracking-wider text-primary">Summary of Rules</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-4">
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Session Type:</span>
+              <div className="flex justify-between border-b border-primary/10 pb-2">
+                <span className="text-muted-foreground">Type:</span>
                 <span className="font-medium capitalize">{session.sessionType}</span>
               </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Max Duration:</span>
+              <div className="flex justify-between border-b border-primary/10 pb-2">
+                <span className="text-muted-foreground">Limit:</span>
                 <span className="font-medium">{session.maxPreachingTimeMinutes || 'Unlimited'} mins</span>
               </div>
               <div className="space-y-2">
-                <span className="text-muted-foreground block mb-1">Fine Rules:</span>
+                <span className="text-muted-foreground block mb-1">Active Fine:</span>
                 {session.fineRules?.map((rule: any, i: number) => (
-                  <div key={i} className="bg-muted p-2 rounded text-[10px] border">
+                  <div key={i} className="bg-background p-2 rounded text-[10px] border border-primary/10">
                     <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Variable'} ({rule.appliesTo}):</span>
                     <span className="ml-2 font-bold text-destructive">${rule.amount} {rule.type === 'per-minute-overage' ? '/ min' : ''}</span>
                   </div>
