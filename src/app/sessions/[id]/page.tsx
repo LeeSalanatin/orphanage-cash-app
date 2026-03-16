@@ -321,6 +321,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     setActiveParticipantId(null);
     setActiveGroupId(null);
+    setTimer(0);
     toast({ title: "Preaching Recorded" });
   }
 
@@ -517,57 +518,74 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   {groupedHistory && groupedHistory.length > 0 ? (
                     <div className="space-y-4">
                       {groupedHistory.map((item: any) => (
-                        <div key={item.id} className="p-4 rounded-lg border bg-card space-y-2">
-                          <div className="flex flex-col md:flex-row justify-between md:items-center gap-2">
-                            <div className="space-y-1">
-                              <p className="font-bold text-lg flex items-center gap-2">
-                                {item.type === 'group' ? <UsersIcon className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-muted-foreground" />}
-                                {item.name} 
-                                <span className="text-muted-foreground font-normal ml-1">= {formatDuration(item.totalDuration)}</span>
-                                {!item.preachingGroupId && user?.uid === session.ownerId && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-6 w-6 ml-2" 
-                                    onClick={() => {
-                                      setEditingRecord(item.originalRecord);
-                                      setNewMin(Math.floor(item.originalRecord.actualDurationSeconds / 60).toString());
-                                      setNewSec((item.originalRecord.actualDurationSeconds % 60).toString());
-                                    }}
-                                  >
-                                    <Edit2 className="h-3 w-3" />
-                                  </Button>
+                        <div key={item.id} className="p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+                          <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
+                            <div className="space-y-3 flex-grow">
+                              <div className="flex items-center justify-between border-b pb-2">
+                                <div className="flex items-center gap-2">
+                                  {item.type === 'group' ? (
+                                    <div className="bg-primary/10 p-1.5 rounded-md"><UsersIcon className="h-4 w-4 text-primary" /></div>
+                                  ) : (
+                                    <div className="bg-muted p-1.5 rounded-md"><User className="h-4 w-4 text-muted-foreground" /></div>
+                                  )}
+                                  <div>
+                                    <p className="font-bold text-base">{item.name}</p>
+                                    <p className="text-xs text-muted-foreground">Total: {formatDuration(item.totalDuration)}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                  <Badge variant={item.totalFine > 0 ? "destructive" : "outline"} className="text-[10px] h-5">
+                                    {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'No Fine'}
+                                  </Badge>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {item.type === 'group' ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {item.members.map((m: any) => (
+                                      <div key={m.id} className="flex items-center justify-between text-xs bg-muted/40 p-2 rounded border border-transparent hover:border-muted-foreground/20 transition-colors">
+                                        <div className="flex flex-col">
+                                          <span className="font-medium text-muted-foreground">{m.name}</span>
+                                          <span className="font-mono font-bold">{m.duration}</span>
+                                        </div>
+                                        {user?.uid === session.ownerId && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
+                                            onClick={() => {
+                                              setEditingRecord(m.originalRecord);
+                                              setNewMin(Math.floor(m.originalRecord.actualDurationSeconds / 60).toString());
+                                              setNewSec((m.originalRecord.actualDurationSeconds % 60).toString());
+                                            }}
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between text-xs bg-muted/40 p-2 rounded">
+                                    <span className="font-mono font-bold">{item.formatted}</span>
+                                    {user?.uid === session.ownerId && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-7 w-7 opacity-50 hover:opacity-100 hover:bg-background" 
+                                        onClick={() => {
+                                          setEditingRecord(item.originalRecord);
+                                          setNewMin(Math.floor(item.originalRecord.actualDurationSeconds / 60).toString());
+                                          setNewSec((item.originalRecord.actualDurationSeconds % 60).toString());
+                                        }}
+                                      >
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
-                              </p>
-                              {item.type === 'group' && (
-                                <p className="text-sm text-muted-foreground italic flex flex-wrap gap-x-2">
-                                  {item.members.map((m: any, idx: number) => (
-                                    <span key={m.id} className="flex items-center">
-                                      {m.name} {m.duration}
-                                      {user?.uid === session.ownerId && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-4 w-4 ml-1" 
-                                          onClick={() => {
-                                            setEditingRecord(m.originalRecord);
-                                            setNewMin(Math.floor(m.originalRecord.actualDurationSeconds / 60).toString());
-                                            setNewSec((m.originalRecord.actualDurationSeconds % 60).toString());
-                                          }}
-                                        >
-                                          <Edit2 className="h-2 w-2" />
-                                        </Button>
-                                      )}
-                                      {idx < item.members.length - 1 && <span className="ml-2">and</span>}
-                                    </span>
-                                  ))}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <Badge variant={item.totalFine > 0 ? "destructive" : "default"}>
-                                {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'Clear'}
-                              </Badge>
+                              </div>
                             </div>
                           </div>
                         </div>
