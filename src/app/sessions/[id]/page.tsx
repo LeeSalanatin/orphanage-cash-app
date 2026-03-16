@@ -128,7 +128,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const sorted = Object.entries(counts)
         .map(([id, count]) => ({
           id,
-          name: dataPool?.find(d => d.id === id)?.name || 'Unknown',
+          name: dataPool?.find(d => d.id === id || d.userId === id)?.name || 'Unknown',
           votes: count
         }))
         .sort((a, b) => b.votes - a.votes);
@@ -175,7 +175,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (activeId) return;
     setActiveId(targetId);
     setActiveType(type);
-    toast({ title: "Stopwatch Started", description: "Time is now being recorded for this preacher." });
+    toast({ title: "Stopwatch Started", description: "Time is now being recorded." });
   }
 
   function handleCancelTracking() {
@@ -202,11 +202,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (overageSeconds > 0) {
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
         totalFineAmount = rule.amount;
-        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage. No computation applied.`;
+        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage.`;
       } else {
         const ratePerSecond = rule.amount / 60;
         totalFineAmount = overageSeconds * ratePerSecond;
-        fineCalculationDetails = `${formatDuration(overageSeconds)} overage (${overageSeconds}s) at ₱${rule.amount}/min (₱${ratePerSecond.toFixed(2)}/sec). Total: ₱${totalFineAmount.toFixed(2)}`;
+        fineCalculationDetails = `${formatDuration(overageSeconds)} overage at ₱${rule.amount}/min.`;
       }
     }
 
@@ -222,12 +222,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           participantName: targetName || 'Target',
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
-          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min (half of seconds)`,
+          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
           overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
           rulesSummary: session.sessionType === 'sunday preaching' 
-            ? `Fixed fine of ₱${rule.amount} for any overage beyond ${formatDuration(maxSeconds)}.` 
-            : `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
+            ? `Fixed fine of ₱${rule.amount} for any overage.` 
+            : `Maximum allowed time is ${formatDuration(maxSeconds)}.`
         });
         explanation = aiResponse.explanation;
       } catch (e) {
@@ -237,11 +237,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     let perMemberFine = totalFineAmount;
     if (activeType === 'group' && targetGroup && targetGroup.members) {
-      const memberCount = Object.keys(targetGroup.members).length;
+      const memberCount = Object.keys(targetGroup.members).filter(k => k !== 'owner').length;
       perMemberFine = totalFineAmount / (memberCount || 1);
-      if (memberCount > 1) {
-        explanation += ` (Split among ${memberCount} members: ₱${perMemberFine.toFixed(2)} each)`;
-      }
     }
 
     const eventData = {
@@ -281,7 +278,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     setActiveId(null);
     setActiveType(null);
-    toast({ title: "Preaching Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "Duration logged successfully." });
+    toast({ title: "Preaching Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "Duration logged." });
   }
 
   function handleSaveSettings() {
@@ -340,7 +337,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
         const group = allGroups?.find(g => g.id === item.id);
         if (group && group.members) {
-          const memberIds = Object.keys(group.members);
+          const memberIds = Object.keys(group.members).filter(k => k !== 'owner');
           const split = Math.floor(reward / (memberIds.length || 1));
           memberIds.forEach(mId => {
             updateDocumentNonBlocking(doc(firestore, 'participants', mId), {
@@ -352,7 +349,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
 
     updateDocumentNonBlocking(doc(firestore, 'sessions', id), { rewardsDistributed: true });
-    toast({ title: "Rewards Distributed", description: "Points have been added to winners." });
+    toast({ title: "Rewards Distributed", description: "Points awarded to winners." });
   }
 
   function toggleSessionStatus() {
@@ -370,10 +367,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!session) return null;
 
-  const displayDate = session.sessionDate 
-    ? new Date(session.sessionDate).toLocaleDateString() 
-    : (session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'N/A');
-
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -383,8 +376,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1 capitalize"><Mic2 className="h-3.5 w-3.5" /> {session.sessionType} Session</span>
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {displayDate}</span>
+            <span className="flex items-center gap-1 capitalize"><Mic2 className="h-3.5 w-3.5" /> {session.sessionType}</span>
+            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {session.sessionDate || 'N/A'}</span>
             <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Max: {session.maxPreachingTimeMinutes || 0}m {session.maxPreachingTimeSeconds || 0}s</span>
           </div>
         </div>
@@ -470,18 +463,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle>Voting Leaderboard</CardTitle>
-                    <CardDescription>Based on {votes?.length || 0} ballots cast.</CardDescription>
+                    <CardTitle>Leaderboard</CardTitle>
+                    <CardDescription>{votes?.length || 0} ballots cast.</CardDescription>
                   </div>
                   {session.ownerId === user?.uid && !session.rewardsDistributed && (
                     <Button onClick={handleDistributeRewards} disabled={votes?.length === 0}>
                       <CheckCircle2 className="mr-2 h-4 w-4" /> Award Points
                     </Button>
-                  )}
-                  {session.rewardsDistributed && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      <CheckCircle2 className="mr-1 h-3 w-3" /> Rewards Sent
-                    </Badge>
                   )}
                 </CardHeader>
                 <CardContent className="space-y-8">
@@ -555,27 +543,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     </div>
                   </div>
                   
-                  {session.sessionType !== 'sunday preaching' && (
-                    <div className="mt-4">
-                      <Label className="mb-3 block">Fine Model</Label>
-                      <RadioGroup value={editFineType} onValueChange={(v: any) => setEditFineType(v)} className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center space-x-2 border p-3 rounded-md">
-                          <RadioGroupItem value="per-minute-overage" id="edit-per-min" />
-                          <Label htmlFor="edit-per-min" className="flex-grow cursor-pointer">Per Minute (Variable)</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 border p-3 rounded-md">
-                          <RadioGroupItem value="fixed" id="edit-fixed" />
-                          <Label htmlFor="edit-fixed" className="flex-grow cursor-pointer">Fixed</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  )}
-                  {session.sessionType === 'sunday preaching' && (
-                    <div className="p-3 bg-accent/5 border border-accent/20 rounded-lg text-xs text-muted-foreground">
-                      Sunday Preaching is strictly forced to <strong>Fixed Fines</strong>.
-                    </div>
-                  )}
-
                   <Button className="w-full" onClick={handleSaveSettings}>Save Timing Rules</Button>
                 </CardContent>
               </Card>
@@ -585,7 +552,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Card>
                 <CardHeader>
                   <CardTitle>Menu: Rewards Configuration</CardTitle>
-                  <CardDescription>Configure point allocations for top performers.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex items-center justify-between">
@@ -623,7 +589,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <div className="space-y-2">
                             <Label className="text-xs">Top Group Reward</Label>
                             <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
-                            <p className="text-[10px] text-muted-foreground">Points split among members of the top group.</p>
                           </div>
                         </div>
                       )}
@@ -641,7 +606,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <Card>
             <CardHeader>
               <CardTitle>Stopwatch Roster</CardTitle>
-              <CardDescription>Start or stop time for participants.</CardDescription>
+              <CardDescription>Track time for participants.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Tabs defaultValue="individuals">
@@ -675,31 +640,42 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     </div>
                   ))}
                 </TabsContent>
-                <TabsContent value="groups" className="p-4 space-y-2">
-                  {allGroups?.map((g) => (
-                    <div key={g.id} className={cn(
-                      "flex items-center justify-between p-3 border rounded-lg transition-all",
-                      activeId === g.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
-                    )}>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{g.name}</span>
-                        {activeId === g.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1"><Mic2 className="h-2 w-2" /> LIVE PREACHING</span>}
+                <TabsContent value="groups" className="p-4 space-y-4">
+                  {allGroups?.map((g) => {
+                    const memberIds = Object.keys(g.members || {}).filter(k => k !== 'owner');
+                    const memberNames = memberIds
+                      .map(mId => availableParticipants?.find(p => p.id === mId || p.userId === mId)?.name)
+                      .filter(Boolean)
+                      .join(', ');
+
+                    return (
+                      <div key={g.id} className={cn(
+                        "flex flex-col p-3 border rounded-lg transition-all gap-3",
+                        activeId === g.id ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm" : "hover:bg-muted"
+                      )}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-primary">{g.name}</span>
+                            <span className="text-[10px] text-muted-foreground line-clamp-1">{memberNames || 'No members assigned'}</span>
+                            {activeId === g.id && <span className="text-[9px] text-primary animate-pulse font-bold flex items-center gap-1 mt-1"><Mic2 className="h-2 w-2" /> LIVE GROUP PREACHING</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {activeId === g.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
+                            <Button 
+                              size="sm" 
+                              variant={activeId === g.id ? "destructive" : "outline"} 
+                              className="h-8 px-2"
+                              disabled={(activeId !== null && activeId !== g.id) || session.status !== 'active'} 
+                              onClick={() => activeId === g.id ? handleStopTracking() : handleStartTracking(g.id, 'group')}
+                            >
+                              {activeId === g.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                              <span className="ml-1 text-[10px]">{activeId === g.id ? 'Stop' : 'Start'}</span>
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {activeId === g.id && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
-                        <Button 
-                          size="sm" 
-                          variant={activeId === g.id ? "destructive" : "outline"} 
-                          className="h-8 px-2"
-                          disabled={(activeId !== null && activeId !== g.id) || session.status !== 'active'} 
-                          onClick={() => activeId === g.id ? handleStopTracking() : handleStartTracking(g.id, 'group')}
-                        >
-                          {activeId === g.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          <span className="ml-1 text-[10px]">{activeId === g.id ? 'Stop' : 'Start'}</span>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </TabsContent>
               </Tabs>
             </CardContent>

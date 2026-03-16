@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking } from '@/firebase';
+import { useState } from 'react';
+import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,17 +25,17 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const sessionRef = useMemo(() => {
+  const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'sessions', id);
   }, [firestore, id, user]);
 
-  const participantsRef = useMemo(() => {
+  const participantsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const groupsQuery = useMemo(() => {
+  const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, 'groups'),
