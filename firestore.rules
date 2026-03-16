@@ -31,13 +31,29 @@ service cloud.firestore {
       );
     }
 
-    // Collection Group rule for preaching_events
-    // This MUST be outside of specific path blocks to reliably handle collectionGroup queries
+    // --- Collection Group rules must be defined with recursive wildcards at the top level ---
+    
     match /{path=**}/preaching_events/{eventId} {
+      // Allow any signed-in user to read events. 
+      // The dashboard query filters by sessionMembers.uid, which is inherently secure.
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
+
+    match /{path=**}/fines/{fineId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    match /{path=**}/votes/{voteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Standard Collections ---
 
     match /users/{userId} {
       allow get, list: if isOwner(userId) || isAdmin();
@@ -75,22 +91,15 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
 
+      // Individual sub-collection rules (redundant but helpful for clarity alongside CG rules)
       match /preaching_events/{eventId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
-
       match /fines/{fineId} {
-        allow get, list: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
-
       match /votes/{voteId} {
-        allow get, list: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
     }
 

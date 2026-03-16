@@ -85,18 +85,23 @@ export function useCollection<T = any>(
         // Safe path extraction for reporting
         let path: string = 'unknown';
         try {
-          if (memoizedTargetRefOrQuery instanceof CollectionReference) {
-            path = memoizedTargetRefOrQuery.path;
-          } else {
-            const internal = memoizedTargetRefOrQuery as any as InternalQuery;
-            if (internal._query?.path) {
-              path = internal._query.path.toString();
-            } else if (internal.path) {
-              path = internal.path;
+          if (memoizedTargetRefOrQuery) {
+            if ('path' in memoizedTargetRefOrQuery) {
+              path = (memoizedTargetRefOrQuery as CollectionReference).path;
+            } else {
+              // It's likely a Query or CollectionGroup query
+              const internal = memoizedTargetRefOrQuery as any as InternalQuery;
+              if (internal._query?.path) {
+                path = internal._query.path.toString();
+              } else if (internal.path) {
+                path = internal.path;
+              } else {
+                path = 'collectionGroupQuery';
+              }
             }
           }
         } catch (e) {
-          // Fallback to default path indicator
+          path = 'collectionGroupQuery';
         }
 
         const contextualError = new FirestorePermissionError({
