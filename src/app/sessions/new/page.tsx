@@ -12,7 +12,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -47,6 +48,12 @@ export default function NewSession() {
   const [maxTime, setMaxTime] = useState('15');
   const [fineAmount, setFineAmount] = useState('5');
   const [fineType, setFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
+  
+  // Advanced Settings
+  const [votingEnabled, setVotingEnabled] = useState(false);
+  const [pointsEnabled, setPointsEnabled] = useState(false);
+  const [topN, setTopN] = useState('3');
+  const [pointsAmount, setPointsAmount] = useState('100');
 
   const [generatedRules, setGeneratedRules] = useState<any>(null);
 
@@ -59,6 +66,10 @@ export default function NewSession() {
         setFineAmount(generatedRules.fineRules[0].amount.toString());
         setFineType(generatedRules.fineRules[0].type);
       }
+      setVotingEnabled(generatedRules.votingConfig?.enabled || false);
+      setPointsEnabled(generatedRules.pointDistribution?.enabled || false);
+      setTopN(generatedRules.votingConfig?.topIndividualsToVoteFor?.toString() || '3');
+      setPointsAmount(generatedRules.pointDistribution?.pointsPerTopIndividual?.toString() || '100');
     }
   }, [generatedRules]);
 
@@ -106,7 +117,6 @@ export default function NewSession() {
     try {
       const colRef = collection(db, 'sessions');
       
-      // Build rules object from manual inputs
       const finalRules = {
         sessionType,
         maxPreachingTimeMinutes: parseInt(maxTime) || 0,
@@ -118,8 +128,16 @@ export default function NewSession() {
             gracePeriodMinutes: 0
           }
         ],
-        votingConfig: generatedRules?.votingConfig || { enabled: false },
-        pointDistribution: generatedRules?.pointDistribution || { enabled: false }
+        votingConfig: {
+          enabled: votingEnabled,
+          topIndividualsToVoteFor: parseInt(topN) || 0,
+          topGroupsToVoteFor: sessionType === 'group' ? 1 : 0
+        },
+        pointDistribution: {
+          enabled: pointsEnabled,
+          pointsPerTopIndividual: parseInt(pointsAmount) || 0,
+          pointsPerTopGroup: sessionType === 'group' ? parseInt(pointsAmount) : 0
+        }
       };
 
       const data = {
@@ -145,7 +163,7 @@ export default function NewSession() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl">
+    <div className="container mx-auto py-8 px-4 max-w-5xl">
       <div className="mb-6">
         <Button variant="ghost" asChild className="mb-4">
           <Link href="/sessions">
@@ -154,17 +172,17 @@ export default function NewSession() {
           </Link>
         </Button>
         <h1 className="text-3xl font-headline font-bold text-primary">Create New Session</h1>
-        <p className="text-muted-foreground">Set up your preaching session rules.</p>
+        <p className="text-muted-foreground">Define your preaching rules and criteria.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: AI & Intent */}
-        <div className="space-y-6">
-          <Card className="shadow-md">
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="shadow-md h-full">
             <CardHeader>
-              <CardTitle className="text-lg">1. Describe Intent (Optional)</CardTitle>
+              <CardTitle className="text-lg">AI Assistant</CardTitle>
               <CardDescription>
-                Let AI help you set the rules based on a description.
+                Describe your session in plain English.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -187,11 +205,11 @@ export default function NewSession() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Natural Language Rules</Label>
+                <Label htmlFor="description">Describe Rules</Label>
                 <Textarea 
                   id="description"
-                  placeholder="Explain the timing, fines, and voting..."
-                  className="min-h-[100px] text-sm"
+                  placeholder="e.g. 15 minute limit, $5 fine per minute overage..."
+                  className="min-h-[150px] text-sm"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
@@ -209,96 +227,141 @@ export default function NewSession() {
           </Card>
         </div>
 
-        {/* Right Column: Manual Configuration */}
-        <div className="space-y-6">
+        {/* Right Column: Manual Configuration "Menu" */}
+        <div className="lg:col-span-8 space-y-6">
           <Card className="shadow-md border-primary/10">
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-primary" />
-                2. Review & Refine
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Settings2 className="h-6 w-6 text-primary" />
+                Session Configuration
               </CardTitle>
               <CardDescription>
-                Manually adjust the core rules below.
+                Review and "fix" your session criteria below.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="title">Session Title</Label>
-                <Input 
-                  id="title" 
-                  placeholder="e.g. Missionary Training Week 1" 
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Session Type</Label>
-                <Select value={sessionType} onValueChange={(v: any) => setSessionType(v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individual">Individual Preaching</SelectItem>
-                    <SelectItem value="group">Group / Team</SelectItem>
-                    <SelectItem value="sunday preaching">Sunday Service</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="maxTime">Max Time (Mins)</Label>
+                  <Label htmlFor="title">Session Title</Label>
                   <Input 
-                    id="maxTime" 
-                    type="number" 
-                    value={maxTime}
-                    onChange={(e) => setMaxTime(e.target.value)}
+                    id="title" 
+                    placeholder="e.g. Missionary Training Week 1" 
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fineAmount">Fine Amount ($)</Label>
-                  <Input 
-                    id="fineAmount" 
-                    type="number" 
-                    value={fineAmount}
-                    onChange={(e) => setFineAmount(e.target.value)}
-                  />
+                  <Label>Session Type</Label>
+                  <Select value={sessionType} onValueChange={(v: any) => setSessionType(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">Individual Preaching</SelectItem>
+                      <SelectItem value="group">Group / Team</SelectItem>
+                      <SelectItem value="sunday preaching">Sunday Service</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Label>Fine Model</Label>
-                <RadioGroup 
-                  value={fineType} 
-                  onValueChange={(v: any) => setFineType(v)}
-                  disabled={sessionType === 'sunday preaching'}
-                  className="flex flex-col space-y-1"
-                >
-                  <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="per-minute-overage" id="per-min" />
-                    <Label htmlFor="per-min" className="flex-grow cursor-pointer font-normal">Per Minute Over-time</Label>
+              <div className="border-t pt-6">
+                <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Timing & Fines</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="maxTime">Time Limit (Minutes)</Label>
+                    <Input 
+                      id="maxTime" 
+                      type="number" 
+                      value={maxTime}
+                      onChange={(e) => setMaxTime(e.target.value)}
+                    />
                   </div>
-                  <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="fixed" id="fixed" />
-                    <Label htmlFor="fixed" className="flex-grow cursor-pointer font-normal">Fixed Amount (If over)</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="fineAmount">Fine Amount ($)</Label>
+                    <Input 
+                      id="fineAmount" 
+                      type="number" 
+                      value={fineAmount}
+                      onChange={(e) => setFineAmount(e.target.value)}
+                    />
                   </div>
-                </RadioGroup>
-                {sessionType === 'sunday preaching' && (
-                  <p className="text-[10px] text-muted-foreground italic">
-                    * Sunday Service always uses a fixed fine model.
-                  </p>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <Label>Fine Model</Label>
+                  <RadioGroup 
+                    value={fineType} 
+                    onValueChange={(v: any) => setFineType(v)}
+                    disabled={sessionType === 'sunday preaching'}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                  >
+                    <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <RadioGroupItem value="per-minute-overage" id="per-min" />
+                      <Label htmlFor="per-min" className="flex-grow cursor-pointer font-normal">Per Minute Over-time</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 rounded-md border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <RadioGroupItem value="fixed" id="fixed" />
+                      <Label htmlFor="fixed" className="flex-grow cursor-pointer font-normal">Fixed Amount (If over)</Label>
+                    </div>
+                  </RadioGroup>
+                  {sessionType === 'sunday preaching' && (
+                    <p className="text-xs text-primary font-medium bg-primary/5 p-2 rounded border border-primary/10">
+                      * Sunday Service requires a <strong>Fixed Fine</strong> model.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Voting & Points */}
+              <div className="border-t pt-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <VoteIcon className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-base">Enable Voting</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Allow participants to vote for top performers.</p>
+                  </div>
+                  <Switch checked={votingEnabled} onCheckedChange={setVotingEnabled} />
+                </div>
+
+                {votingEnabled && (
+                  <div className="pl-6 space-y-4 border-l-2 border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-4 w-4 text-muted-foreground" />
+                          <Label className="text-base">Enable Point Rewards</Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Automatically award points based on votes.</p>
+                      </div>
+                      <Switch checked={pointsEnabled} onCheckedChange={setPointsEnabled} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Vote for Top N</Label>
+                        <Input type="number" value={topN} onChange={(e) => setTopN(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Points to Award</Label>
+                        <Input type="number" value={pointsAmount} onChange={(e) => setPointsAmount(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>
             <CardFooter className="bg-muted/5 border-t pt-6">
               <Button 
-                className="w-full h-12 text-lg font-bold shadow-lg shadow-primary/20" 
+                className="w-full h-14 text-lg font-bold shadow-xl shadow-primary/20" 
                 onClick={handleSaveSession} 
                 disabled={loading || !title.trim()}
               >
                 {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
-                Save & Start
+                Initialize Session
               </Button>
             </CardFooter>
           </Card>

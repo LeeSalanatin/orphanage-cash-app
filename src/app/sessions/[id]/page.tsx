@@ -42,7 +42,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Filtering by sessionMembers to satisfy security rules
     return query(
       collection(firestore, 'sessions', id, 'preaching_events'),
       where(`sessionMembers.${user.uid}`, '!=', null)
@@ -54,7 +53,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const { data: userGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
 
-  // Sort records in memory
   const records = useMemo(() => {
     if (!rawRecords) return [];
     return [...rawRecords].sort((a, b) => {
@@ -90,18 +88,16 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const maxMinutes = session.maxPreachingTimeMinutes || 9999;
     const overage = Math.max(0, durationMinutes - maxMinutes);
     
-    // Find the relevant fine rule based on what we are tracking
     const rule = session.fineRules?.find((r: any) => 
       activeType === 'individual' ? r.appliesTo === 'individual' : r.appliesTo === 'group'
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
     
     let fineAmount = 0;
-    if (session.sessionType === 'sunday preaching') {
-      fineAmount = rule.amount;
-    } else {
-      if (rule.type === 'fixed' && overage > 0) {
+    // Apply fine ONLY if there is an overage
+    if (overage > 0) {
+      if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
         fineAmount = rule.amount;
-      } else if (rule.type === 'per-minute-overage') {
+      } else {
         fineAmount = overage * rule.amount;
       }
     }
@@ -118,7 +114,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           participantName: targetName || 'Target',
           preachingDurationMinutes: Math.round(durationMinutes * 10) / 10,
           maxAllowedDurationMinutes: maxMinutes,
-          fineRateDescription: rule.type === 'fixed' ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
+          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
           fineAmount: Math.round(fineAmount * 100) / 100,
           overageMinutes: Math.round(overage * 10) / 10,
           rulesSummary: `Maximum allowed time is ${maxMinutes} minutes.`
@@ -203,11 +199,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 'N/A'} min</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/sessions/${id}/voting`}>
-              <Vote className="mr-2 h-4 w-4" /> Voting
-            </Link>
-          </Button>
+          {session.votingConfig?.enabled && (
+            <Button variant="outline" asChild>
+              <Link href={`/sessions/${id}/voting`}>
+                <Vote className="mr-2 h-4 w-4" /> Voting
+              </Link>
+            </Button>
+          )}
           <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'}>
             {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {session.status === 'active' ? 'End Session' : 'Start Session'}
