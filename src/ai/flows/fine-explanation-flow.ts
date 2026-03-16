@@ -15,7 +15,7 @@ const FineExplanationInputSchema = z.object({
   participantName: z.string().describe('The name of the individual or group incurring the fine.'),
   preachingDurationMinutes: z.number().describe('The actual duration of the preaching in minutes.'),
   maxAllowedDurationMinutes: z.number().describe('The maximum allowed duration for preaching in minutes.'),
-  fineRateDescription: z.string().describe('A description of how the fine is calculated (e.g., "$5 per minute overage", "fixed rate of $20").'),
+  fineRateDescription: z.string().describe('A description of how the fine is calculated (e.g., "₱5 per minute overage", "fixed rate of ₱20").'),
   fineAmount: z.number().describe('The total calculated fine amount.'),
   overageMinutes: z.number().describe('The number of minutes over the allowed duration.'),
   rulesSummary: z.string().describe('A brief summary of the session rules relevant to fine calculation.'),
@@ -46,7 +46,7 @@ Actual Preaching Duration: {{{preachingDurationMinutes}}} minutes
 Maximum Allowed Duration: {{{maxAllowedDurationMinutes}}} minutes
 Time Overage: {{{overageMinutes}}} minutes
 Fine Rate: {{{fineRateDescription}}}
-Total Fine Amount: $ {{{fineAmount}}}
+Total Fine Amount: ₱ {{{fineAmount}}}
 Relevant Session Rules: {{{rulesSummary}}}
 
 Explanation:`,

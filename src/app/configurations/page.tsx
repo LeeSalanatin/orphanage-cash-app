@@ -76,7 +76,7 @@ export default function ConfigurationsPage() {
                   <Gavel className="h-4 w-4 text-muted-foreground" />
                   <span>
                     {config.fineRules?.[0]?.type === 'fixed' ? 'Fixed' : 'Variable'} Fine: 
-                    <span className="font-bold text-destructive ml-1">${config.fineRules?.[0]?.amount}</span>
+                    <span className="font-bold text-destructive ml-1">₱{config.fineRules?.[0]?.amount}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">

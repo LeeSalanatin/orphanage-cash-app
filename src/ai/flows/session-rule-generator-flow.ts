@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview This file defines a Genkit flow for generating structured session rules from natural language descriptions.
@@ -64,7 +63,7 @@ Here are the possible fine types:
 
 Example descriptions and expected JSON structure:
 
-1. Description: "An individual session where preachers get fined $10 for every minute they go over 15 minutes. There will be voting for the top 3 speakers, who each get 100 points."
+1. Description: "An individual session where preachers get fined ₱10 for every minute they go over 15 minutes. There will be voting for the top 3 speakers, who each get 100 points."
    Expected Output:
    {
      "sessionType": "individual",
@@ -91,7 +90,7 @@ Example descriptions and expected JSON structure:
      }
    }
 
-2. Description: "A group session with fines for going over 10 minutes and 30 seconds for individuals, and a fixed fine of $50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
+2. Description: "A group session with fines for going over 10 minutes and 30 seconds for individuals, and a fixed fine of ₱50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
    Expected Output:
    {
      "sessionType": "group",

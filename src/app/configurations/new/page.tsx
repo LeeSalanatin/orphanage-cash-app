@@ -20,15 +20,15 @@ import Link from 'next/link';
 const SUGGESTIONS = [
   { 
     label: "Missionary (Individual)", 
-    text: "Missionary training - individual preaching session. 15 minute limit, $30 fine per minute overage (half of seconds). Voting for top 3 speakers." 
+    text: "Missionary training - individual preaching session. 15 minute limit, ₱30 fine per minute overage (half of seconds). Voting for top 3 speakers." 
   },
   { 
     label: "Missionary (Group)", 
-    text: "Missionary training - group prayer meeting. 30 minute limit, $30 per minute overage (half of seconds) split among members." 
+    text: "Missionary training - group prayer meeting. 30 minute limit, ₱30 per minute overage (half of seconds) split among members." 
   },
   { 
     label: "Sunday Service", 
-    text: "Sunday preaching session. Preacher gets a fixed fine of $25 if they don't follow the theme. No voting." 
+    text: "Sunday preaching session. Preacher gets a fixed fine of ₱25 if they don't follow the theme. No voting." 
   }
 ];
 
@@ -203,7 +203,7 @@ export default function NewConfiguration() {
                 </div>
               </div>
               <Textarea 
-                placeholder="e.g. 15 minute limit, $30 fine per minute overage..."
+                placeholder="e.g. 15 minute limit, ₱30 fine per minute overage..."
                 value={aiDescription}
                 onChange={(e) => setAiDescription(e.target.value)}
                 className="min-h-[120px]"
@@ -243,7 +243,7 @@ export default function NewConfiguration() {
               {simResult !== null && (
                 <div className="mt-2 text-center p-2 bg-background rounded border border-accent/20">
                   <p className="text-xs text-muted-foreground">Resulting Fine:</p>
-                  <p className="text-xl font-bold text-destructive">${simResult.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-destructive">₱{simResult.toFixed(2)}</p>
                 </div>
               )}
             </CardContent>
@@ -294,7 +294,7 @@ export default function NewConfiguration() {
                     <Input type="number" min="0" max="59" value={maxTimeSec} onChange={(e) => setMaxTimeSec(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Fine Amount ($)</Label>
+                    <Label>Fine Amount (₱)</Label>
                     <Input type="number" value={fineAmount} onChange={(e) => setFineAmount(e.target.value)} />
                   </div>
                 </div>
@@ -303,7 +303,7 @@ export default function NewConfiguration() {
                   <Info className="h-5 w-5 text-accent mt-0.5" />
                   <div className="text-xs text-muted-foreground">
                     <p className="font-bold text-foreground mb-1">Fine Calculation Tip:</p>
-                    <p>To set the fine as <strong>half of total excess seconds</strong>, enter <strong>30</strong> as the Fine Amount ($30/min = $0.50 per second).</p>
+                    <p>To set the fine as <strong>half of total excess seconds</strong>, enter <strong>30</strong> as the Fine Amount (₱30/min = ₱0.50 per second).</p>
                   </div>
                 </div>
 

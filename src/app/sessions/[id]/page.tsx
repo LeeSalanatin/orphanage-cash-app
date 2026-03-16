@@ -201,7 +201,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       } else {
         const ratePerSecond = rule.amount / 60;
         totalFineAmount = overageSeconds * ratePerSecond;
-        fineCalculationDetails = `${formatDuration(overageSeconds)} overage (${overageSeconds}s) at $${rule.amount}/min ($${ratePerSecond.toFixed(2)}/sec). Total: $${totalFineAmount.toFixed(2)}`;
+        fineCalculationDetails = `${formatDuration(overageSeconds)} overage (${overageSeconds}s) at ₱${rule.amount}/min (₱${ratePerSecond.toFixed(2)}/sec). Total: ₱${totalFineAmount.toFixed(2)}`;
       }
     }
 
@@ -217,7 +217,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           participantName: targetName || 'Target',
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
-          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min (half of seconds)`,
+          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min (half of seconds)`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
           overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
           rulesSummary: `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
@@ -233,7 +233,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const memberCount = Object.keys(targetGroup.members).length;
       perMemberFine = totalFineAmount / (memberCount || 1);
       if (memberCount > 1) {
-        explanation += ` (Split among ${memberCount} members: $${perMemberFine.toFixed(2)} each)`;
+        explanation += ` (Split among ${memberCount} members: ₱${perMemberFine.toFixed(2)} each)`;
       }
     }
 
@@ -274,7 +274,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     setActiveId(null);
     setActiveType(null);
-    toast({ title: "Session Recorded", description: totalFineAmount > 0 ? `Fine: $${totalFineAmount.toFixed(2)}` : "No fines incurred." });
+    toast({ title: "Session Recorded", description: totalFineAmount > 0 ? `Fine: ₱${totalFineAmount.toFixed(2)}` : "No fines incurred." });
   }
 
   function handleSaveSettings() {
@@ -436,7 +436,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             <p className="font-bold text-lg">{record.participantName}</p>
                             <div className="flex gap-3 text-sm text-muted-foreground">
                               <span><Clock className="inline h-4 w-4 mr-1" /> {record.actualDurationFormatted}</span>
-                              {record.totalFineAmount > 0 && <span className="text-destructive font-semibold">$ {record.totalFineAmount.toFixed(2)} Fine</span>}
+                              {record.totalFineAmount > 0 && <span className="text-destructive font-semibold">₱{record.totalFineAmount.toFixed(2)} Fine</span>}
                             </div>
                           </div>
                           <Badge variant={record.totalFineAmount > 0 ? "destructive" : "default"}>{record.totalFineAmount > 0 ? 'Fined' : 'Clear'}</Badge>
@@ -484,7 +484,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             <TableCell>{item.name}</TableCell>
                             <TableCell className="text-right font-mono">{item.votes}</TableCell>
                           </TableRow>
-                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>} vacation
+                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>}
                       </TableBody>
                     </Table>
                   </div>
@@ -532,7 +532,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <Input type="number" min="0" max="59" value={editMaxTimeSec} onChange={(e) => setEditMaxTimeSec(e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Fine Amount ($ per Min)</Label>
+                      <Label>Fine Amount (₱ per Min)</Label>
                       <Input type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
                     </div>
                   </div>
