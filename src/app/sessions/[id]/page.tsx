@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
-import { doc, collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,14 +30,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return collection(firestore, 'participants');
   }, [firestore]);
 
-  const recordsQuery = useMemoFirebase(() => {
+  const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'preaching_records'), where('sessionId', '==', id));
+    // According to backend.json, preaching events are subcollections of sessions
+    return query(
+      collection(firestore, 'sessions', id, 'preaching_events'),
+      orderBy('startTime', 'desc')
+    );
   }, [firestore, id]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: records, isLoading: recordsLoading } = useCollection(recordsQuery);
+  const { data: records, isLoading: recordsLoading } = useCollection(preachingEventsRef);
 
   useEffect(() => {
     let interval: any;
@@ -57,7 +61,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }
 
   async function handleStopPreaching() {
-    if (!activePreacher || !session || !firestore) return;
+    if (!activePreacher || !session || !firestore || !user) return;
     
     const durationSeconds = timer;
     const durationMinutes = durationSeconds / 60;
@@ -99,18 +103,40 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const newRecord = {
+    const eventData = {
       sessionId: id,
       participantId: activePreacher,
       participantName: participant?.name || 'Unknown',
-      durationSeconds,
-      durationMinutes: Math.round(durationMinutes * 10) / 10,
+      actualDurationMinutes: Math.round(durationMinutes * 10) / 10,
+      overageMinutes: Math.round(overage * 10) / 10,
+      startTime: new Date(Date.now() - timer * 1000).toISOString(),
+      endTime: new Date().toISOString(),
       fineAmount,
       explanation,
-      createdAt: serverTimestamp()
+      // Denormalized auth data for security rules 'authorization independence'
+      sessionOwnerId: session.ownerId,
+      sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
-    addDocumentNonBlocking(collection(firestore, 'preaching_records'), newRecord);
+    // Store in the correct subcollection as defined in backend.json
+    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
+    
+    // Also store a fine record if needed
+    if (fineAmount > 0) {
+      const fineData = {
+        sessionId: id,
+        targetParticipantId: activePreacher,
+        amount: fineAmount,
+        calculationDetails: `${Math.round(overage * 10) / 10} minutes overage`,
+        explanation,
+        status: 'ISSUED',
+        issuedDateTime: new Date().toISOString(),
+        sessionOwnerId: session.ownerId,
+        sessionMembers: session.members || { [user.uid]: 'owner' }
+      };
+      addDocumentNonBlocking(collection(firestore, 'sessions', id, 'fines'), fineData);
+    }
+
     setActivePreacher(null);
     toast({ title: "Preaching Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
   }
@@ -202,7 +228,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <div className="space-y-1">
                         <p className="font-bold text-lg">{record.participantName}</p>
                         <div className="flex gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.durationMinutes} min</span>
+                          <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.actualDurationMinutes} min</span>
                           {record.fineAmount > 0 && (
                             <span className="flex items-center gap-1 text-destructive font-semibold">
                               <AlertTriangle className="h-4 w-4" /> Fine: ${record.fineAmount.toFixed(2)}

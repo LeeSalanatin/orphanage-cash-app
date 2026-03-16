@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
 import { Button } from '@/components/ui/button';
@@ -59,17 +59,13 @@ export default function NewSession() {
 
     setLoading(true);
     try {
-      // Use addDocumentNonBlocking for better error handling/UX
-      // Though it doesn't return the ID immediately, we can use a generated ID if we need to redirect immediately
-      // For simplicity in a 'new' form, standard addDoc is often awaited, but we'll follow the guideline
-      // and redirect after the local initiation if we really wanted to, 
-      // but usually for "New" screens, we want to know the ID.
-      // Let's use the standard Firestore pattern but wrapped for contextual errors.
       const colRef = collection(db, 'sessions');
       const data = {
         title,
         ...generatedRules,
         ownerId: user.uid,
+        // Ensure members map exists for security rules 'isMember' helper
+        members: { [user.uid]: 'owner' },
         status: 'pending',
         createdAt: serverTimestamp(),
       };
