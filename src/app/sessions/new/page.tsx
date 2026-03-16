@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense } from 'react';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Save, ArrowLeft, Settings2, AlertCircle } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, Settings2, AlertCircle, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -47,7 +48,8 @@ function NewSessionContent() {
       const data = {
         title,
         sessionType: config.sessionType,
-        maxPreachingTimeMinutes: config.maxPreachingTimeMinutes,
+        maxPreachingTimeMinutes: config.maxPreachingTimeMinutes || 0,
+        maxPreachingTimeSeconds: config.maxPreachingTimeSeconds || 0,
         fineRules: config.fineRules,
         votingConfig: config.votingConfig,
         pointDistribution: config.pointDistribution,
@@ -136,7 +138,7 @@ function NewSessionContent() {
               {configs.filter(c => c.id === selectedConfigId).map(c => (
                 <div key={c.id} className="text-xs space-y-1 text-muted-foreground">
                   <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
-                  <p>• Time Limit: {c.maxPreachingTimeMinutes} mins</p>
+                  <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
                   <p>• Fine: ${c.fineRules?.[0]?.amount} ({c.fineRules?.[0]?.type})</p>
                 </div>
               ))}

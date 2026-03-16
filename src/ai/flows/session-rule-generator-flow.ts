@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview This file defines a Genkit flow for generating structured session rules from natural language descriptions.
@@ -18,7 +19,8 @@ export type GenerateSessionRulesInput = z.infer<typeof GenerateSessionRulesInput
 // Define the output schema for the structured session rules.
 const GenerateSessionRulesOutputSchema = z.object({
   sessionType: z.enum(['individual', 'group', 'sunday preaching']).describe('The primary type of session: "individual" for single participants, "group" for multiple participants organized into teams, or "sunday preaching" for a general Sunday service preaching without specific individual time tracking for fines.').default('individual'),
-  maxPreachingTimeMinutes: z.number().int().min(0).nullable().describe('Optional maximum allowed preaching time in minutes for individual or group sessions. If exceeded, fines may apply. Not applicable for "sunday preaching" if duration is fixed.').default(null),
+  maxPreachingTimeMinutes: z.number().int().min(0).nullable().describe('Optional maximum allowed preaching time in minutes for individual or group sessions. If exceeded, fines may apply.').default(null),
+  maxPreachingTimeSeconds: z.number().int().min(0).max(59).nullable().describe('Optional maximum allowed preaching time in seconds (added to minutes).').default(0),
   fineRules: z.array(
     z.object({
       appliesTo: z.enum(['individual', 'group', 'sunday preaching']).describe('Specifies who this fine rule applies to: "individual" participants, "group" entities, or the "sunday preaching" session as a whole.').default('individual'),
@@ -58,7 +60,7 @@ Here are the possible session types:
 
 Here are the possible fine types:
 - 'fixed': A set fine amount.
-- 'per-minute-overage': A fine charged per minute that a participant or group exceeds the 'maxPreachingTimeMinutes'.
+- 'per-minute-overage': A fine charged per minute that a participant or group exceeds the 'maxPreachingTimeMinutes' and 'maxPreachingTimeSeconds'.
 
 Example descriptions and expected JSON structure:
 
@@ -67,6 +69,7 @@ Example descriptions and expected JSON structure:
    {
      "sessionType": "individual",
      "maxPreachingTimeMinutes": 15,
+     "maxPreachingTimeSeconds": 0,
      "fineRules": [
        {
          "appliesTo": "individual",
@@ -88,11 +91,12 @@ Example descriptions and expected JSON structure:
      }
    }
 
-2. Description: "A group session with fines for going over 10 minutes for individuals, and a fixed fine of $50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
+2. Description: "A group session with fines for going over 10 minutes and 30 seconds for individuals, and a fixed fine of $50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
    Expected Output:
    {
      "sessionType": "group",
      "maxPreachingTimeMinutes": 10,
+     "maxPreachingTimeSeconds": 30,
      "fineRules": [
        {
          "appliesTo": "individual",
@@ -116,46 +120,6 @@ Example descriptions and expected JSON structure:
        "enabled": true,
        "pointsPerTopIndividual": 0,
        "pointsPerTopGroup": 500
-     }
-   }
-
-3. Description: "Missionary training - group prayer meeting. If the prayer goes over 20 minutes, the group gets a $10 fine."
-   Expected Output:
-   {
-     "sessionType": "group",
-     "maxPreachingTimeMinutes": 20,
-     "fineRules": [
-       {
-         "appliesTo": "group",
-         "type": "fixed",
-         "amount": 10
-       }
-     ],
-     "votingConfig": {
-       "enabled": false
-     },
-     "pointDistribution": {
-       "enabled": false
-     }
-   }
-
-4. Description: "Missionary training - individual preaching session. 15 minute limit, $5 fine per minute overage."
-   Expected Output:
-   {
-     "sessionType": "individual",
-     "maxPreachingTimeMinutes": 15,
-     "fineRules": [
-       {
-         "appliesTo": "individual",
-         "type": "per-minute-overage",
-         "amount": 5
-       }
-     ],
-     "votingConfig": {
-       "enabled": false
-     },
-     "pointDistribution": {
-       "enabled": false
      }
    }
 

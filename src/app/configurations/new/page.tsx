@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -45,7 +46,8 @@ export default function NewConfiguration() {
   
   // Manual Configuration State
   const [sessionType, setSessionType] = useState<'individual' | 'group' | 'sunday preaching'>('individual');
-  const [maxTime, setMaxTime] = useState('15');
+  const [maxTimeMin, setMaxTimeMin] = useState('15');
+  const [maxTimeSec, setMaxTimeSec] = useState('0');
   const [fineAmount, setFineAmount] = useState('5');
   const [fineType, setFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
   
@@ -74,7 +76,8 @@ export default function NewConfiguration() {
     try {
       const rules = await generateSessionRules({ description: aiDescription });
       setSessionType(rules.sessionType);
-      setMaxTime(rules.maxPreachingTimeMinutes?.toString() || '0');
+      setMaxTimeMin(rules.maxPreachingTimeMinutes?.toString() || '0');
+      setMaxTimeSec(rules.maxPreachingTimeSeconds?.toString() || '0');
       if (rules.fineRules?.[0]) {
         setFineAmount(rules.fineRules[0].amount.toString());
         setFineType(rules.fineRules[0].type);
@@ -103,7 +106,8 @@ export default function NewConfiguration() {
         name,
         description,
         sessionType,
-        maxPreachingTimeMinutes: parseInt(maxTime) || 0,
+        maxPreachingTimeMinutes: parseInt(maxTimeMin) || 0,
+        maxPreachingTimeSeconds: parseInt(maxTimeSec) || 0,
         fineRules: [
           {
             appliesTo: sessionType === 'group' ? 'group' : 'individual',
@@ -227,10 +231,14 @@ export default function NewConfiguration() {
 
               <div className="border-t pt-6">
                 <h3 className="font-semibold mb-4 text-sm uppercase tracking-wider text-muted-foreground">Timing & Fines</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <Label>Time Limit (Minutes)</Label>
-                    <Input type="number" value={maxTime} onChange={(e) => setMaxTime(e.target.value)} />
+                    <Label>Time Limit (Min)</Label>
+                    <Input type="number" value={maxTimeMin} onChange={(e) => setMaxTimeMin(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Time Limit (Sec)</Label>
+                    <Input type="number" min="0" max="59" value={maxTimeSec} onChange={(e) => setMaxTimeSec(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Fine Amount ($)</Label>

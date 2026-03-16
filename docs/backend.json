@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -165,6 +166,10 @@
         "maxPreachingTimeMinutes": {
           "type": "number",
           "description": "The maximum allowed preaching time in minutes for events under this configuration."
+        },
+        "maxPreachingTimeSeconds": {
+          "type": "number",
+          "description": "The maximum allowed preaching time in seconds (added to minutes) for events under this configuration."
         },
         "fineCalculationMethod": {
           "type": "string",
@@ -514,7 +519,7 @@
         },
         "recipientGroupId": {
           "type": "string",
-          "description": "Optional reference to the Group that received the points. (Relationship: Group 1:N PointAward)"
+          "description": "Optional reference to the Group who received the points. (Relationship: Group 1:N PointAward)"
         },
         "pointsAwarded": {
           "type": "number",

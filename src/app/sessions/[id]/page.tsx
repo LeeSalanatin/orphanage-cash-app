@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -28,7 +29,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   // Edit States for Menu
   const [editTitle, setEditTitle] = useState('');
-  const [editMaxTime, setEditMaxTime] = useState('');
+  const [editMaxTimeMin, setEditMaxTimeMin] = useState('');
+  const [editMaxTimeSec, setEditMaxTimeSec] = useState('0');
   const [editFineAmount, setEditFineAmount] = useState('');
   const [editFineType, setEditFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
   const [editVotingEnabled, setEditVotingEnabled] = useState(false);
@@ -71,7 +73,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   useEffect(() => {
     if (session) {
       setEditTitle(session.title || '');
-      setEditMaxTime(session.maxPreachingTimeMinutes?.toString() || '0');
+      setEditMaxTimeMin(session.maxPreachingTimeMinutes?.toString() || '0');
+      setEditMaxTimeSec(session.maxPreachingTimeSeconds?.toString() || '0');
       if (session.fineRules?.[0]) {
         setEditFineAmount(session.fineRules[0].amount.toString());
         setEditFineType(session.fineRules[0].type);
@@ -120,7 +123,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (!activeId || !session || !firestore || !user) return;
     
     const durationSeconds = timer;
-    const maxSeconds = (session.maxPreachingTimeMinutes || 0) * 60;
+    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
     
     const rule = session.fineRules?.find((r: any) => 
@@ -153,11 +156,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           sessionType: session.sessionType,
           participantName: targetName || 'Target',
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
-          maxAllowedDurationMinutes: session.maxPreachingTimeMinutes || 0,
+          maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
           overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
-          rulesSummary: `Maximum allowed time is ${session.maxPreachingTimeMinutes} minutes. Fines are calculated by the second.`
+          rulesSummary: `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
         });
         explanation = aiResponse.explanation;
       } catch (e) {
@@ -220,7 +223,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const finalRules = {
       title: editTitle,
-      maxPreachingTimeMinutes: parseInt(editMaxTime) || 0,
+      maxPreachingTimeMinutes: parseInt(editMaxTimeMin) || 0,
+      maxPreachingTimeSeconds: parseInt(editMaxTimeSec) || 0,
       fineRules: [
         {
           appliesTo: session.sessionType === 'group' ? 'group' : 'individual',
@@ -270,6 +274,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     </div>
   );
 
+  const maxLimitFormatted = `${session.maxPreachingTimeMinutes || 0}m ${session.maxPreachingTimeSeconds || 0}s`;
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -278,7 +284,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
             <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
           </div>
-          <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 'N/A'} min</p>
+          <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {maxLimitFormatted}</p>
         </div>
         <div className="flex gap-2">
           {session.votingConfig?.enabled && (
@@ -396,15 +402,27 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="editMaxTime">Max Time (Minutes)</Label>
+                      <Label htmlFor="editMaxTimeMin">Max Time (Min)</Label>
                       <Input 
-                        id="editMaxTime" 
+                        id="editMaxTimeMin" 
                         type="number" 
                         placeholder="e.g. 15" 
-                        value={editMaxTime} 
-                        onChange={(e) => setEditMaxTime(e.target.value)} 
+                        value={editMaxTimeMin} 
+                        onChange={(e) => setEditMaxTimeMin(e.target.value)} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editMaxTimeSec">Max Time (Sec)</Label>
+                      <Input 
+                        id="editMaxTimeSec" 
+                        type="number" 
+                        min="0"
+                        max="59"
+                        placeholder="e.g. 30" 
+                        value={editMaxTimeSec} 
+                        onChange={(e) => setEditMaxTimeSec(e.target.value)} 
                       />
                     </div>
                     <div className="space-y-2">
@@ -582,7 +600,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </div>
               <div className="flex justify-between border-b border-primary/10 pb-2">
                 <span className="text-muted-foreground">Time Limit:</span>
-                <span className="font-medium">{session.maxPreachingTimeMinutes || 'Unlimited'} mins</span>
+                <span className="font-medium">{maxLimitFormatted}</span>
               </div>
               <div className="space-y-2">
                 <span className="text-muted-foreground block mb-1">Active Penalties:</span>
