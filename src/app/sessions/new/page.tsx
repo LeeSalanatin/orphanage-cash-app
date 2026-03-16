@@ -10,9 +10,24 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Wand2, Loader2, Save, ArrowLeft } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+
+const SUGGESTIONS = [
+  { 
+    label: "Missionary (Individual)", 
+    text: "Missionary training - individual preaching session. 15 minute limit, $5 fine per minute overage. Voting for top 3 speakers." 
+  },
+  { 
+    label: "Missionary (Group)", 
+    text: "Missionary training - group prayer meeting. 30 minute limit, $50 group fine if exceeded." 
+  },
+  { 
+    label: "Sunday Service", 
+    text: "Sunday preaching session. Preacher gets a fixed fine of $25 if they don't follow the theme. No voting." 
+  }
+];
 
 export default function NewSession() {
   const router = useRouter();
@@ -64,7 +79,6 @@ export default function NewSession() {
         title,
         ...generatedRules,
         ownerId: user.uid,
-        // Ensure members map exists for security rules 'isMember' helper
         members: { [user.uid]: 'owner' },
         status: 'pending',
         createdAt: serverTimestamp(),
@@ -101,19 +115,38 @@ export default function NewSession() {
           <CardHeader>
             <CardTitle>Session Intent</CardTitle>
             <CardDescription>
-              Describe your session (e.g., "A Sunday preaching session with a fixed $50 fine for the preacher if they go over 45 mins").
+              Describe your session in natural language.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="title">Session Title</Label>
               <Input 
                 id="title" 
-                placeholder="Morning Worship, Youth Group Night, etc." 
+                placeholder="e.g. Missionary Training Week 1" 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
+            
+            <div className="space-y-3">
+              <Label>Suggestions</Label>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <Button 
+                    key={s.label} 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs rounded-full"
+                    onClick={() => setDescription(s.text)}
+                  >
+                    <Sparkles className="mr-1 h-3 w-3 text-accent" />
+                    {s.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="description">Rules & Criteria (Natural Language)</Label>
               <Textarea 
@@ -125,8 +158,8 @@ export default function NewSession() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button variant="outline" onClick={() => { setDescription(''); setGeneratedRules(null); }}>Clear</Button>
+          <CardFooter className="flex justify-between border-t pt-6 bg-muted/5">
+            <Button variant="ghost" onClick={() => { setDescription(''); setGeneratedRules(null); }}>Clear</Button>
             <Button onClick={handleGenerateRules} disabled={loading || !description.trim()}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
               Generate Rules
@@ -157,7 +190,7 @@ export default function NewSession() {
                 <div className="grid gap-2">
                   {generatedRules.fineRules.map((rule: any, idx: number) => (
                     <div key={idx} className="p-3 bg-background rounded-md border text-sm flex justify-between items-center shadow-sm">
-                      <span className="font-medium">{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'} ({rule.appliesTo})</span>
+                      <span className="font-medium capitalize">{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'} ({rule.appliesTo})</span>
                       <span className="font-bold text-destructive">${rule.amount}</span>
                     </div>
                   ))}
@@ -168,10 +201,10 @@ export default function NewSession() {
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Voting Configuration</p>
                   <div className="p-3 bg-background rounded-md border text-xs shadow-sm min-h-[60px]">
-                    {generatedRules.votingConfig.enabled ? (
+                    {generatedRules.votingConfig?.enabled ? (
                       <ul className="space-y-1">
-                        <li>• Top Individuals: {generatedRules.votingConfig.topIndividualsToVoteFor}</li>
-                        <li>• Top Groups: {generatedRules.votingConfig.topGroupsToVoteFor}</li>
+                        <li>• Top Individuals: {generatedRules.votingConfig.topIndividualsToVoteFor || 0}</li>
+                        <li>• Top Groups: {generatedRules.votingConfig.topGroupsToVoteFor || 0}</li>
                       </ul>
                     ) : (
                       <span className="text-muted-foreground">Voting is disabled for this session.</span>
@@ -181,10 +214,10 @@ export default function NewSession() {
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Points Distribution</p>
                   <div className="p-3 bg-background rounded-md border text-xs shadow-sm min-h-[60px]">
-                    {generatedRules.pointDistribution.enabled ? (
+                    {generatedRules.pointDistribution?.enabled ? (
                       <ul className="space-y-1">
-                        <li>• Individual Reward: {generatedRules.pointDistribution.pointsPerTopIndividual} pts</li>
-                        <li>• Group Reward: {generatedRules.pointDistribution.pointsPerTopGroup} pts</li>
+                        <li>• Individual Reward: {generatedRules.pointDistribution.pointsPerTopIndividual || 0} pts</li>
+                        <li>• Group Reward: {generatedRules.pointDistribution.pointsPerTopGroup || 0} pts</li>
                       </ul>
                     ) : (
                       <span className="text-muted-foreground">No points will be awarded.</span>
@@ -194,7 +227,7 @@ export default function NewSession() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full h-12 text-lg font-bold" size="lg" onClick={handleSaveSession} disabled={loading || !title.trim()}>
+              <Button className="w-full h-12 text-lg font-bold shadow-lg shadow-primary/20" size="lg" onClick={handleSaveSession} disabled={loading || !title.trim()}>
                 {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
                 Save & Initialize Session
               </Button>

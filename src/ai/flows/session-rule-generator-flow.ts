@@ -18,7 +18,7 @@ export type GenerateSessionRulesInput = z.infer<typeof GenerateSessionRulesInput
 // Define the output schema for the structured session rules.
 const GenerateSessionRulesOutputSchema = z.object({
   sessionType: z.enum(['individual', 'group', 'sunday preaching']).describe('The primary type of session: "individual" for single participants, "group" for multiple participants organized into teams, or "sunday preaching" for a general Sunday service preaching without specific individual time tracking for fines.').default('individual'),
-  maxPreachingTimeMinutes: z.number().int().min(0).optional().describe('Optional maximum allowed preaching time in minutes for individual or group sessions. If exceeded, fines may apply. Not applicable for "sunday preaching" if duration is fixed.').default(null),
+  maxPreachingTimeMinutes: z.number().int().min(0).nullable().describe('Optional maximum allowed preaching time in minutes for individual or group sessions. If exceeded, fines may apply. Not applicable for "sunday preaching" if duration is fixed.').default(null),
   fineRules: z.array(
     z.object({
       appliesTo: z.enum(['individual', 'group', 'sunday preaching']).describe('Specifies who this fine rule applies to: "individual" participants, "group" entities, or the "sunday preaching" session as a whole.').default('individual'),
@@ -47,7 +47,120 @@ const generateSessionRulesPrompt = ai.definePrompt({
   name: 'generateSessionRulesPrompt',
   input: { schema: GenerateSessionRulesInputSchema },
   output: { schema: GenerateSessionRulesOutputSchema },
-  prompt: `You are an AI assistant tasked with generating structured session rules based on a natural language description.\nYour goal is to parse the user's request and output a JSON object conforming strictly to the provided JSON schema.\nIf a specific detail is not mentioned, infer a sensible default or mark it as not applicable based on the session type.\n\nHere are the possible session types:\n- 'individual': Sessions where participants preach individually. Fines and voting typically apply to individuals.\n- 'group': Sessions where participants are part of groups. Fines might apply to individuals or groups. Voting can be for top groups, top individuals within groups, or both.\n- 'sunday preaching': A general preaching session, often with fixed fines for the preacher (individual) but without a maximum time limit for each person, and usually with no voting.\n\nHere are the possible fine types:\n- 'fixed': A set fine amount.\n- 'per-minute-overage': A fine charged per minute that a participant or group exceeds the 'maxPreachingTimeMinutes'.\n\nExample descriptions and expected JSON structure:\n\n1. Description: "An individual session where preachers get fined $10 for every minute they go over 15 minutes. There will be voting for the top 3 speakers, who each get 100 points."\n   Expected Output:\n   {\n     "sessionType": "individual",\n     "maxPreachingTimeMinutes": 15,\n     "fineRules": [\n       {\n         "appliesTo": "individual",\n         "type": "per-minute-overage",\n         "amount": 10,\n         "gracePeriodMinutes": 0\n       }\n     ],\n     "votingConfig": {\n       "enabled": true,\n       "topIndividualsToVoteFor": 3,\n       "topGroupsToVoteFor": 0,\n       "enableIndividualVotingInGroupSession": false\n     },\n     "pointDistribution": {\n       "enabled": true,\n       "pointsPerTopIndividual": 100,\n       "pointsPerTopGroup": 0\n     }\n   }\n\n2. Description: "A group session with fines for going over 10 minutes for individuals, and a fixed fine of $50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."\n   Expected Output:\n   {\n     "sessionType": "group",\n     "maxPreachingTimeMinutes": 10,\n     "fineRules": [\n       {\n         "appliesTo": "individual",\n         "type": "per-minute-overage",\n         "amount": 5, // Defaulting if not specified, assuming some base fine amount.\n         "gracePeriodMinutes": 0\n       },\n       {\n         "appliesTo": "group",\n         "type": "fixed",\n         "amount": 50\n       }\n     ],\n     "votingConfig": {\n       "enabled": true,\n       "topIndividualsToVoteFor": 0,\n       "topGroupsToVoteFor": 1,\n       "enableIndividualVotingInGroupSession": false\n     },\n     "pointDistribution": {\n       "enabled": true,\n       "pointsPerTopIndividual": 0,\n       "pointsPerTopGroup": 500\n     }\n   }\n\n3. Description: "Sunday preaching session. Preacher gets a fixed fine of $25 if they don't follow the theme. No voting."\n   Expected Output:\n   {\n     "sessionType": "sunday preaching",\n     "maxPreachingTimeMinutes": null,\n     "fineRules": [\n       {\n         "appliesTo": "individual", // Assuming preacher is an individual\n         "type": "fixed",\n         "amount": 25\n       }\n     ],\n     "votingConfig": {\n       "enabled": false,\n       "topIndividualsToVoteFor": 0,\n       "topGroupsToVoteFor": 0,\n       "enableIndividualVotingInGroupSession": false\n     },\n     "pointDistribution": {\n       "enabled": false,\n       "pointsPerTopIndividual": 0,\n       "pointsPerTopGroup": 0\n     }\n   }\n\nNow, generate the JSON for the following description:\n{{{description}}} `
+  prompt: `You are an AI assistant tasked with generating structured session rules based on a natural language description.
+Your goal is to parse the user's request and output a JSON object conforming strictly to the provided JSON schema.
+If a specific detail is not mentioned, infer a sensible default or mark it as not applicable based on the session type.
+
+Here are the possible session types:
+- 'individual': Sessions where participants preach individually. Fines and voting typically apply to individuals.
+- 'group': Sessions where participants are part of groups. Fines might apply to individuals or groups. Voting can be for top groups, top individuals within groups, or both.
+- 'sunday preaching': A general preaching session, often with fixed fines for the preacher (individual) but without a maximum time limit for each person, and usually with no voting.
+
+Here are the possible fine types:
+- 'fixed': A set fine amount.
+- 'per-minute-overage': A fine charged per minute that a participant or group exceeds the 'maxPreachingTimeMinutes'.
+
+Example descriptions and expected JSON structure:
+
+1. Description: "An individual session where preachers get fined $10 for every minute they go over 15 minutes. There will be voting for the top 3 speakers, who each get 100 points."
+   Expected Output:
+   {
+     "sessionType": "individual",
+     "maxPreachingTimeMinutes": 15,
+     "fineRules": [
+       {
+         "appliesTo": "individual",
+         "type": "per-minute-overage",
+         "amount": 10,
+         "gracePeriodMinutes": 0
+       }
+     ],
+     "votingConfig": {
+       "enabled": true,
+       "topIndividualsToVoteFor": 3,
+       "topGroupsToVoteFor": 0,
+       "enableIndividualVotingInGroupSession": false
+     },
+     "pointDistribution": {
+       "enabled": true,
+       "pointsPerTopIndividual": 100,
+       "pointsPerTopGroup": 0
+     }
+   }
+
+2. Description: "A group session with fines for going over 10 minutes for individuals, and a fixed fine of $50 for the group if any member is late. Voting for the top group only. Top group gets 500 points."
+   Expected Output:
+   {
+     "sessionType": "group",
+     "maxPreachingTimeMinutes": 10,
+     "fineRules": [
+       {
+         "appliesTo": "individual",
+         "type": "per-minute-overage",
+         "amount": 5,
+         "gracePeriodMinutes": 0
+       },
+       {
+         "appliesTo": "group",
+         "type": "fixed",
+         "amount": 50
+       }
+     ],
+     "votingConfig": {
+       "enabled": true,
+       "topIndividualsToVoteFor": 0,
+       "topGroupsToVoteFor": 1,
+       "enableIndividualVotingInGroupSession": false
+     },
+     "pointDistribution": {
+       "enabled": true,
+       "pointsPerTopIndividual": 0,
+       "pointsPerTopGroup": 500
+     }
+   }
+
+3. Description: "Missionary training - group prayer meeting. If the prayer goes over 20 minutes, the group gets a $10 fine."
+   Expected Output:
+   {
+     "sessionType": "group",
+     "maxPreachingTimeMinutes": 20,
+     "fineRules": [
+       {
+         "appliesTo": "group",
+         "type": "fixed",
+         "amount": 10
+       }
+     ],
+     "votingConfig": {
+       "enabled": false
+     },
+     "pointDistribution": {
+       "enabled": false
+     }
+   }
+
+4. Description: "Missionary training - individual preaching session. 15 minute limit, $5 fine per minute overage."
+   Expected Output:
+   {
+     "sessionType": "individual",
+     "maxPreachingTimeMinutes": 15,
+     "fineRules": [
+       {
+         "appliesTo": "individual",
+         "type": "per-minute-overage",
+         "amount": 5
+       }
+     ],
+     "votingConfig": {
+       "enabled": false
+     },
+     "pointDistribution": {
+       "enabled": false
+     }
+   }
+
+Now, generate the JSON for the following description:
+{{{description}}} `
 });
 
 // Define the Genkit flow to process the natural language description.

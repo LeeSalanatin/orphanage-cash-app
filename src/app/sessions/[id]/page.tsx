@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -6,7 +5,8 @@ import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Mic2, Clock, Play, StopCircle, UserPlus, AlertTriangle, Vote, Loader2, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -18,7 +18,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [activePreacher, setActivePreacher] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeType, setActiveType] = useState<'individual' | 'group' | null>(null);
   const [timer, setTimer] = useState(0);
 
   const sessionRef = useMemoFirebase(() => {
@@ -31,8 +32,17 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return collection(firestore, 'participants');
   }, [firestore]);
 
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'groups'),
+      where(`members.${user.uid}`, '!=', null)
+    );
+  }, [firestore, user]);
+
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Filtering by sessionMembers to satisfy security rules
     return query(
       collection(firestore, 'sessions', id, 'preaching_events'),
       where(`sessionMembers.${user.uid}`, '!=', null)
@@ -41,6 +51,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
+  const { data: userGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
 
   // Sort records in memory
@@ -55,7 +66,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     let interval: any;
-    if (activePreacher) {
+    if (activeId) {
       interval = setInterval(() => {
         setTimer(t => t + 1);
       }, 1000);
@@ -63,25 +74,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       setTimer(0);
     }
     return () => clearInterval(interval);
-  }, [activePreacher]);
+  }, [activeId]);
 
-  function handleStartPreaching(participantId: string) {
-    setActivePreacher(participantId);
-    toast({ title: "Recording Started", description: "Tracking preaching time now." });
+  function handleStartTracking(targetId: string, type: 'individual' | 'group') {
+    setActiveId(targetId);
+    setActiveType(type);
+    toast({ title: "Tracking Started", description: `Monitoring ${type} time now.` });
   }
 
-  async function handleStopPreaching() {
-    if (!activePreacher || !session || !firestore || !user) return;
+  async function handleStopTracking() {
+    if (!activeId || !session || !firestore || !user) return;
     
     const durationSeconds = timer;
     const durationMinutes = durationSeconds / 60;
     const maxMinutes = session.maxPreachingTimeMinutes || 9999;
     const overage = Math.max(0, durationMinutes - maxMinutes);
     
-    // Fine Calculation
-    let fineAmount = 0;
-    const rule = session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
+    // Find the relevant fine rule based on what we are tracking
+    const rule = session.fineRules?.find((r: any) => 
+      activeType === 'individual' ? r.appliesTo === 'individual' : r.appliesTo === 'group'
+    ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
     
+    let fineAmount = 0;
     if (session.sessionType === 'sunday preaching') {
       fineAmount = rule.amount;
     } else {
@@ -92,14 +106,16 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     }
 
-    const participant = availableParticipants?.find(p => p.id === activePreacher);
+    const targetName = activeType === 'individual' 
+      ? availableParticipants?.find(p => p.id === activeId)?.name 
+      : userGroups?.find(g => g.id === activeId)?.name;
     
     let explanation = "No fine incurred.";
     if (fineAmount > 0) {
       try {
         const aiResponse = await generateFineExplanation({
           sessionType: session.sessionType,
-          participantName: participant?.name || 'Preacher',
+          participantName: targetName || 'Target',
           preachingDurationMinutes: Math.round(durationMinutes * 10) / 10,
           maxAllowedDurationMinutes: maxMinutes,
           fineRateDescription: rule.type === 'fixed' ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
@@ -115,8 +131,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const eventData = {
       sessionId: id,
-      participantId: activePreacher,
-      participantName: participant?.name || 'Unknown',
+      participantId: activeType === 'individual' ? activeId : null,
+      preachingGroupId: activeType === 'group' ? activeId : null,
+      participantName: targetName || 'Unknown',
       actualDurationMinutes: Math.round(durationMinutes * 10) / 10,
       overageMinutes: Math.round(overage * 10) / 10,
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
@@ -132,7 +149,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (fineAmount > 0) {
       const fineData = {
         sessionId: id,
-        targetParticipantId: activePreacher,
+        targetParticipantId: activeType === 'individual' ? activeId : null,
+        targetGroupId: activeType === 'group' ? activeId : null,
         amount: fineAmount,
         calculationDetails: `${Math.round(overage * 10) / 10} minutes overage`,
         explanation,
@@ -144,8 +162,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       addDocumentNonBlocking(collection(firestore, 'sessions', id, 'fines'), fineData);
     }
 
-    setActivePreacher(null);
-    toast({ title: "Preaching Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
+    setActiveId(null);
+    setActiveType(null);
+    toast({ title: "Session Recorded", description: fineAmount > 0 ? "Fine calculated." : "No fines incurred." });
   }
 
   function toggleSessionStatus() {
@@ -155,7 +174,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: `Session ${newStatus}` });
   }
 
-  if (sessionLoading || participantsLoading || recordsLoading) return (
+  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
@@ -163,7 +182,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!session) return (
     <div className="p-20 text-center">
-      <Card className="max-w-md mx-auto py-10">
+      <Card className="max-w-md mx-auto py-10 shadow-lg">
         <CardTitle>Session Not Found</CardTitle>
         <CardDescription>The requested session could not be located.</CardDescription>
         <Button asChild className="mt-4">
@@ -179,7 +198,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
-            <Badge className="capitalize">{session.status}</Badge>
+            <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
           </div>
           <p className="text-muted-foreground capitalize">{session.sessionType} Session • Max Time: {session.maxPreachingTimeMinutes || 'N/A'} min</p>
         </div>
@@ -189,7 +208,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Vote className="mr-2 h-4 w-4" /> Voting
             </Link>
           </Button>
-          <Button onClick={toggleSessionStatus}>
+          <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'}>
             {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {session.status === 'active' ? 'End Session' : 'Start Session'}
           </Button>
@@ -198,24 +217,26 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          {activePreacher && (
+          {activeId && (
             <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in fade-in zoom-in duration-300">
               <CardHeader>
                 <CardTitle className="flex items-center text-accent">
                   <div className="w-3 h-3 bg-accent rounded-full animate-pulse mr-2" />
-                  Live Preaching
+                  Live Tracking: {activeType === 'group' ? 'Group' : 'Individual'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col items-center py-8">
-                <p className="text-lg font-medium mb-2">Currently Preaching:</p>
+                <p className="text-lg font-medium mb-2">Currently Active:</p>
                 <p className="text-3xl font-bold font-headline mb-6 text-primary">
-                  {availableParticipants?.find(p => p.id === activePreacher)?.name}
+                  {activeType === 'individual' 
+                    ? availableParticipants?.find(p => p.id === activeId)?.name 
+                    : userGroups?.find(g => g.id === activeId)?.name}
                 </p>
                 <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8 text-foreground">
                   {Math.floor(timer / 60).toString().padStart(2, '0')}:
                   {(timer % 60).toString().padStart(2, '0')}
                 </div>
-                <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold" onClick={handleStopPreaching}>
+                <Button size="lg" variant="destructive" className="w-full max-w-xs h-14 text-lg font-bold" onClick={handleStopTracking}>
                   <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
                 </Button>
               </CardContent>
@@ -225,7 +246,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle>Session History</CardTitle>
-              <CardDescription>Recorded preaching durations and calculated fines.</CardDescription>
+              <CardDescription>Recorded durations and calculated fines.</CardDescription>
             </CardHeader>
             <CardContent>
               {records && records.length > 0 ? (
@@ -233,7 +254,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   {records.map((record) => (
                     <div key={record.id} className="p-4 rounded-lg border bg-card flex flex-col md:flex-row justify-between md:items-center gap-4 hover:border-primary/50 transition-colors">
                       <div className="space-y-1">
-                        <p className="font-bold text-lg">{record.participantName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-lg">{record.participantName}</p>
+                          <Badge variant="outline" className="text-[10px]">
+                            {record.participantId ? 'Individual' : 'Group'}
+                          </Badge>
+                        </div>
                         <div className="flex gap-3 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {record.actualDurationMinutes} min</span>
                           {record.fineAmount > 0 && (
@@ -266,30 +292,52 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         <div className="space-y-8">
           <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Preachers</CardTitle>
-              <CardDescription>Select a participant to start tracking.</CardDescription>
+              <CardTitle>Participants</CardTitle>
+              <CardDescription>Select who is currently active.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {availableParticipants && availableParticipants.length > 0 ? availableParticipants.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border">
-                  <span className="font-medium">{p.name}</span>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    disabled={!!activePreacher || session.status !== 'active'}
-                    onClick={() => handleStartPreaching(p.id)}
-                  >
-                    <Play className="h-3 w-3 mr-1" /> Start
+            <CardContent className="p-0">
+              <Tabs defaultValue="individuals">
+                <TabsList className="w-full grid grid-cols-2 rounded-none border-b h-12">
+                  <TabsTrigger value="individuals" className="rounded-none">Individuals</TabsTrigger>
+                  <TabsTrigger value="groups" className="rounded-none">Groups</TabsTrigger>
+                </TabsList>
+                <TabsContent value="individuals" className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
+                  {availableParticipants?.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border bg-background">
+                      <span className="font-medium text-sm">{p.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        disabled={!!activeId || session.status !== 'active'}
+                        onClick={() => handleStartTracking(p.id, 'individual')}
+                      >
+                        <Play className="h-3 w-3 mr-1" /> Start
+                      </Button>
+                    </div>
+                  ))}
+                  <Button variant="ghost" className="w-full mt-2 text-xs" asChild>
+                    <Link href="/participants">Manage Individuals</Link>
                   </Button>
-                </div>
-              )) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No participants found.</p>
-              )}
-              <Button variant="ghost" className="w-full mt-4" asChild>
-                <Link href="/participants">
-                  <UserPlus className="mr-2 h-4 w-4" /> Add Participants
-                </Link>
-              </Button>
+                </TabsContent>
+                <TabsContent value="groups" className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
+                  {userGroups?.map((g) => (
+                    <div key={g.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border bg-background">
+                      <span className="font-medium text-sm">{g.name}</span>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        disabled={!!activeId || session.status !== 'active'}
+                        onClick={() => handleStartTracking(g.id, 'group')}
+                      >
+                        <Play className="h-3 w-3 mr-1" /> Start
+                      </Button>
+                    </div>
+                  ))}
+                  <Button variant="ghost" className="w-full mt-2 text-xs" asChild>
+                    <Link href="/participants?tab=groups">Manage Groups</Link>
+                  </Button>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
@@ -307,11 +355,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <span className="font-medium">{session.maxPreachingTimeMinutes || 'Unlimited'} mins</span>
               </div>
               <div className="space-y-2">
-                <span className="text-muted-foreground block mb-1">Fine Calculation:</span>
+                <span className="text-muted-foreground block mb-1">Fine Rules:</span>
                 {session.fineRules?.map((rule: any, i: number) => (
-                  <div key={i} className="bg-muted p-2 rounded text-xs border">
-                    <span className="font-semibold">{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'}:</span>
-                    <span className="ml-2 font-bold text-destructive">${rule.amount}</span>
+                  <div key={i} className="bg-muted p-2 rounded text-[10px] border">
+                    <span className="font-semibold capitalize">{rule.type === 'fixed' ? 'Fixed' : 'Variable'} ({rule.appliesTo}):</span>
+                    <span className="ml-2 font-bold text-destructive">${rule.amount} {rule.type === 'per-minute-overage' ? '/ min' : ''}</span>
                   </div>
                 ))}
               </div>
