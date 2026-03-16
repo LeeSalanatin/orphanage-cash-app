@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2 } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2, Timer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
@@ -121,7 +121,46 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // Grouped History Logic
+  // Time-based statistics for Results tab
+  const timeStats = useMemo(() => {
+    if (!records || records.length === 0) return { individuals: [], group: null };
+
+    // Individual Longest Times
+    const individualStats = [...records]
+      .sort((a, b) => b.actualDurationSeconds - a.actualDurationSeconds)
+      .slice(0, 3)
+      .map(r => ({
+        id: r.id,
+        name: r.participantName,
+        duration: r.actualDurationSeconds,
+        formatted: r.actualDurationFormatted
+      }));
+
+    // Group Longest Time (Summing all individual contributions within the group)
+    const groupDurations: Record<string, { id: string, name: string, total: number }> = {};
+    records.forEach(r => {
+      if (r.preachingGroupId) {
+        if (!groupDurations[r.preachingGroupId]) {
+          const gInfo = allGroups?.find(g => g.id === r.preachingGroupId);
+          groupDurations[r.preachingGroupId] = {
+            id: r.preachingGroupId,
+            name: gInfo?.name || 'Unknown Group',
+            total: 0
+          };
+        }
+        groupDurations[r.preachingGroupId].total += r.actualDurationSeconds;
+      }
+    });
+
+    const longestGrp = Object.values(groupDurations).sort((a, b) => b.total - a.total)[0] || null;
+
+    return {
+      individuals: individualStats,
+      group: longestGrp
+    };
+  }, [records, allGroups]);
+
+  // Grouped History Logic for Live tab
   const groupedHistory = useMemo(() => {
     if (!records || !session) return [];
     
@@ -610,67 +649,103 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Card>
             </TabsContent>
 
-            <TabsContent value="results" className="space-y-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Leaderboard</CardTitle>
-                    <CardDescription>{votes?.length || 0} ballots cast.</CardDescription>
-                  </div>
-                  {session.ownerId === user?.uid && !session.rewardsDistributed && (
-                    <Button onClick={handleDistributeRewards} disabled={votes?.length === 0}>
-                      <CheckCircle2 className="mr-2 h-4 w-4" /> Award Points
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-8">
-                  <div>
-                    <h3 className="font-semibold mb-4 flex items-center gap-2"><Star className="h-4 w-4 text-yellow-500" /> Individuals</h3>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">Rank</TableHead>
-                          <TableHead>Participant</TableHead>
-                          <TableHead className="text-right">Votes</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {leaderboard.individuals.length > 0 ? leaderboard.individuals.map((item) => (
-                          <TableRow key={item.id} className={item.rank <= 3 ? "bg-primary/5" : ""}>
-                            <TableCell className="font-bold">#{item.rank}</TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell className="text-right font-mono">{item.votes}</TableCell>
-                          </TableRow>
-                        )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {session.sessionType === 'group' && (
+            <TabsContent value="results" className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border-primary/20 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Timer className="h-5 w-5 text-primary" />
+                      Session Records
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
                     <div>
-                      <h3 className="font-semibold mb-4 flex items-center gap-2"><UsersIcon className="h-4 w-4 text-primary" /> Groups</h3>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-16">Rank</TableHead>
-                            <TableHead>Group Name</TableHead>
-                            <TableHead className="text-right">Votes</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {leaderboard.groups.length > 0 ? leaderboard.groups.map((item) => (
-                            <TableRow key={item.id} className={item.rank === 1 ? "bg-primary/5" : ""}>
-                              <TableCell className="font-bold">#{item.rank}</TableCell>
-                              <TableCell>{item.name}</TableCell>
-                              <TableCell className="text-right font-mono">{item.votes}</TableCell>
-                            </TableRow>
-                          )) : <TableRow><TableCell colSpan={3} className="text-center py-4">No votes yet.</TableCell></TableRow>}
-                        </TableBody>
-                      </Table>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Longest Individual Time</h4>
+                      <div className="space-y-2">
+                        {timeStats.individuals.length > 0 ? timeStats.individuals.map((stat, idx) => (
+                          <div key={stat.id} className="flex items-center justify-between p-2 rounded bg-muted/30">
+                            <span className="text-sm flex items-center gap-2">
+                              <span className="font-bold text-xs text-muted-foreground">#{idx+1}</span>
+                              {stat.name}
+                            </span>
+                            <span className="font-mono font-bold text-sm text-primary">{stat.formatted}</span>
+                          </div>
+                        )) : <p className="text-xs text-muted-foreground italic">No data yet.</p>}
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+
+                    {session.sessionType === 'group' && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Longest Group Total</h4>
+                        {timeStats.group ? (
+                          <div className="flex items-center justify-between p-3 rounded bg-primary/5 border border-primary/10">
+                            <span className="text-sm font-bold flex items-center gap-2">
+                              <Trophy className="h-4 w-4 text-yellow-500" />
+                              {timeStats.group.name}
+                            </span>
+                            <span className="font-mono font-bold text-primary">{formatDuration(timeStats.group.total)}</span>
+                          </div>
+                        ) : <p className="text-xs text-muted-foreground italic">No group data yet.</p>}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary/20 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Trophy className="h-5 w-5 text-primary" />
+                        Voting Leaderboard
+                      </CardTitle>
+                      {session.ownerId === user?.uid && !session.rewardsDistributed && (
+                        <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={handleDistributeRewards} disabled={votes?.length === 0}>
+                          Award Points
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6 pt-2">
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Top Preachers</h4>
+                      <div className="space-y-1">
+                        {leaderboard.individuals.length > 0 ? leaderboard.individuals.slice(0, 5).map((item) => (
+                          <div key={item.id} className={cn(
+                            "flex items-center justify-between text-xs p-2 rounded",
+                            item.rank <= 3 ? "bg-accent/5" : "bg-transparent"
+                          )}>
+                            <span className="flex items-center gap-2">
+                              <span className="font-bold">#{item.rank}</span>
+                              {item.name}
+                            </span>
+                            <span className="font-bold text-accent">{item.votes} v</span>
+                          </div>
+                        )) : <p className="text-xs text-muted-foreground italic">No votes yet.</p>}
+                      </div>
+                    </div>
+
+                    {session.sessionType === 'group' && (
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Top Teams</h4>
+                        <div className="space-y-1">
+                          {leaderboard.groups.length > 0 ? leaderboard.groups.slice(0, 5).map((item) => (
+                            <div key={item.id} className={cn(
+                              "flex items-center justify-between text-xs p-2 rounded",
+                              item.rank === 1 ? "bg-primary/5" : "bg-transparent"
+                            )}>
+                              <span className="flex items-center gap-2">
+                                <span className="font-bold">#{item.rank}</span>
+                                {item.name}
+                              </span>
+                              <span className="font-bold text-primary">{item.votes} v</span>
+                            </div>
+                          )) : <p className="text-xs text-muted-foreground italic">No group votes yet.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="timing" className="space-y-6">
@@ -910,3 +985,4 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     </div>
   );
 }
+
