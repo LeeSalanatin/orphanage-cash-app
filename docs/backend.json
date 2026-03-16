@@ -1,0 +1,798 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user account in the system, primarily for authentication and basic profile information. It is assumed that sensitive authentication data like passwords are managed externally.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user, used for login and communication.",
+          "format": "email"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "The full name of the user."
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Indicates if the user has administrative privileges."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "fullName",
+        "isAdmin"
+      ]
+    },
+    "Participant": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Participant",
+      "type": "object",
+      "description": "Represents an individual who can participate in preaching sessions, vote, incur fines, and receive points. Every participant is linked to a user account.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Participant entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User entity this participant is associated with. (Relationship: User 1:1 Participant)"
+        },
+        "preachingNickname": {
+          "type": "string",
+          "description": "An optional nickname or alias for the participant used during preaching sessions."
+        },
+        "dateJoined": {
+          "type": "string",
+          "description": "The date and time when the participant joined the PreachPoint system.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "dateJoined"
+      ]
+    },
+    "Group": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Group",
+      "type": "object",
+      "description": "Represents a group of participants that can preach, incur fines, or receive points collectively.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Group entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the group."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the group."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "GroupMembership": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "GroupMembership",
+      "type": "object",
+      "description": "Links a participant to a specific group, enabling many-to-many relationships between participants and groups.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the GroupMembership entity."
+        },
+        "groupId": {
+          "type": "string",
+          "description": "Reference to the Group entity this membership belongs to. (Relationship: Group 1:N GroupMembership)"
+        },
+        "participantId": {
+          "type": "string",
+          "description": "Reference to the Participant entity who is a member of the group. (Relationship: Participant 1:N GroupMembership)"
+        },
+        "dateJoined": {
+          "type": "string",
+          "description": "The date and time when the participant joined this group.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "groupId",
+        "participantId",
+        "dateJoined"
+      ]
+    },
+    "SessionType": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SessionType",
+      "type": "object",
+      "description": "Defines the broad categories of sessions, such as 'Individual', 'Group', or 'Sunday Preaching', serving as a template for configurations.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SessionType entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The descriptive name of the session type (e.g., 'Individual', 'Group', 'Sunday Preaching')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief explanation of what this session type entails."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "SessionConfiguration": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SessionConfiguration",
+      "type": "object",
+      "description": "Defines the specific rules and settings for a particular type of session (e.g., 'Standard Individual Preaching', 'Team Challenge Group', 'Weekly Sunday Sermon').",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SessionConfiguration entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "A unique name for this session configuration."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of this session configuration."
+        },
+        "sessionTypeId": {
+          "type": "string",
+          "description": "Reference to the SessionType this configuration belongs to. (Relationship: SessionType 1:N SessionConfiguration)"
+        },
+        "maxPreachingTimeMinutes": {
+          "type": "number",
+          "description": "The maximum allowed preaching time in minutes for events under this configuration."
+        },
+        "fineCalculationMethod": {
+          "type": "string",
+          "description": "The method used to calculate fines (e.g., 'FIXED_RATE', 'PER_MINUTE_OVERAGE', 'NONE').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixedFineAmount": {
+          "type": "number",
+          "description": "The fixed amount of fine, applicable if fineCalculationMethod is 'FIXED_RATE'."
+        },
+        "perMinuteFineRate": {
+          "type": "number",
+          "description": "The fine rate per minute of overage, applicable if fineCalculationMethod is 'PER_MINUTE_OVERAGE'."
+        },
+        "appliesFineToTarget": {
+          "type": "string",
+          "description": "Specifies whether fines apply to 'INDIVIDUAL', 'GROUP', or 'NONE' for this configuration.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isVotingEnabled": {
+          "type": "boolean",
+          "description": "Indicates if voting is enabled for sessions using this configuration."
+        },
+        "votingCategories": {
+          "type": "array",
+          "description": "An array of strings defining the categories participants can vote on (e.g., 'Clarity', 'Delivery').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowIndividualVotingInGroup": {
+          "type": "boolean",
+          "description": "If true, allows individual members within a group to be voted on separately in group sessions."
+        },
+        "topNParticipantsForPoints": {
+          "type": "number",
+          "description": "The number of top individuals who will receive points based on voting results."
+        },
+        "topNGroupsForPoints": {
+          "type": "number",
+          "description": "The number of top groups who will receive points based on voting results."
+        },
+        "pointsPerTopIndividual": {
+          "type": "number",
+          "description": "The base points awarded to each top individual."
+        },
+        "pointsPerTopGroup": {
+          "type": "number",
+          "description": "The base points awarded to each top group."
+        },
+        "groupPointsDistributionMethod": {
+          "type": "string",
+          "description": "Specifies how points awarded to a top group are distributed among its members (e.g., 'EQUALLY', 'LEADER_BONUS', 'NONE').",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "sessionTypeId",
+        "maxPreachingTimeMinutes",
+        "fineCalculationMethod",
+        "appliesFineToTarget",
+        "isVotingEnabled"
+      ]
+    },
+    "Session": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Session",
+      "type": "object",
+      "description": "Represents an actual instance of a preaching event or session, based on a specific SessionConfiguration.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Session entity."
+        },
+        "sessionConfigurationId": {
+          "type": "string",
+          "description": "Reference to the SessionConfiguration entity that defines the rules for this session. (Relationship: SessionConfiguration 1:N Session)"
+        },
+        "name": {
+          "type": "string",
+          "description": "A specific name for this session instance (e.g., 'Sunday Preaching - May 12, 2024')."
+        },
+        "scheduledDateTime": {
+          "type": "string",
+          "description": "The planned date and time for the session.",
+          "format": "date-time"
+        },
+        "actualStartDateTime": {
+          "type": "string",
+          "description": "The actual start date and time of the session, if it has begun.",
+          "format": "date-time"
+        },
+        "actualEndDateTime": {
+          "type": "string",
+          "description": "The actual end date and time of the session, if it has concluded.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the session (e.g., 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELED').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fineExplanationEnabled": {
+          "type": "boolean",
+          "description": "Indicates if the GenAI fine explanation tool is enabled for this session."
+        }
+      },
+      "required": [
+        "id",
+        "sessionConfigurationId",
+        "name",
+        "scheduledDateTime",
+        "status",
+        "fineExplanationEnabled"
+      ]
+    },
+    "SessionParticipantAssignment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SessionParticipantAssignment",
+      "type": "object",
+      "description": "Records the assignment of participants (individuals or groups) to a specific session, defining their role within that session.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SessionParticipantAssignment entity."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the Session this assignment belongs to. (Relationship: Session 1:N SessionParticipantAssignment)"
+        },
+        "participantId": {
+          "type": "string",
+          "description": "Reference to the Participant assigned to this session. (Relationship: Participant 1:N SessionParticipantAssignment)"
+        },
+        "groupId": {
+          "type": "string",
+          "description": "Optional reference to the Group if the participant is assigned as part of a group in this session. (Relationship: Group 1:N SessionParticipantAssignment)"
+        },
+        "assignedRole": {
+          "type": "string",
+          "description": "The role of the participant/group in the session (e.g., 'PREACHER', 'VOTER').",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "sessionId",
+        "participantId",
+        "assignedRole"
+      ]
+    },
+    "PreachingEvent": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PreachingEvent",
+      "type": "object",
+      "description": "Records the details of a single preaching event within a session, including timing and potential overage.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PreachingEvent entity."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the Session this preaching event occurred within. (Relationship: Session 1:N PreachingEvent)"
+        },
+        "participantId": {
+          "type": "string",
+          "description": "Reference to the Participant who preached. (Relationship: Participant 1:N PreachingEvent)"
+        },
+        "preachingGroupId": {
+          "type": "string",
+          "description": "Optional reference to the Group if the participant preached as part of a group. (Relationship: Group 1:N PreachingEvent)"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The actual start time of the preaching event.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The actual end time of the preaching event.",
+          "format": "date-time"
+        },
+        "actualDurationMinutes": {
+          "type": "number",
+          "description": "The total duration of the preaching event in minutes."
+        },
+        "overageMinutes": {
+          "type": "number",
+          "description": "The number of minutes by which the preaching event exceeded the maximum allowed time."
+        },
+        "fineId": {
+          "type": "string",
+          "description": "Optional reference to the Fine entity if a fine was incurred for this event. (Relationship: PreachingEvent 1:1 Fine)"
+        }
+      },
+      "required": [
+        "id",
+        "sessionId",
+        "participantId",
+        "startTime",
+        "endTime",
+        "actualDurationMinutes",
+        "overageMinutes"
+      ]
+    },
+    "Fine": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Fine",
+      "type": "object",
+      "description": "Records details about a fine incurred by an individual or a group during a preaching event.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Fine entity."
+        },
+        "preachingEventId": {
+          "type": "string",
+          "description": "Reference to the PreachingEvent that resulted in this fine. (Relationship: PreachingEvent 1:1 Fine)"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the Session during which the fine was incurred. (Relationship: Session 1:N Fine)"
+        },
+        "targetParticipantId": {
+          "type": "string",
+          "description": "Optional reference to the Participant who incurred the fine, if applicable. (Relationship: Participant 1:N Fine)"
+        },
+        "targetGroupId": {
+          "type": "string",
+          "description": "Optional reference to the Group that incurred the fine, if applicable. (Relationship: Group 1:N Fine)"
+        },
+        "amount": {
+          "type": "number",
+          "description": "The monetary amount of the fine."
+        },
+        "calculationDetails": {
+          "type": "string",
+          "description": "A summary of how the fine was calculated (e.g., '5 minutes overage at $2/minute')."
+        },
+        "explanation": {
+          "type": "string",
+          "description": "A detailed explanation of the fine, potentially generated by the AI tool."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the fine (e.g., 'ISSUED', 'PAID', 'WAIVED').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "issuedDateTime": {
+          "type": "string",
+          "description": "The date and time when the fine was issued.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "preachingEventId",
+        "sessionId",
+        "amount",
+        "calculationDetails",
+        "explanation",
+        "status",
+        "issuedDateTime"
+      ]
+    },
+    "Vote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Vote",
+      "type": "object",
+      "description": "Records an individual vote cast by a participant for another participant or a group within a session.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Vote entity."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the Session in which the vote was cast. (Relationship: Session 1:N Vote)"
+        },
+        "voterParticipantId": {
+          "type": "string",
+          "description": "Reference to the Participant who cast the vote. (Relationship: Participant 1:N Vote (voter))"
+        },
+        "votedForParticipantId": {
+          "type": "string",
+          "description": "Optional reference to the Participant who received the vote, if applicable. (Relationship: Participant 1:N Vote (voted for))"
+        },
+        "votedForGroupId": {
+          "type": "string",
+          "description": "Optional reference to the Group that received the vote, if applicable. (Relationship: Group 1:N Vote (voted for))"
+        },
+        "votingCategory": {
+          "type": "string",
+          "description": "The category for which the vote was cast (e.g., 'Clarity', 'Delivery')."
+        },
+        "rank": {
+          "type": "number",
+          "description": "The rank given to the voted entity within its category (e.g., 1 for top, 2 for second)."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the vote was cast.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "sessionId",
+        "voterParticipantId",
+        "votingCategory",
+        "rank",
+        "timestamp"
+      ]
+    },
+    "PointAward": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PointAward",
+      "type": "object",
+      "description": "Records the awarding of points or incentives to individuals or groups based on voting results or other criteria.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PointAward entity."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Reference to the Session in which points were awarded. (Relationship: Session 1:N PointAward)"
+        },
+        "recipientParticipantId": {
+          "type": "string",
+          "description": "Optional reference to the Participant who received the points. (Relationship: Participant 1:N PointAward)"
+        },
+        "recipientGroupId": {
+          "type": "string",
+          "description": "Optional reference to the Group that received the points. (Relationship: Group 1:N PointAward)"
+        },
+        "pointsAwarded": {
+          "type": "number",
+          "description": "The number of points awarded."
+        },
+        "reason": {
+          "type": "string",
+          "description": "The reason for the point award (e.g., 'Top Individual in Clarity category', 'Group member share from Top Group award')."
+        },
+        "awardDateTime": {
+          "type": "string",
+          "description": "The date and time when the points were awarded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "sessionId",
+        "pointsAwarded",
+        "reason",
+        "awardDateTime"
+      ]
+    },
+    "ParticipantScore": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ParticipantScore",
+      "type": "object",
+      "description": "Aggregates the total points accumulated by a participant across all sessions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ParticipantScore entity."
+        },
+        "participantId": {
+          "type": "string",
+          "description": "Reference to the Participant whose score is being tracked. (Relationship: Participant 1:1 ParticipantScore)"
+        },
+        "totalPoints": {
+          "type": "number",
+          "description": "The total accumulated points for the participant."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The date and time when the total points were last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "participantId",
+        "totalPoints",
+        "lastUpdated"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Document ID {userId} matches request.auth.uid for direct user ownership."
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Denormalized collection to indicate if a user has administrative privileges. Document existence signifies admin role, where {userId} matches request.auth.uid."
+        }
+      },
+      {
+        "path": "/participants/{participantId}",
+        "definition": {
+          "entityName": "Participant",
+          "schema": {
+            "$ref": "#/backend/entities/Participant"
+          },
+          "description": "Stores participant-specific data. Document ID {participantId} matches the associated User's ID (request.auth.uid) to simplify ownership-based security rules. Includes denormalized 'userId'."
+        }
+      },
+      {
+        "path": "/session_types/{sessionTypeId}",
+        "definition": {
+          "entityName": "SessionType",
+          "schema": {
+            "$ref": "#/backend/entities/SessionType"
+          },
+          "description": "Global configuration for different categories of sessions (e.g., 'Individual', 'Group'). Read-only for authenticated users, writeable by admins."
+        }
+      },
+      {
+        "path": "/session_configurations/{sessionConfigurationId}",
+        "definition": {
+          "entityName": "SessionConfiguration",
+          "schema": {
+            "$ref": "#/backend/entities/SessionConfiguration"
+          },
+          "description": "Global configuration defining specific rules and settings for session types (e.g., fines, voting). Read-only for authenticated users, writeable by admins."
+        }
+      },
+      {
+        "path": "/groups/{groupId}",
+        "definition": {
+          "entityName": "Group",
+          "schema": {
+            "$ref": "#/backend/entities/Group"
+          },
+          "description": "Manages groups of participants. Includes denormalized 'ownerId' (userId of creator) and a 'members' map for authorization independence for this document and its related subcollections.",
+          "params": [
+            {
+              "name": "groupId",
+              "description": "Unique identifier for the group."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/group_memberships/{groupMembershipId}",
+        "definition": {
+          "entityName": "GroupMembership",
+          "schema": {
+            "$ref": "#/backend/entities/GroupMembership"
+          },
+          "description": "Links participants to groups. Includes denormalized 'participantId' (which is the userId), 'groupId', 'groupOwnerId', and 'groupMembers' map (from the associated Group) for authorization independence.",
+          "params": [
+            {
+              "name": "groupMembershipId",
+              "description": "Unique identifier for the group membership record."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}",
+        "definition": {
+          "entityName": "Session",
+          "schema": {
+            "$ref": "#/backend/entities/Session"
+          },
+          "description": "Represents an instance of a preaching session. Includes denormalized 'ownerId' (userId of creator) and a 'members' map (containing userId's) for authorization independence for this document and its subcollections.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier for the session."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}/assignments/{assignmentId}",
+        "definition": {
+          "entityName": "SessionParticipantAssignment",
+          "schema": {
+            "$ref": "#/backend/entities/SessionParticipantAssignment"
+          },
+          "description": "Assigns participants/groups to a specific session. Includes denormalized 'participantId' (which is the userId), 'sessionId', 'sessionOwnerId', and 'sessionMembers' map (from the parent Session) for authorization independence.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier of the parent session."
+            },
+            {
+              "name": "assignmentId",
+              "description": "Unique identifier for the session participant assignment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}/preaching_events/{preachingEventId}",
+        "definition": {
+          "entityName": "PreachingEvent",
+          "schema": {
+            "$ref": "#/backend/entities/PreachingEvent"
+          },
+          "description": "Records individual preaching events within a session. Includes denormalized 'participantId' (which is the userId), 'sessionId', 'sessionOwnerId', and 'sessionMembers' map (from the parent Session) for authorization independence.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier of the parent session."
+            },
+            {
+              "name": "preachingEventId",
+              "description": "Unique identifier for the preaching event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}/fines/{fineId}",
+        "definition": {
+          "entityName": "Fine",
+          "schema": {
+            "$ref": "#/backend/entities/Fine"
+          },
+          "description": "Records fines incurred during a session. Includes denormalized 'sessionId', 'targetParticipantId' (which is the userId, if applicable), 'sessionOwnerId', and 'sessionMembers' map (from the parent Session) for authorization independence.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier of the parent session."
+            },
+            {
+              "name": "fineId",
+              "description": "Unique identifier for the fine."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}/votes/{voteId}",
+        "definition": {
+          "entityName": "Vote",
+          "schema": {
+            "$ref": "#/backend/entities/Vote"
+          },
+          "description": "Records votes cast within a session. Includes denormalized 'sessionId', 'voterParticipantId' (which is the userId), 'votedForParticipantId' (which is the userId, if applicable), 'sessionOwnerId', and 'sessionMembers' map (from the parent Session) for authorization independence.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier of the parent session."
+            },
+            {
+              "name": "voteId",
+              "description": "Unique identifier for the vote."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sessions/{sessionId}/point_awards/{pointAwardId}",
+        "definition": {
+          "entityName": "PointAward",
+          "schema": {
+            "$ref": "#/backend/entities/PointAward"
+          },
+          "description": "Records points awarded in a session. Includes denormalized 'sessionId', 'recipientParticipantId' (which is the userId, if applicable), 'sessionOwnerId', and 'sessionMembers' map (from the parent Session) for authorization independence.",
+          "params": [
+            {
+              "name": "sessionId",
+              "description": "Unique identifier of the parent session."
+            },
+            {
+              "name": "pointAwardId",
+              "description": "Unique identifier for the point award."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/participant_scores/{participantId}",
+        "definition": {
+          "entityName": "ParticipantScore",
+          "schema": {
+            "$ref": "#/backend/entities/ParticipantScore"
+          },
+          "description": "Aggregates the total points accumulated by a participant across all sessions. Document ID {participantId} matches the associated User's ID (request.auth.uid) to simplify ownership-based security rules.",
+          "params": [
+            {
+              "name": "participantId",
+              "description": "Unique identifier for the participant, matching their userId."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for PreachPoint is designed to be highly secure, scalable, and debuggable by strictly adhering to the core design principles. The primary strategy employed for **Authorization Independence** is extensive denormalization of authorization context. For collaborative entities like Groups and Sessions, crucial access control information such as the `ownerId` (the `userId` of the creator/manager) and a `members` map (containing `userId`s and their respective roles) will be stored directly on the main document. Subsequently, this `ownerId` and `members` map will be denormalized into every subcollection document (e.g., `GroupMembership`, `SessionParticipantAssignment`, `PreachingEvent`, `Fine`, `Vote`, `PointAward`). This eliminates the need for expensive and rule-breaking `get()` calls in security rules to check parent document permissions, enabling atomic operations and making rules explicit and easy to audit. This denormalization is crucial because the `participantId` in our design is effectively the `userId` (request.auth.uid), allowing direct comparison in rules.\n\n**Queryable by Authorized Parties (QAPs)** are supported through a combination of structural segregation and the denormalization strategy. Collections like `/session_types` and `/session_configurations` are structurally segregated as global, read-only data (for authenticated users, writeable by admins), making list operations trivial. For user-specific data, path-based ownership is utilized, such as `/users/{userId}` and `/participants/{participantId}` (where `{participantId}` is identical to `request.auth.uid`), which inherently restricts `list` access to the authenticated user's own data. For collaborative data like `/groups` and `/sessions`, the denormalized `ownerId` and `members` map fields allow secure and efficient `list` queries using `where('ownerId', '==', request.auth.uid)` or `where('members.' + request.auth.uid, '!=', null)`. Subcollections inherit the `sessionId` or `groupId` from their path and can be further filtered by denormalized `participantId` (which is `userId`) or `sessionMembers` / `groupMembers` fields, ensuring that `list` operations always return only data the requesting user is authorized to see without relying on rules as filters. Global admin roles are handled via an 'existence over content' approach in `/roles_admin/{userId}`, where the presence of a document signifies admin status.\n\nOverall, the design prioritizes data placement that aligns with its security requirements, explicitly models authorization within each document through denormalization, and uses clear, descriptive paths and fields to ensure debuggability and maintainability."
+  }
+}

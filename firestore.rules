@@ -1,0 +1,238 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * PREACHPOINT SECURITY RULES
+     *
+     * CORE PHILOSOPHY:
+     * This ruleset enforces a "Collaboration-First" security model. It relies heavily on 
+     * denormalization of authorization context (owner IDs and member maps) to ensure that 
+     * security checks are performant and do not require expensive cross-document lookups.
+     *
+     * DATA STRUCTURE:
+     * - User Profiles: Isolated under /users/{userId}.
+     * - Administrative Configs: Stored in global collections, managed by users with the Admin role.
+     * - Collaborative Entities: Groups and Sessions are top-level. Authorization is determined 
+     *   by 'ownerId' and 'members' maps stored directly on the documents.
+     * - Transactional Data: Fines, Votes, and Assignments are sub-collections of Sessions, 
+     *   carrying denormalized access maps from their parents.
+     *
+     * KEY SECURITY DECISIONS:
+     * 1. Path-Identity Mapping: Document IDs for /users, /participants, and /participant_scores 
+     *    directly match the Firebase Auth UID.
+     * 2. Admin Elevation: Administrative rights are verified via the /roles_admin collection 
+     *    (existence check).
+     * 3. Denormalized Auth: Every collaborative sub-document contains a map of authorized 
+     *    members to allow instant access validation during list and get operations.
+     * 4. Relational Integrity: On creation, documents must link themselves to the 
+     *    authenticated user (e.g., creatorId or ownerId).
+     */
+
+    // --- Helper Functions ---
+
+    /** @description Checks if the user is authenticated. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** @description Checks if the user's UID matches the provided ID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Checks if the user is the owner of an existing document. */
+    function isExistingOwner(ownerId) {
+      return isSignedIn() && resource != null && request.auth.uid == ownerId;
+    }
+
+    /** @description Verifies if the authenticated user has administrative privileges. */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    /** @description Checks if a user is part of a members map (UID -> role). */
+    function isMember(membersMap) {
+      return isSignedIn() && membersMap[request.auth.uid] != null;
+    }
+
+    /** @description Checks if a user is an owner/admin within a members map. */
+    function isMemberAdmin(membersMap) {
+      return isSignedIn() && membersMap[request.auth.uid] == 'owner' || membersMap[request.auth.uid] == 'admin';
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description User profile management. Users can only manage their own profile.
+     * @path /users/{userId}
+     * @allow (get, update) if userId == request.auth.uid
+     * @deny (get) if userId != request.auth.uid
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if false; // Profiles should generally not be deleted by users in this app
+    }
+
+    /**
+     * @description Admin role registry. Read-only for the user, managed by system/Admin SDK.
+     * @path /roles_admin/{userId}
+     * @allow (get) if userId == request.auth.uid
+     * @deny (create, update, delete) if true (system managed)
+     * @principle Existence-based role verification.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /**
+     * @description Participant identity. Closely tied to the User ID.
+     * @path /participants/{participantId}
+     * @allow (create) if participantId == request.auth.uid
+     * @deny (update) if request.resource.data.userId != resource.data.userId
+     * @principle Enforces path-to-data consistency and ownership.
+     */
+    match /participants/{participantId} {
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(participantId) && request.resource.data.userId == request.auth.uid;
+      allow update: if isExistingOwner(participantId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(participantId);
+    }
+
+    /**
+     * @description Global session categories. Publicly readable, admin writable.
+     * @path /session_types/{sessionTypeId}
+     * @allow (list) if isSignedIn()
+     * @deny (create) if !isAdmin()
+     * @principle Role-based write access for configuration data.
+     */
+    match /session_types/{sessionTypeId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description Global session rules. Publicly readable, admin writable.
+     * @path /session_configurations/{sessionConfigurationId}
+     * @allow (get) if isSignedIn()
+     * @deny (update) if !isAdmin()
+     * @principle Role-based write access for configuration data.
+     */
+    match /session_configurations/{sessionConfigurationId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description Groups of participants. Access controlled by 'members' map and 'ownerId'.
+     * @path /groups/{groupId}
+     * @allow (get) if user in members map
+     * @deny (update) if user is not group owner
+     * @principle Shared Access (Closed Collaborators) via membership maps.
+     */
+    match /groups/{groupId} {
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isExistingOwner(resource.data.ownerId) || isMemberAdmin(resource.data.members);
+      allow delete: if isExistingOwner(resource.data.ownerId);
+    }
+
+    /**
+     * @description Junction collection for group memberships.
+     * @path /group_memberships/{groupMembershipId}
+     * @allow (get) if participant is the user OR user is group owner
+     * @principle Denormalized membership check for performant list operations.
+     */
+    match /group_memberships/{groupMembershipId} {
+      allow get, list: if isSignedIn() && (resource.data.participantId == request.auth.uid || resource.data.groupOwnerId == request.auth.uid || isMember(resource.data.groupMembers));
+      allow create: if isSignedIn() && (request.resource.data.participantId == request.auth.uid || request.resource.data.groupOwnerId == request.auth.uid);
+      allow update: if isExistingOwner(resource.data.groupOwnerId) || isOwner(resource.data.participantId);
+      allow delete: if isExistingOwner(resource.data.groupOwnerId) || isOwner(resource.data.participantId);
+    }
+
+    /**
+     * @description Preaching sessions. Managed by owners and shared with members.
+     * @path /sessions/{sessionId}
+     * @allow (create) if signed in
+     * @principle Ownership and collaboration using denormalized member maps.
+     */
+    match /sessions/{sessionId} {
+      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isExistingOwner(resource.data.ownerId) || isMemberAdmin(resource.data.members);
+      allow delete: if isExistingOwner(resource.data.ownerId);
+
+      /**
+       * @description Participants and roles assigned to a session.
+       * @path /sessions/{sessionId}/assignments/{assignmentId}
+       * @principle Subcollection access secured by parent-denormalized membership map.
+       */
+      match /assignments/{assignmentId} {
+        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create: if isSignedIn() && (request.resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+        allow update: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
+        allow delete: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
+      }
+
+      /**
+       * @description Records of preaching duration and timing.
+       * @path /sessions/{sessionId}/preaching_events/{preachingEventId}
+       */
+      match /preaching_events/{preachingEventId} {
+        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create: if isSignedIn() && (request.resource.data.participantId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
+      }
+
+      /**
+       * @description Fines issued during the session.
+       * @path /sessions/{sessionId}/fines/{fineId}
+       */
+      match /fines/{fineId} {
+        allow get, list: if isSignedIn() && (resource.data.targetParticipantId == request.auth.uid || resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create, update, delete: if isSignedIn() && (request.resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+      }
+
+      /**
+       * @description Votes cast by participants.
+       * @path /sessions/{sessionId}/votes/{voteId}
+       * @allow (create) if user is the voter
+       * @principle Ensures voters can only create and manage their own votes.
+       */
+      match /votes/{voteId} {
+        allow get, list: if isSignedIn() && (resource.data.voterParticipantId == request.auth.uid || resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(resource.data.sessionMembers));
+        allow create: if isOwner(request.resource.data.voterParticipantId) && isMember(request.resource.data.sessionMembers);
+        allow update: if isExistingOwner(resource.data.voterParticipantId);
+        allow delete: if isExistingOwner(resource.data.voterParticipantId) || isMemberAdmin(resource.data.sessionMembers);
+      }
+
+      /**
+       * @description Points awarded based on voting or session outcome.
+       * @path /sessions/{sessionId}/point_awards/{pointAwardId}
+       */
+      match /point_awards/{pointAwardId} {
+        allow get, list: if isSignedIn() && (resource.data.recipientParticipantId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create, update, delete: if isSignedIn() && (request.resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+      }
+    }
+
+    /**
+     * @description Aggregated participant scores.
+     * @path /participant_scores/{participantId}
+     * @allow (get) if signed in
+     * @deny (write) if participantId != auth.uid
+     * @principle Ownership-based write access for user metrics.
+     */
+    match /participant_scores/{participantId} {
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(participantId);
+      allow update: if isExistingOwner(participantId);
+      allow delete: if false; // Scores are persistent
+    }
+  }
+}
