@@ -17,7 +17,6 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
-        // Hardcoded admin for initial setup/bypass if necessary
         request.auth.token.email == 'yfjcenter@gmail.com' ||
         request.auth.token.email == 'yfj@example.com' ||
         request.auth.token.email == 'admin@example.com'
@@ -26,6 +25,14 @@ service cloud.firestore {
 
     function isMember(membersMap) {
       return isSignedIn() && membersMap != null && membersMap[request.auth.uid] != null;
+    }
+
+    // Collection Group rule for preaching_events (required for dashboard query)
+    match /{path=**}/preaching_events/{eventId} {
+      allow list: if isSignedIn() && (resource.data.sessionMembers[request.auth.uid] != null || isAdmin());
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     match /users/{userId} {
@@ -41,7 +48,6 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId || 
         request.auth.uid == participantId ||
         isAdmin() ||
-        // Allow linking by email if user email matches orphan record email
         (resource.data.userId == null && request.auth.token.email == resource.data.email)
       );
       allow delete: if isAdmin();
