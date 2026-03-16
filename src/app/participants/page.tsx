@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -10,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,6 +30,10 @@ export default function ParticipantsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<{id: string, name: string} | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
+  
+  // Group Management State
+  const [managingGroup, setManagingGroup] = useState<any>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Record<string, boolean>>({});
 
   // Check if current user is admin
   useEffect(() => {
@@ -107,6 +113,34 @@ export default function ParticipantsPage() {
     setNewGroupName('');
     setNewGroupDescription('');
     toast({ title: "Group Created", description: `${newGroupName} is ready for sessions.` });
+  }
+
+  function handleOpenMemberManagement(group: any) {
+    setManagingGroup(group);
+    setSelectedMemberIds(group.members || {});
+  }
+
+  function handleToggleMember(participantId: string, participantUserId: string | null) {
+    const newMembers = { ...selectedMemberIds };
+    if (newMembers[participantId]) {
+      delete newMembers[participantId];
+      if (participantUserId) delete newMembers[participantUserId];
+    } else {
+      newMembers[participantId] = true;
+      if (participantUserId) newMembers[participantUserId] = true;
+    }
+    setSelectedMemberIds(newMembers);
+  }
+
+  function handleSaveGroupMembers() {
+    if (!managingGroup || !firestore) return;
+
+    updateDocumentNonBlocking(doc(firestore, 'groups', managingGroup.id), {
+      members: selectedMemberIds
+    });
+
+    toast({ title: "Members Updated", description: `Group ${managingGroup.name} roster has been saved.` });
+    setManagingGroup(null);
   }
 
   function toggleAdmin(targetUserId: string, currentStatus: boolean, name: string) {
@@ -333,20 +367,25 @@ export default function ParticipantsPage() {
                       </CardDescription>
                     )}
                   </div>
-                  {(user?.uid === g.ownerId || isAdmin) && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
-                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMemberManagement(g)}>
+                      <Settings2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
                     </Button>
-                  )}
+                    {(user?.uid === g.ownerId || isAdmin) && (
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between text-sm mb-4">
                     <span className="text-muted-foreground">Team Points:</span>
-                    <span className="font-bold text-accent">₱{g.totalPoints || 0}</span>
+                    <span className="font-bold text-accent">{g.totalPoints || 0} pts</span>
                   </div>
                   <div className="text-[10px] text-muted-foreground bg-muted p-2 rounded flex items-center gap-2">
                     <Users className="h-3 w-3" />
-                    Members: {Object.keys(g.members || {}).length}
+                    Members: {Object.keys(g.members || {}).length > 0 ? (Object.keys(g.members || {}).length / (g.members?.owner ? 1 : 1)).toFixed(0) : 0} assigned
                   </div>
                 </CardContent>
               </Card>
@@ -381,6 +420,46 @@ export default function ParticipantsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingParticipant(null)}>Cancel</Button>
             <Button onClick={handleUpdateName}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group Member Management Dialog */}
+      <Dialog open={!!managingGroup} onOpenChange={(open) => !open && setManagingGroup(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manage Members: {managingGroup?.name}</DialogTitle>
+            <DialogDescription>
+              Assign participants to this group. Members will receive split rewards and fines.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-grow overflow-y-auto py-4 space-y-2 pr-2">
+            {participantsLoading ? (
+              <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : participants?.map((p) => (
+              <div 
+                key={p.id} 
+                className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => handleToggleMember(p.id, p.userId)}
+              >
+                <Checkbox 
+                  id={`member-${p.id}`} 
+                  checked={!!selectedMemberIds[p.id]} 
+                  onCheckedChange={() => handleToggleMember(p.id, p.userId)}
+                />
+                <div className="flex-grow">
+                  <Label htmlFor={`member-${p.id}`} className="font-medium cursor-pointer">{p.name}</Label>
+                  <p className="text-[10px] text-muted-foreground">{p.email || 'No email'}</p>
+                </div>
+                {p.userId && <Badge variant="outline" className="text-[9px] h-4">Registered</Badge>}
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="pt-4 border-t">
+            <Button variant="outline" onClick={() => setManagingGroup(null)}>Cancel</Button>
+            <Button onClick={handleSaveGroupMembers}>Save Roster</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
