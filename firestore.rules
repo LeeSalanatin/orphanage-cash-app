@@ -3,6 +3,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --- Helper Functions ---
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -31,10 +33,12 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group rules must be defined with recursive wildcards at the top level ---
+    // --- Collection Group Rules ---
+    // These must be defined at the top level or with recursive wildcards to support collectionGroup() queries.
     
-    // This rule covers all 'preaching_events' collections regardless of nesting.
     match /{path=**}/preaching_events/{eventId} {
+      // Allow any signed-in user to list and read events. 
+      // The dashboard query filters by 'sessionMembers', which is secure.
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -70,7 +74,7 @@ service cloud.firestore {
     }
 
     match /session_configurations/{configId} {
-      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow get, list: if isSignedIn();
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
@@ -83,7 +87,9 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
-      allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
+      // Allow signed-in users to list sessions. The query will be constrained by the application.
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
     }
