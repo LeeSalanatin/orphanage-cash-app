@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Toaster } from '@/components/ui/toaster';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
   title: 'PreachPoint - Preaching Time Management',
@@ -21,11 +22,13 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-background text-foreground flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-grow">
-          {children}
-        </main>
-        <Toaster />
+        <FirebaseClientProvider>
+          <Navbar />
+          <main className="flex-grow">
+            {children}
+          </main>
+          <Toaster />
+        </FirebaseClientProvider>
       </body>
     </html>
   );

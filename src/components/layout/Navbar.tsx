@@ -3,10 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Mic2, Users, LayoutDashboard, PlusCircle } from 'lucide-react';
+import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut } from 'lucide-react';
+import { useUser, useAuth } from '@/firebase';
+import { Button } from '@/components/ui/button';
+import { signOut } from 'firebase/auth';
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user, isUserLoading } = useUser();
+  const auth = useAuth();
 
   const links = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -43,12 +48,34 @@ export function Navbar() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/sessions/new">
-            <button className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Session
-            </button>
-          </Link>
+          {!isUserLoading && (
+            user ? (
+              <div className="flex items-center gap-4">
+                <Link href="/sessions/new" className="hidden sm:block">
+                  <Button size="sm">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    New Session
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={() => signOut(auth)}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link href="/login">
+                  <Button variant="ghost" size="sm">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button size="sm">Sign Up</Button>
+                </Link>
+              </div>
+            )
+          )}
         </div>
       </div>
     </nav>

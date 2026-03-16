@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { useFirestore } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function Dashboard() {
+  const db = useFirestore();
   const [stats, setStats] = useState({
     totalSessions: 0,
     activeSessions: 0,
@@ -23,6 +24,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function fetchData() {
+      if (!db) return;
       try {
         const sessionsSnap = await getDocs(query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(5)));
         const participantsSnap = await getDocs(collection(db, 'participants'));
@@ -44,7 +46,7 @@ export default function Dashboard() {
       }
     }
     fetchData();
-  }, []);
+  }, [db]);
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
