@@ -32,7 +32,7 @@ service cloud.firestore {
     match /{path=**}/preaching_events/{eventId} {
       allow list: if isSignedIn() && (
         isAdmin() || 
-        (resource.data.get('sessionMembers', {})[request.auth.uid] != null)
+        (request.auth.uid in resource.data.get('sessionMembers', {}))
       );
       allow get: if isSignedIn();
       allow create: if isSignedIn();
