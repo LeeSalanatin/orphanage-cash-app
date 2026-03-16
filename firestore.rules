@@ -5,10 +5,7 @@ service cloud.firestore {
 
     /**
      * PREACHPOINT SECURITY RULES
-     * Improved for robust list/query support and better membership checks.
      */
-
-    // --- Helper Functions ---
 
     function isSignedIn() {
       return request.auth != null;
@@ -34,8 +31,6 @@ service cloud.firestore {
       return isSignedIn() && membersMap != null && (membersMap[request.auth.uid] == 'owner' || membersMap[request.auth.uid] == 'admin');
     }
 
-    // --- Collection Rules ---
-
     match /users/{userId} {
       allow get, list: if isOwner(userId);
       allow create: if isOwner(userId);
@@ -51,8 +46,8 @@ service cloud.firestore {
 
     match /participants/{participantId} {
       allow get, list: if isSignedIn();
-      allow create: if isOwner(participantId) && request.resource.data.userId == request.auth.uid;
-      allow update: if isExistingOwner(participantId) && request.resource.data.userId == resource.data.userId;
+      allow create: if isOwner(participantId);
+      allow update: if isExistingOwner(participantId);
       allow delete: if isExistingOwner(participantId);
     }
 
@@ -63,7 +58,8 @@ service cloud.firestore {
 
     match /session_configurations/{sessionConfigurationId} {
       allow get, list: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isExistingOwner(resource.data.ownerId);
     }
 
     match /groups/{groupId} {
@@ -73,47 +69,28 @@ service cloud.firestore {
       allow delete: if isExistingOwner(resource.data.ownerId);
     }
 
-    match /group_memberships/{groupMembershipId} {
-      allow get, list: if isSignedIn() && (resource.data.participantId == request.auth.uid || resource.data.groupOwnerId == request.auth.uid || isMember(resource.data.groupMembers));
-      allow create: if isSignedIn() && (request.resource.data.participantId == request.auth.uid || request.resource.data.groupOwnerId == request.auth.uid);
-      allow update: if isExistingOwner(resource.data.groupOwnerId) || isOwner(resource.data.participantId);
-      allow delete: if isExistingOwner(resource.data.groupOwnerId) || isOwner(resource.data.participantId);
-    }
-
     match /sessions/{sessionId} {
       allow get, list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.members));
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isExistingOwner(resource.data.ownerId) || isMemberAdmin(resource.data.members);
       allow delete: if isExistingOwner(resource.data.ownerId);
 
-      match /assignments/{assignmentId} {
+      match /preaching_events/{eventId} {
         allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
-        allow create: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
-        allow update: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
-        allow delete: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
-      }
-
-      match /preaching_events/{preachingEventId} {
-        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
-        allow create: if isSignedIn() && (request.resource.data.participantId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
-        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId) || isMemberAdmin(resource.data.sessionMembers);
+        allow create: if isSignedIn();
+        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
       }
 
       match /fines/{fineId} {
-        allow get, list: if isSignedIn() && (resource.data.targetParticipantId == request.auth.uid || resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
-        allow create, update, delete: if isSignedIn() && (request.resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create: if isSignedIn();
+        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
       }
 
       match /votes/{voteId} {
-        allow get, list: if isSignedIn() && (resource.data.voterParticipantId == request.auth.uid || resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(resource.data.sessionMembers));
-        allow create: if isOwner(request.resource.data.voterParticipantId) && isMember(request.resource.data.sessionMembers);
-        allow update: if isExistingOwner(resource.data.voterParticipantId);
-        allow delete: if isExistingOwner(resource.data.voterParticipantId) || isMemberAdmin(resource.data.sessionMembers);
-      }
-
-      match /point_awards/{pointAwardId} {
-        allow get, list: if isSignedIn() && (resource.data.recipientParticipantId == request.auth.uid || isMember(resource.data.sessionMembers));
-        allow create, update, delete: if isSignedIn() && (request.resource.data.sessionOwnerId == request.auth.uid || isMemberAdmin(request.resource.data.sessionMembers));
+        allow get, list: if isSignedIn() && (resource.data.sessionOwnerId == request.auth.uid || isMember(resource.data.sessionMembers));
+        allow create: if isSignedIn();
+        allow update, delete: if isExistingOwner(resource.data.sessionOwnerId);
       }
     }
 

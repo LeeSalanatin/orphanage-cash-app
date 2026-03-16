@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut } from 'lucide-react';
+import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut, Settings2 } from 'lucide-react';
 import { useUser, useAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { signOut } from 'firebase/auth';
@@ -16,6 +16,7 @@ export function Navbar() {
   const links = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/sessions', label: 'Sessions', icon: Mic2 },
+    { href: '/configurations', label: 'Rules', icon: Settings2 },
     { href: '/participants', label: 'Participants', icon: Users },
   ];
 
