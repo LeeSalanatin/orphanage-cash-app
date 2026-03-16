@@ -14,18 +14,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 const SUGGESTIONS = [
   { 
     label: "Missionary (Individual)", 
-    text: "Missionary training - individual preaching session. 15 minute limit, $5 fine per minute overage. Voting for top 3 speakers." 
+    text: "Missionary training - individual preaching session. 15 minute limit, $30 fine per minute overage (half of seconds). Voting for top 3 speakers." 
   },
   { 
     label: "Missionary (Group)", 
-    text: "Missionary training - group prayer meeting. 30 minute limit, $50 group fine if exceeded." 
+    text: "Missionary training - group prayer meeting. 30 minute limit, $30 per minute overage (half of seconds) split among members." 
   },
   { 
     label: "Sunday Service", 
@@ -48,7 +48,7 @@ export default function NewConfiguration() {
   const [sessionType, setSessionType] = useState<'individual' | 'group' | 'sunday preaching'>('individual');
   const [maxTimeMin, setMaxTimeMin] = useState('15');
   const [maxTimeSec, setMaxTimeSec] = useState('0');
-  const [fineAmount, setFineAmount] = useState('5');
+  const [fineAmount, setFineAmount] = useState('30');
   const [fineType, setFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
   
   // Advanced Settings
@@ -179,7 +179,7 @@ export default function NewConfiguration() {
                 </div>
               </div>
               <Textarea 
-                placeholder="e.g. 15 minute limit, $5 fine per minute overage..."
+                placeholder="e.g. 15 minute limit, $30 fine per minute overage..."
                 value={aiDescription}
                 onChange={(e) => setAiDescription(e.target.value)}
                 className="min-h-[120px]"
@@ -245,12 +245,21 @@ export default function NewConfiguration() {
                     <Input type="number" value={fineAmount} onChange={(e) => setFineAmount(e.target.value)} />
                   </div>
                 </div>
+                
+                <div className="mt-4 p-3 bg-accent/5 border border-accent/20 rounded-lg flex items-start gap-3">
+                  <Info className="h-5 w-5 text-accent mt-0.5" />
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-bold text-foreground mb-1">Fine Calculation Tip:</p>
+                    <p>To set the fine as <strong>half of total excess seconds</strong>, enter <strong>30</strong> as the Fine Amount ($30/min = $0.50 per second).</p>
+                  </div>
+                </div>
+
                 <div className="mt-4">
                   <Label className="mb-3 block">Fine Model</Label>
                   <RadioGroup value={fineType} onValueChange={(v: any) => setFineType(v)} disabled={sessionType === 'sunday preaching'} className="grid grid-cols-2 gap-4">
                     <div className="flex items-center space-x-2 border p-3 rounded-md">
                       <RadioGroupItem value="per-minute-overage" id="per-min" />
-                      <Label htmlFor="per-min" className="flex-grow cursor-pointer">Per Minute</Label>
+                      <Label htmlFor="per-min" className="flex-grow cursor-pointer">Per Minute (Variable)</Label>
                     </div>
                     <div className="flex items-center space-x-2 border p-3 rounded-md">
                       <RadioGroupItem value="fixed" id="fixed" />

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, AlertTriangle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import Link from 'next/link';
@@ -128,7 +128,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     const rule = session.fineRules?.find((r: any) => 
       activeType === 'individual' ? r.appliesTo === 'individual' : r.appliesTo === 'group'
-    ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 5 };
+    ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 30 };
     
     let totalFineAmount = 0;
     let fineCalculationDetails = "";
@@ -139,6 +139,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage.`;
       } else {
         // Compute per second: rate / 60
+        // e.g. if amount is 30, rate is 0.5 per second (half of seconds)
         const ratePerSecond = rule.amount / 60;
         totalFineAmount = overageSeconds * ratePerSecond;
         fineCalculationDetails = `${formatDuration(overageSeconds)} overage (${overageSeconds}s) at $${rule.amount}/min ($${ratePerSecond.toFixed(2)}/sec). Total: $${totalFineAmount.toFixed(2)}`;
@@ -157,7 +158,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           participantName: targetName || 'Target',
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
-          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min`,
+          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `$${rule.amount} fixed` : `$${rule.amount} per min (half of seconds)`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
           overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
           rulesSummary: `Maximum allowed time is ${formatDuration(maxSeconds)}. Fines are calculated by the second.`
@@ -434,7 +435,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         value={editFineAmount} 
                         onChange={(e) => setEditFineAmount(e.target.value)} 
                       />
-                      <p className="text-[10px] text-muted-foreground">Example: $30/min = $0.50/sec overage.</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-accent/5 border border-accent/20 rounded-lg flex items-start gap-3">
+                    <Info className="h-5 w-5 text-accent mt-0.5" />
+                    <div className="text-xs text-muted-foreground">
+                      <p className="font-bold text-foreground mb-1">How to calculate "Half of Seconds":</p>
+                      <p>Set Fine Amount to <strong>30</strong>. This creates a $0.50/second rate, meaning the fine is exactly half the overage in seconds.</p>
                     </div>
                   </div>
 
