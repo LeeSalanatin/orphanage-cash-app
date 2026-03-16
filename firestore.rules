@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,7 +30,10 @@ service cloud.firestore {
 
     // Collection Group rule for preaching_events (required for dashboard query)
     match /{path=**}/preaching_events/{eventId} {
-      allow list: if isSignedIn() && (resource.data.sessionMembers[request.auth.uid] != null || isAdmin());
+      allow list: if isSignedIn() && (
+        isAdmin() || 
+        (resource != null && resource.data.sessionMembers != null && resource.data.sessionMembers[request.auth.uid] != null)
+      );
       allow get: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
