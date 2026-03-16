@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, query, where, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, ShieldAlert, UserCog } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,6 +23,8 @@ export default function ParticipantsPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<{id: string, name: string} | null>(null);
+  const [editNameValue, setEditNameValue] = useState('');
 
   // Check if current user is admin
   useEffect(() => {
@@ -72,6 +75,17 @@ export default function ParticipantsPage() {
     setNewName('');
     setNewEmail('');
     toast({ title: "Participant Added", description: `${newName} has been added to the roster.` });
+  }
+
+  function handleUpdateName() {
+    if (!editingParticipant || !editNameValue.trim() || !firestore) return;
+
+    updateDocumentNonBlocking(doc(firestore, 'participants', editingParticipant.id), {
+      name: editNameValue.trim()
+    });
+
+    toast({ title: "Name Updated", description: "Participant name has been successfully changed." });
+    setEditingParticipant(null);
   }
 
   function handleAddGroup() {
@@ -139,7 +153,7 @@ export default function ParticipantsPage() {
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle>Add Participant</CardTitle>
-              <CardDescription>Register a new preacher. If they sign up later with this email, their accounts will link automatically.</CardDescription>
+              <CardDescription>Register a new preacher. You can now edit their name at any time.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="space-y-1">
@@ -152,7 +166,7 @@ export default function ParticipantsPage() {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="email">Email (Optional)</Label>
+                <Label htmlFor="email">Email (Linkage)</Label>
                 <Input 
                   id="email" 
                   type="email"
@@ -173,10 +187,10 @@ export default function ParticipantsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Preacher</TableHead>
+                    <TableHead>Preacher Name</TableHead>
+                    <TableHead>Account Status</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Points</TableHead>
-                    <TableHead>Fines Paid</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -192,13 +206,28 @@ export default function ParticipantsPage() {
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-2">
-                              {p.name}
-                              {p.userId && <Badge variant="outline" className="text-[10px] bg-primary/5 text-primary border-primary/20">Registered</Badge>}
-                            </span>
-                            <span className="text-xs text-muted-foreground">{p.email || 'No email provided'}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 opacity-50 hover:opacity-100"
+                              onClick={() => {
+                                setEditingParticipant({ id: p.id, name: p.name });
+                                setEditNameValue(p.name);
+                              }}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {p.userId ? (
+                            <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Registered</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Roster Only</Badge>
+                          )}
+                          <span className="block text-[10px] text-muted-foreground mt-1">{p.email || 'No email'}</span>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -225,11 +254,6 @@ export default function ParticipantsPage() {
                         <TableCell>
                           <div className="flex items-center gap-1 text-accent font-semibold">
                             <Award className="h-4 w-4" /> {p.totalPoints || 0}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-destructive font-semibold">
-                            ₱ {p.totalFines || 0}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -312,6 +336,31 @@ export default function ParticipantsPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Rename Dialog */}
+      <Dialog open={!!editingParticipant} onOpenChange={(open) => !open && setEditingParticipant(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Participant Name</DialogTitle>
+            <DialogDescription>
+              Change the display name for this participant across all sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="editName">Name</Label>
+            <Input 
+              id="editName" 
+              value={editNameValue} 
+              onChange={(e) => setEditNameValue(e.target.value)} 
+              className="mt-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingParticipant(null)}>Cancel</Button>
+            <Button onClick={handleUpdateName}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -17,8 +17,8 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
-        // Allow the first user or a hardcoded YFJ bypass for setup if needed, 
-        // but normally we rely on the collection.
+        // Hardcoded admin for initial setup/bypass if necessary
+        request.auth.token.email == 'yfj@example.com' ||
         request.auth.token.email == 'admin@example.com'
       );
     }
@@ -36,11 +36,14 @@ service cloud.firestore {
     match /participants/{participantId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && (
+      allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
         request.auth.uid == participantId ||
-        isAdmin()
+        isAdmin() ||
+        // Allow linking by email if user email matches orphan record email
+        (resource.data.userId == null && request.auth.token.email == resource.data.email)
       );
+      allow delete: if isAdmin();
     }
 
     match /session_configurations/{configId} {
