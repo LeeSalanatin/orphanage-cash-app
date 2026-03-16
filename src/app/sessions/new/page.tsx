@@ -1,0 +1,203 @@
+"use client";
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Wand2, Loader2, Save, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
+
+export default function NewSession() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [description, setDescription] = useState('');
+  const [generatedRules, setGeneratedRules] = useState<any>(null);
+  const [title, setTitle] = useState('');
+
+  async function handleGenerateRules() {
+    if (!description.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please provide a description for the rules.",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const rules = await generateSessionRules({ description });
+      setGeneratedRules(rules);
+      toast({
+        title: "Rules Generated",
+        description: "Review and save your session configuration.",
+      });
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Generation Failed",
+        description: "Could not generate rules from your description. Try being more specific.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveSession() {
+    if (!title.trim() || !generatedRules) return;
+
+    setLoading(true);
+    try {
+      const docRef = await addDoc(collection(db, 'sessions'), {
+        title,
+        ...generatedRules,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      toast({
+        title: "Session Created",
+        description: "Redirecting to your new session...",
+      });
+      router.push(`/sessions/${docRef.id}`);
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: "Failed to save the session to Firebase.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="container mx-auto py-8 px-4 max-w-4xl">
+      <div className="mb-6">
+        <Button variant="ghost" asChild className="mb-4">
+          <Link href="/sessions">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Sessions
+          </Link>
+        </Button>
+        <h1 className="text-3xl font-headline font-bold">Create New Session</h1>
+        <p className="text-muted-foreground">Define your preaching session rules using AI or manually.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-8">
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle>Session Description</CardTitle>
+            <CardDescription>
+              Tell the AI what kind of session you want (e.g., "A Sunday preaching session with a fixed $50 fine for the preacher if they go over 45 mins").
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Session Title</Label>
+              <Input 
+                id="title" 
+                placeholder="Morning Worship, Youth Group Night, etc." 
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Rules & Criteria (Natural Language)</Label>
+              <Textarea 
+                id="description"
+                placeholder="Explain the timing, fines, and voting rewards..."
+                className="min-h-[120px]"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => setDescription('')}>Clear</Button>
+            <Button onClick={handleGenerateRules} disabled={loading || !description}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+              Generate Rules
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {generatedRules && (
+          <Card className="shadow-lg border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle>Generated Session Configuration</CardTitle>
+              <CardDescription>AI-parsed rules based on your description.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-background rounded-lg border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold">Session Type</p>
+                  <p className="text-lg font-bold capitalize">{generatedRules.sessionType}</p>
+                </div>
+                <div className="p-4 bg-background rounded-lg border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold">Max Time</p>
+                  <p className="text-lg font-bold">{generatedRules.maxPreachingTimeMinutes || 'Unlimited'} mins</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Fine Rules</p>
+                {generatedRules.fineRules.map((rule: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-background rounded-md border text-sm flex justify-between items-center">
+                    <span>{rule.type === 'fixed' ? 'Fixed Rate' : 'Per Minute Over'} ({rule.appliesTo})</span>
+                    <span className="font-bold text-destructive">${rule.amount}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Voting</p>
+                  <div className="p-3 bg-background rounded-md border text-xs">
+                    {generatedRules.votingConfig.enabled ? (
+                      <ul className="space-y-1">
+                        <li>Top Individuals: {generatedRules.votingConfig.topIndividualsToVoteFor}</li>
+                        <li>Top Groups: {generatedRules.votingConfig.topGroupsToVoteFor}</li>
+                      </ul>
+                    ) : (
+                      "Disabled"
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Points Distribution</p>
+                  <div className="p-3 bg-background rounded-md border text-xs">
+                    {generatedRules.pointDistribution.enabled ? (
+                      <ul className="space-y-1">
+                        <li>Per Top Indiv: {generatedRules.pointDistribution.pointsPerTopIndividual}</li>
+                        <li>Per Top Group: {generatedRules.pointDistribution.pointsPerTopGroup}</li>
+                      </ul>
+                    ) : (
+                      "No Points"
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button className="w-full" size="lg" onClick={handleSaveSession} disabled={loading || !title}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save & Initialize Session
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
