@@ -28,13 +28,10 @@ service cloud.firestore {
       return isSignedIn() && membersMap != null && membersMap[request.auth.uid] != null;
     }
 
-    // Collection Group rule for preaching_events (required for dashboard query)
+    // Collection Group rule for preaching_events
+    // This allows the dashboard to query across all sessions for user participation
     match /{path=**}/preaching_events/{eventId} {
-      allow list: if isSignedIn() && (
-        isAdmin() || 
-        (request.auth.uid in resource.data.get('sessionMembers', {}))
-      );
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -76,7 +73,7 @@ service cloud.firestore {
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
 
       match /preaching_events/{eventId} {
-        allow get, list: if isSignedIn();
+        allow read: if isSignedIn();
         allow create: if isSignedIn();
         allow update, delete: if isAdmin();
       }
