@@ -23,18 +23,19 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // Authorized at the root level to allow database-wide aggregation (e.g., on the dashboard).
-    
-    match /{anyPath=**}/preaching_events/{eventId} {
+    // Using the canonical {path=**} recursive wildcard pattern.
+
+    match /{path=**}/preaching_events/{eventId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -78,7 +79,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
       
-      // Direct subcollection access rules (additive to collection group rules)
+      // Direct subcollection access rules (redundant but safe)
       match /preaching_events/{eventId} {
         allow read, create: if isSignedIn();
         allow update, delete: if isAdmin();
