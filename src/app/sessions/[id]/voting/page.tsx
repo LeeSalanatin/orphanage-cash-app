@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc, collection, query, where } from 'firebase/firestore';
+import { doc, collection } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -11,9 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function VotingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -57,7 +59,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     const activeIds = new Set(events.map(e => e.participantId));
     return participants
       .filter(p => activeIds.has(p.id))
-      .filter(p => p.id !== user.uid);
+      .filter(p => p.id !== user.uid && p.userId !== user.uid);
   }, [participants, events, user]);
 
   const filteredGroups = useMemo(() => {
@@ -88,9 +90,12 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
 
-    toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted." });
-    setVotes({ individual: [], group: null });
-    setIsSubmitting(false);
+    toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted. Returning to session..." });
+    
+    // Redirect after a brief delay so they see the success toast
+    setTimeout(() => {
+      router.push(`/sessions/${id}`);
+    }, 1500);
   }
 
   if (loading) return (
