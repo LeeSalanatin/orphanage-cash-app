@@ -22,24 +22,21 @@ service cloud.firestore {
     }
 
     // --- Global Collection Group Rules ---
-    // These must use {path=**} at the root level to authorize collectionGroup() queries database-wide.
-    // Using 'path' as the wildcard variable name is the canonical convention for collection groups.
+    // These MUST be at the root level to authorize collectionGroup() queries database-wide.
+    // We use {allPaths=**} to avoid any potential collision with reserved keywords.
 
-    match /{path=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/preaching_events/{eventId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/fines/{fineId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/votes/{voteId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
