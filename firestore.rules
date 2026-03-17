@@ -23,23 +23,22 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group Rules (MUST BE AT ROOT LEVEL) ---
-    // These authorize queries like firestore.collectionGroup('preaching_events')
-    // across the entire database.
+    // --- Collection Group Rules (Authorized for the entire database) ---
+    // These allow collection group queries like firestore.collectionGroup('preaching_events')
 
-    match /{anyPath=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
