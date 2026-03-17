@@ -42,16 +42,15 @@ interface InternalQuery {
  * Handles nullable references/queries.
  * 
  * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
+ * use useMemo to memoize it per React guidance. Also make sure that its dependencies are stable references.
  *  
  * @template T Optional type for document data. Defaults to any.
- * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} targetRefOrQuery -
+ * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} memoizedTargetRefOrQuery -
  * The Firestore CollectionReference or Query. Waits if null/undefined.
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+  memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean}) | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -75,8 +74,8 @@ export function useCollection<T = any>(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
-        for (const doc of snapshot.docs) {
-          results.push({ ...(doc.data() as T), id: doc.id });
+        for (const docSnapshot of snapshot.docs) {
+          results.push({ ...(docSnapshot.data() as T), id: docSnapshot.id });
         }
         setData(results);
         setError(null);
@@ -93,11 +92,11 @@ export function useCollection<T = any>(
             } else if (internal.path) {
               path = internal.path;
             } else if (internal._query?.path) {
-               if (typeof internal._query.path.canonicalString === 'function') {
-                 path = internal._query.path.canonicalString();
-               } else if (typeof internal._query.path.toString === 'function') {
-                 path = internal._query.path.toString();
-               }
+              if (typeof internal._query.path.canonicalString === 'function') {
+                path = internal._query.path.canonicalString();
+              } else if (typeof internal._query.path.toString === 'function') {
+                path = internal._query.path.toString();
+              }
             } else if ('path' in (memoizedTargetRefOrQuery as any)) {
               path = (memoizedTargetRefOrQuery as any).path;
             }
@@ -109,11 +108,11 @@ export function useCollection<T = any>(
         const contextualError = new FirestorePermissionError({
           operation: 'list',
           path: path || 'collectionGroupQuery',
-        })
+        });
 
-        setError(contextualError)
-        setData(null)
-        setIsLoading(false)
+        setError(contextualError);
+        setData(null);
+        setIsLoading(false);
 
         // Trigger global error propagation
         errorEmitter.emit('permission-error', contextualError);
@@ -123,8 +122,9 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]);
 
-  if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
+  if (memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
+    throw new Error('Target was not properly memoized using useMemoFirebase. Ensure you are wrapping your collection() or query() calls.');
   }
+  
   return { data, isLoading, error };
 }
