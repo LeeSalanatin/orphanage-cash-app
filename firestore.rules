@@ -35,20 +35,19 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // These must be defined at the top level or with recursive wildcards to support collectionGroup() queries.
+    // They authorize queries that span across all session sub-collections.
     
-    match /{path=**}/preaching_events/{eventId} {
-      // Allow any signed-in user to list and read events. 
-      // The dashboard query filters by 'sessionMembers', which is secure.
+    match /{allPaths=**}/preaching_events/{eventId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{allPaths=**}/fines/{fineId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{allPaths=**}/votes/{voteId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -87,11 +86,24 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
-      // Allow signed-in users to list sessions. The query will be constrained by the application.
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
+      
+      // Explicitly allow subcollection access if needed directly
+      match /preaching_events/{eventId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /fines/{fineId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /votes/{voteId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /roles_admin/{userId} {
