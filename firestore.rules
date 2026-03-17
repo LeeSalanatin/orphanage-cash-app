@@ -17,28 +17,22 @@ service cloud.firestore {
       );
     }
 
-    function isMember(membersMap) {
-      return isSignedIn() && membersMap != null && (
-        membersMap.get(request.auth.uid, null) != null
-      );
-    }
-
-    // --- Collection Group Rules (Authorized for the entire database) ---
-    // These allow collection group queries like firestore.collectionGroup('preaching_events')
-
-    match /{path=**}/preaching_events/{eventId} {
+    // --- Collection Group Rules (CRITICAL: Must be at the top level for collectionGroup queries) ---
+    // These allow the dashboard to aggregate data across all sessions.
+    
+    match /{allPaths=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{allPaths=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{allPaths=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -72,17 +66,25 @@ service cloud.firestore {
     match /groups/{groupId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isMember(resource.data.get('members', {})) || isAdmin());
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.ownerId || 
+        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null) || 
+        isAdmin()
+      );
       allow delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /sessions/{sessionId} {
       allow list: if isSignedIn();
-      allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
+      allow get: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid || 
+        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null) || 
+        isAdmin()
+      );
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Explicit nested subcollection rules for direct path access
+      // Nested subcollection rules for direct path access
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
