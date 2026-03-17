@@ -27,22 +27,22 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // Rules for collection group queries MUST use a recursive wildcard pattern at the top level.
-    // Using 'anyPath' instead of 'path' to avoid potential reserved keyword conflicts.
+    // Standardizing on 'path' as the wildcard variable name for maximum reliability.
     
-    match /{anyPath=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
+    match /{path=**}/preaching_events/{eventId} {
+      allow list, get: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
-      allow read: if isSignedIn();
+    match /{path=**}/fines/{fineId} {
+      allow list, get: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
-      allow read: if isSignedIn();
+    match /{path=**}/votes/{voteId} {
+      allow list, get: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -86,7 +86,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
       
-      // Explicitly allow subcollection access if not using collectionGroup
+      // Sub-matches for clarity (additive to collection group rules)
       match /preaching_events/{eventId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn();
