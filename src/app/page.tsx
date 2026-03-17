@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
@@ -54,15 +55,11 @@ export default function Dashboard() {
 
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    if (isAdmin) {
-      return query(collection(firestore, 'sessions'), limit(20));
-    }
-    // Users can see sessions they are members of or created
     return query(
       collection(firestore, 'sessions'),
       limit(20)
     );
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user]);
 
   const participantsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;

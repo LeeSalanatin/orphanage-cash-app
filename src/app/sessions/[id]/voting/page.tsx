@@ -1,14 +1,15 @@
+
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { useState, useMemo, useEffect } from 'react';
+import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle, CheckCircle2, Edit3 } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -46,7 +47,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
-  // Check if user has already voted
   const userVoteQuery = useMemoFirebase(() => {
     if (!firestore || !user || !id) return null;
     return query(
@@ -65,7 +65,16 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   const hasVoted = existingVotes && existingVotes.length > 0;
 
-  // Filter participants to only those who actually preached, EXCLUDING the current voter
+  useEffect(() => {
+    if (existingVotes && existingVotes.length > 0) {
+      const firstVote = existingVotes[0];
+      setVotes({
+        individual: firstVote.voteData?.individual || [],
+        group: firstVote.voteData?.group || null
+      });
+    }
+  }, [existingVotes]);
+
   const filteredParticipants = useMemo(() => {
     if (!participants || !events || !user) return [];
     const activeIds = new Set(events.map(e => e.participantId));
@@ -80,14 +89,13 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     return allGroups
       .filter(g => activeGroupIds.has(g.id))
       .filter(g => {
-        // Exclude the group if the voter is a member of it
         const members = g.members || {};
         return !Object.keys(members).includes(user.uid);
       });
   }, [allGroups, events, user]);
 
   function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled || !firestore || !user || hasVoted) return;
+    if (!session?.votingConfig?.enabled || !firestore || !user) return;
     
     setIsSubmitting(true);
     
@@ -100,10 +108,17 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
-    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
+    if (hasVoted && existingVotes?.[0]) {
+      updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'votes', existingVotes[0].id), {
+        voteData: votes,
+        updatedAt: new Date().toISOString()
+      });
+      toast({ title: "Votes Updated!", description: "Your modified ballot has been saved." });
+    } else {
+      addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
+      toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted." });
+    }
 
-    toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted. Returning to session..." });
-    
     setTimeout(() => {
       router.push(`/sessions/${id}`);
     }, 1500);
@@ -117,31 +132,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   if (!session) return <div className="p-20 text-center">Session not found.</div>;
 
-  if (hasVoted) {
-    return (
-      <div className="container mx-auto py-20 px-4 max-w-md">
-        <Card className="text-center shadow-lg border-primary/20 bg-primary/5">
-          <CardHeader>
-            <div className="mx-auto bg-primary/10 p-4 rounded-full w-20 h-20 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-10 w-10 text-primary" />
-            </div>
-            <CardTitle className="text-2xl">Already Voted</CardTitle>
-            <CardDescription>
-              You have already submitted your ballot for this session. One vote per participant is allowed.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <Button asChild className="w-full">
-              <Link href={`/sessions/${id}`}>
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Session
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   const topLimit = session.votingConfig?.topIndividualsToVoteFor || 3;
 
   return (
@@ -152,8 +142,15 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Session
           </Link>
         </Button>
-        <h1 className="text-3xl font-headline font-bold text-primary">Cast Your Vote</h1>
-        <p className="text-muted-foreground">Select the best performers from "{session.title}". (You cannot vote for yourself or your own group)</p>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-headline font-bold text-primary">
+            {hasVoted ? 'Review Your Vote' : 'Cast Your Vote'}
+          </h1>
+          {hasVoted && <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 h-6">Previously Submitted</Badge>}
+        </div>
+        <p className="text-muted-foreground mt-2">
+          {hasVoted ? 'You can modify your selections below and update your ballot.' : `Select the best performers from "${session.title}". (You cannot vote for yourself or your own group)`}
+        </p>
       </div>
 
       {!session.votingConfig?.enabled ? (
@@ -166,7 +163,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       ) : (
         <div className="space-y-8">
           {(session.sessionType === 'individual' || session.sessionType === 'group') && (
-            <Card className="shadow-md">
+            <Card className="shadow-md border-primary/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Star className="h-5 w-5 text-accent fill-accent" />
@@ -183,7 +180,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                         <div 
                           key={p.id}
                           className={`p-4 rounded-lg border-2 cursor-pointer transition-all flex items-center justify-between ${
-                            isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                            isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm' : 'border-border hover:border-primary/50'
                           }`}
                           onClick={() => {
                             if (isSelected) {
@@ -194,7 +191,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                           }}
                         >
                           <span className="font-medium">{p.name}</span>
-                          {isSelected && <Award className="h-5 w-5 text-primary" />}
+                          {isSelected && <Award className="h-5 w-5 text-primary animate-in zoom-in" />}
                         </div>
                       );
                     })}
@@ -210,7 +207,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           )}
 
           {session.sessionType === 'group' && (
-            <Card className="shadow-md">
+            <Card className="shadow-md border-primary/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
@@ -222,9 +219,14 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                 {filteredGroups.length > 0 ? (
                   <RadioGroup value={votes.group} onValueChange={(v) => setVotes({ ...votes, group: v })}>
                     {filteredGroups.map((g) => (
-                      <div key={g.id} className="flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-colors">
+                      <div 
+                        key={g.id} 
+                        className={`flex items-center space-x-2 p-4 rounded-lg hover:bg-muted cursor-pointer border mb-2 transition-all ${votes.group === g.id ? 'border-primary bg-primary/5 shadow-sm' : ''}`}
+                        onClick={() => setVotes({ ...votes, group: g.id })}
+                      >
                         <RadioGroupItem value={g.id} id={g.id} />
                         <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer text-lg">{g.name}</Label>
+                        {votes.group === g.id && <CheckCircle2 className="h-5 w-5 text-primary animate-in fade-in" />}
                       </div>
                     ))}
                   </RadioGroup>
@@ -239,12 +241,18 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           )}
 
           <div className="flex justify-center pt-8">
-            <Button size="lg" className="w-full max-w-md h-16 text-xl font-bold" 
+            <Button size="lg" className="w-full max-w-md h-16 text-xl font-bold shadow-xl shadow-primary/20" 
               onClick={handleSubmitVote}
               disabled={isSubmitting || (votes.individual.length === 0 && !votes.group)}
             >
-              {isSubmitting ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : <Trophy className="mr-2 h-7 w-7" />}
-              Submit All Votes
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+              ) : hasVoted ? (
+                <Edit3 className="mr-2 h-7 w-7" />
+              ) : (
+                <Trophy className="mr-2 h-7 w-7" />
+              )}
+              {hasVoted ? 'Update Your Vote' : 'Submit All Votes'}
             </Button>
           </div>
         </div>
