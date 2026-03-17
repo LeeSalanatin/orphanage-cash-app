@@ -16,9 +16,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
-        request.auth.token.email == 'yfjcenter@gmail.com' ||
-        request.auth.token.email == 'yfj@example.com' ||
-        request.auth.token.email == 'admin@example.com'
+        request.auth.token.email in ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com']
       );
     }
 
@@ -29,22 +27,21 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // These must be defined at the top level for collectionGroup queries to be authorized.
-    // We use allPaths=** as a standard recursive wildcard syntax that avoids conflicts with reserved words.
+    // These must be defined at the top level for collectionGroup queries to be authorized across the database.
     
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();

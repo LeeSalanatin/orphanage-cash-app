@@ -26,18 +26,6 @@ export interface UseCollectionResult<T> {
   error: FirestoreError | Error | null; // Error object, or null.
 }
 
-interface InternalQuery {
-  _query?: {
-    path?: {
-      toString: () => string;
-      canonicalString?: () => string;
-      segments?: string[];
-    };
-    collectionGroup?: string;
-  };
-  path?: string;
-}
-
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
  * Handles nullable references/queries.
@@ -86,19 +74,15 @@ export function useCollection<T = any>(
         let path: string = 'unknown';
         try {
           if (memoizedTargetRefOrQuery) {
-            const internal = memoizedTargetRefOrQuery as unknown as InternalQuery;
+            const internal = memoizedTargetRefOrQuery as any;
             if (internal._query?.collectionGroup) {
               path = `collectionGroup(${internal._query.collectionGroup})`;
             } else if (internal.path) {
               path = internal.path;
+            } else if (internal._query?.path?.segments) {
+              path = internal._query.path.segments.join('/');
             } else if (internal._query?.path) {
-              if (internal._query.path.segments) {
-                path = internal._query.path.segments.join('/');
-              } else if (typeof internal._query.path.canonicalString === 'function') {
-                path = internal._query.path.canonicalString() || 'unknown';
-              } else if (typeof internal._query.path.toString === 'function') {
-                path = internal._query.path.toString() || 'unknown';
-              }
+              path = internal._query.path.toString();
             }
           }
         } catch (e) {
