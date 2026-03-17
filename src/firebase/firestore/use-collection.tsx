@@ -74,17 +74,17 @@ export function useCollection<T = any>(
         try {
           const internal = memoizedTargetRefOrQuery as any;
           // Robust path extraction for both direct and collectionGroup queries
-          if (internal._query?.collectionGroup) {
+          if (internal?._query?.collectionGroup) {
             path = `collectionGroup(${internal._query.collectionGroup})`;
-          } else if (internal.path) {
+          } else if (internal?.path) {
             path = internal.path;
-          } else if (internal._query?.path?.segments) {
+          } else if (internal?._query?.path?.segments) {
             path = internal._query.path.segments.join('/');
-          } else if (typeof internal.toString === 'function') {
+          } else if (typeof internal?.toString === 'function') {
             path = internal.toString();
           }
         } catch (e) {
-          path = 'query-denied';
+          path = 'query-extraction-error';
         }
 
         const contextualError = new FirestorePermissionError({
