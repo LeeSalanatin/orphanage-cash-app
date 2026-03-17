@@ -31,6 +31,7 @@ interface InternalQuery {
     path?: {
       toString: () => string;
       canonicalString?: () => string;
+      segments?: string[];
     };
     collectionGroup?: string;
   };
@@ -91,7 +92,9 @@ export function useCollection<T = any>(
             } else if (internal.path) {
               path = internal.path;
             } else if (internal._query?.path) {
-              if (typeof internal._query.path.canonicalString === 'function') {
+              if (internal._query.path.segments) {
+                path = internal._query.path.segments.join('/');
+              } else if (typeof internal._query.path.canonicalString === 'function') {
                 path = internal._query.path.canonicalString() || 'unknown';
               } else if (typeof internal._query.path.toString === 'function') {
                 path = internal._query.path.toString() || 'unknown';

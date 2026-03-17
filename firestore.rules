@@ -13,10 +13,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isExistingOwner(ownerId) {
-      return isSignedIn() && resource != null && request.auth.uid == ownerId;
-    }
-
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
@@ -28,28 +24,27 @@ service cloud.firestore {
 
     function isMember(membersMap) {
       return isSignedIn() && membersMap != null && (
-        membersMap[request.auth.uid] != null || 
         membersMap.get(request.auth.uid, null) != null
       );
     }
 
     // --- Collection Group Rules ---
     // These must be defined at the top level for collectionGroup queries to be authorized.
-    // Using 'allPaths' instead of 'path' to avoid potential shadowing/conflicts.
+    // Using {path=**} is the standard recursive wildcard syntax.
     
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -60,7 +55,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow get, list: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
     }
 
     match /participants/{participantId} {
@@ -78,21 +73,21 @@ service cloud.firestore {
     match /session_configurations/{configId} {
       allow get, list: if isSignedIn();
       allow create: if isAdmin();
-      allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
+      allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
     }
 
     match /groups/{groupId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if isExistingOwner(resource.data.ownerId) || isMember(resource.data.get('members', {})) || isAdmin();
-      allow delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
+      allow update: if (resource != null && (request.auth.uid == resource.data.ownerId || isMember(resource.data.get('members', {})))) || isAdmin();
+      allow delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
     }
 
     match /sessions/{sessionId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
-      allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
+      allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
     }
 
     match /roles_admin/{userId} {
