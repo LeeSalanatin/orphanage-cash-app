@@ -73,25 +73,22 @@ export function useCollection<T = any>(
       async (serverError: FirestoreError) => {
         let path: string = 'unknown';
         try {
-          if (memoizedTargetRefOrQuery) {
-            const internal = memoizedTargetRefOrQuery as any;
-            if (internal._query?.collectionGroup) {
-              path = `collectionGroup(${internal._query.collectionGroup})`;
-            } else if (internal.path) {
-              path = internal.path;
-            } else if (internal._query?.path?.segments) {
-              path = internal._query.path.segments.join('/');
-            } else if (internal._query?.path) {
-              path = internal._query.path.toString();
-            }
+          // Attempt to extract the path for context
+          const internal = memoizedTargetRefOrQuery as any;
+          if (internal._query?.collectionGroup) {
+            path = `collectionGroup(${internal._query.collectionGroup})`;
+          } else if (internal.path) {
+            path = internal.path;
+          } else if (internal._query?.path) {
+            path = internal._query.path.toString();
           }
         } catch (e) {
-          path = 'collectionGroupQuery';
+          path = 'query';
         }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path || 'collectionGroupQuery',
+          path: path,
         });
 
         setError(contextualError);
