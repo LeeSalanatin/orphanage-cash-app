@@ -28,9 +28,6 @@ export interface UseCollectionResult<T> {
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
  * Handles nullable references/queries.
- * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidance. Also make sure that its dependencies are stable references.
  */
 export function useCollection<T = any>(
   memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean}) | null | undefined,
@@ -68,7 +65,6 @@ export function useCollection<T = any>(
         let path: string = 'unknown';
         try {
           const internal = memoizedTargetRefOrQuery as any;
-          // Robust path extraction for both direct and collectionGroup queries
           if (internal?._query?.collectionGroup) {
             path = `collectionGroup(${internal._query.collectionGroup})`;
           } else if (internal?.path) {
@@ -89,7 +85,6 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // Emit the error with the global error emitter
         errorEmitter.emit('permission-error', contextualError);
       }
     );

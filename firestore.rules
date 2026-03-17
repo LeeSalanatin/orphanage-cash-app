@@ -22,23 +22,22 @@ service cloud.firestore {
     }
 
     // --- Global Collection Group Rules ---
-    // These rules must be defined at the absolute root of the database match block
-    // to authorize collectionGroup() queries database-wide.
-    // Using {allPaths=**} instead of {path=**} to avoid potential keyword shadowing with request.path.
+    // These must use {path=**} at the root level to authorize collectionGroup() queries database-wide.
+    // Using 'path' as the wildcard variable name is the canonical convention for collection groups.
 
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -67,21 +66,21 @@ service cloud.firestore {
     match /session_configurations/{configId} {
       allow get, list: if isSignedIn();
       allow create: if isAdmin();
-      allow update, delete: if (resource != null && (request.auth.uid == resource.data.ownerId || isAdmin()));
+      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /groups/{groupId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
-      allow update: if (resource != null && (request.auth.uid == resource.data.ownerId || isMember(resource.data.get('members', {})) || isAdmin()));
-      allow delete: if (resource != null && (request.auth.uid == resource.data.ownerId || isAdmin()));
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isMember(resource.data.get('members', {})) || isAdmin());
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /sessions/{sessionId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
-      allow update, delete: if (resource != null && (request.auth.uid == resource.data.ownerId || isAdmin()));
+      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
       // Explicitly authorize sub-collections for direct session-specific access
       match /preaching_events/{eventId} {
