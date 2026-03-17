@@ -25,22 +25,22 @@ service cloud.firestore {
 
     // --- Collection Group Rules (MUST BE AT ROOT LEVEL) ---
     // These authorize queries like firestore.collectionGroup('preaching_events')
-    // across the entire database. Standardizing the wildcard to {allPaths=**}.
+    // across the entire database. Standardizing to {path=**} recursive wildcard.
 
-    match /{allPaths=**}/preaching_events/{eventId} {
-      allow get, list: if isSignedIn();
+    match /{path=**}/preaching_events/{eventId} {
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
-      allow get, list: if isSignedIn();
+    match /{path=**}/fines/{fineId} {
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
-      allow get, list: if isSignedIn();
+    match /{path=**}/votes/{voteId} {
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -48,9 +48,9 @@ service cloud.firestore {
     // --- Root Collections ---
 
     match /users/{userId} {
-      allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
 
     match /participants/{participantId} {
@@ -58,7 +58,6 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
-        request.auth.uid == participantId ||
         isAdmin() ||
         (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', ''))
       );
@@ -84,7 +83,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Explicit subcollection rules for direct path access
+      // Explicit nested subcollection rules for direct path access
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
