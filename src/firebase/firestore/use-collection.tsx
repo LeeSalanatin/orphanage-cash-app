@@ -72,19 +72,19 @@ export function useCollection<T = any>(
       async (serverError: FirestoreError) => {
         let path: string = 'unknown';
         try {
-          // Attempt to extract path for diagnostic context
           const internal = memoizedTargetRefOrQuery as any;
+          // Robust path extraction for both direct and collectionGroup queries
           if (internal._query?.collectionGroup) {
             path = `collectionGroup(${internal._query.collectionGroup})`;
           } else if (internal.path) {
             path = internal.path;
-          } else if (internal._query?.path) {
-            path = internal._query.path.toString();
+          } else if (internal._query?.path?.segments) {
+            path = internal._query.path.segments.join('/');
           } else if (typeof internal.toString === 'function') {
             path = internal.toString();
           }
         } catch (e) {
-          path = 'query-permission-denied';
+          path = 'query-denied';
         }
 
         const contextualError = new FirestorePermissionError({
