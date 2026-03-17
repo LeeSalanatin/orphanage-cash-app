@@ -26,20 +26,23 @@ service cloud.firestore {
 
     // --- Global Collection Group Rules ---
     // These authorize collectionGroup() queries database-wide.
-    // Standardizing on {path=**} for collectionGroup queries at the database root.
+    // They must be defined at the root to match collections at any depth.
 
-    match /{path=**}/preaching_events/{eventId} {
-      allow get, list, create: if isSignedIn();
+    match /{allPaths=**}/preaching_events/{eventId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
-      allow get, list, create: if isSignedIn();
+    match /{allPaths=**}/fines/{fineId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
-      allow get, list, create: if isSignedIn();
+    match /{allPaths=**}/votes/{voteId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
@@ -82,7 +85,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Direct sub-collection matches.
+      // Nested sub-collection matches (redundant due to collection group rules above but kept for clarity)
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
