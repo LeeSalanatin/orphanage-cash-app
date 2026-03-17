@@ -13,12 +13,13 @@ service cloud.firestore {
         request.auth.token.email == 'yfjcenter@gmail.com' || 
         request.auth.token.email == 'yfj@example.com' || 
         request.auth.token.email == 'admin@example.com' ||
+        request.auth.token.email == 'salanatin.leejay12@gmail.com' ||
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))
       );
     }
 
-    // --- Collection Group Rules (CRITICAL: Must be at the root for collectionGroup queries) ---
-    // These allow global aggregation of performance data across all sessions.
+    // --- Collection Group Rules ---
+    // These must be defined at the root using recursive wildcards to support collectionGroup queries.
     
     match /{allPaths=**}/preaching_events/{eventId} {
       allow read, list: if isSignedIn();
@@ -79,7 +80,6 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Subcollections (also covered by recursive wildcard, but kept for clarity in direct paths)
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }

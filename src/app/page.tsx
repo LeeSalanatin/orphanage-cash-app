@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useMemo, useState, useEffect } from 'react';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function Dashboard() {
   const { user } = useUser();
@@ -54,7 +54,6 @@ export default function Dashboard() {
 
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Admins see all sessions, members see their own
     if (isAdmin) {
       return query(collection(firestore, 'sessions'), limit(20));
     }
@@ -80,7 +79,6 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query events. Admins see everything, members see what they are part of.
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (isAdmin) {
@@ -282,7 +280,6 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Admin or Member participation summary */}
                         {(myEvent || (isAdmin && sessionEvents.length > 0)) && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">

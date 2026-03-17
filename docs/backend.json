@@ -76,7 +76,8 @@
         "explanation": { "type": "string" },
         "startTime": { "type": "string", "format": "date-time" },
         "endTime": { "type": "string", "format": "date-time" },
-        "sessionMembers": { "type": "object" }
+        "sessionMembers": { "type": "object" },
+        "sessionOwnerId": { "type": "string" }
       },
       "required": ["id", "sessionId", "actualDurationSeconds", "sessionMembers"]
     }
@@ -85,42 +86,25 @@
     "providers": ["password", "anonymous"]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/User" },
-          "description": "Stores user profiles."
-        }
-      },
-      {
-        "path": "/participants/{participantId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/Participant" },
-          "description": "Stores participant-specific data."
-        }
-      },
-      {
-        "path": "/groups/{groupId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/Group" },
-          "description": "Manages groups of participants."
-        }
-      },
-      {
-        "path": "/sessions/{sessionId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/Session" },
-          "description": "Represents an instance of a preaching session."
-        }
-      },
-      {
-        "path": "/sessions/{sessionId}/preaching_events/{preachingEventId}",
-        "definition": {
-          "schema": { "$ref": "#/backend/entities/PreachingEvent" },
-          "description": "Records individual preaching events within a session."
-        }
-      }
-    ]
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles."
+    },
+    "participants/{participantId}": {
+      "schema": "Participant",
+      "description": "Stores participant-specific data."
+    },
+    "groups/{groupId}": {
+      "schema": "Group",
+      "description": "Manages groups of participants."
+    },
+    "sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Represents an instance of a preaching session."
+    },
+    "sessions/{sessionId}/preaching_events/{preachingEventId}": {
+      "schema": "PreachingEvent",
+      "description": "Records individual preaching events within a session."
+    }
   }
 }
