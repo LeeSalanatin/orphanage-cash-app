@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +10,7 @@ import {
   CollectionReference,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 /** Utility type to add an 'id' field to a given type T. */
 export type WithId<T> = T & { id: string };
@@ -73,8 +72,8 @@ export function useCollection<T = any>(
       async (serverError: FirestoreError) => {
         let path: string = 'unknown';
         try {
-          // Attempt to extract the path for context
           const internal = memoizedTargetRefOrQuery as any;
+          // Extract path for both standard queries and collectionGroup queries
           if (internal._query?.collectionGroup) {
             path = `collectionGroup(${internal._query.collectionGroup})`;
           } else if (internal.path) {
@@ -89,7 +88,7 @@ export function useCollection<T = any>(
         const contextualError = new FirestorePermissionError({
           operation: 'list',
           path: path,
-        });
+        } satisfies SecurityRuleContext);
 
         setError(contextualError);
         setData(null);
