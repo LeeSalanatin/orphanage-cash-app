@@ -74,15 +74,14 @@ export function useCollection<T = any>(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
-        for (const docSnapshot of snapshot.docs) {
+        snapshot.forEach((docSnapshot) => {
           results.push({ ...(docSnapshot.data() as T), id: docSnapshot.id });
-        }
+        });
         setData(results);
         setError(null);
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Safe path extraction for reporting
         let path: string = 'unknown';
         try {
           if (memoizedTargetRefOrQuery) {
@@ -97,8 +96,6 @@ export function useCollection<T = any>(
               } else if (typeof internal._query.path.toString === 'function') {
                 path = internal._query.path.toString();
               }
-            } else if ('path' in (memoizedTargetRefOrQuery as any)) {
-              path = (memoizedTargetRefOrQuery as any).path;
             }
           }
         } catch (e) {
@@ -114,7 +111,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // Trigger global error propagation
+        // Emit the error with the global error emitter
         errorEmitter.emit('permission-error', contextualError);
       }
     );
