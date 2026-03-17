@@ -30,20 +30,20 @@ service cloud.firestore {
     // Standard {path=**} syntax is used for maximum compatibility.
     
     match /{path=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow list, get: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
     match /{path=**}/fines/{fineId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow list, get: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
     match /{path=**}/votes/{voteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow list, get: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
