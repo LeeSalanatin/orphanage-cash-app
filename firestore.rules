@@ -30,21 +30,21 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // These must be defined at the top level for collectionGroup queries to be authorized.
-    // Using {path=**} is the standard recursive wildcard syntax.
+    // We use allPaths=** as a standard recursive wildcard syntax that avoids conflicts with reserved words.
     
-    match /{path=**}/preaching_events/{eventId} {
+    match /{allPaths=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{allPaths=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{allPaths=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
