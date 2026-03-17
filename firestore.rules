@@ -21,21 +21,21 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group Rules (MUST be at root with recursive wildcard) ---
-    // Authorized here to allow database-wide aggregation (e.g., on the dashboard).
+    // --- Collection Group Rules ---
+    // Authorized at the root level to allow database-wide aggregation (e.g., on the dashboard).
     
-    match /{allPaths=**}/preaching_events/{eventId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/preaching_events/{eventId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/fines/{fineId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/votes/{voteId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
@@ -78,8 +78,16 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
       
-      // Direct subcollection access (additive to collection group rules)
-      match /{subCollection}/{docId} {
+      // Direct subcollection access rules (additive to collection group rules)
+      match /preaching_events/{eventId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /fines/{fineId} {
+        allow read, create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /votes/{voteId} {
         allow read, create: if isSignedIn();
         allow update, delete: if isAdmin();
       }
