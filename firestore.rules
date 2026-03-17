@@ -27,21 +27,21 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // These MUST be defined at the root of the documents match for collectionGroup queries to work.
-    // We use {anyPath=**} to avoid potential keyword conflicts with 'path'.
+    // Using the standard {path=**} syntax for maximum compatibility.
     
-    match /{anyPath=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
