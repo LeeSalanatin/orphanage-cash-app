@@ -11,10 +11,10 @@ service cloud.firestore {
     function isAdmin() {
       let email = request.auth.token.email;
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
         email == 'yfjcenter@gmail.com' || 
         email == 'yfj@example.com' || 
-        email == 'admin@example.com'
+        email == 'admin@example.com' ||
+        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))
       );
     }
 
@@ -25,23 +25,24 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // AUTHORIZATION FOR AGGREGATED QUERIES (Dashboard History, etc.)
-    // These must be at the absolute root of the documents match block.
+    // These rules apply to any collection named 'preaching_events', 'fines', or 'votes'
+    // regardless of their depth in the document hierarchy.
+    // They are essential for Dashboard aggregation and cross-session history.
 
-    match /{anyPath=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
+    match /{path=**}/preaching_events/{eventId} {
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
-      allow read: if isSignedIn();
+    match /{path=**}/fines/{fineId} {
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
-      allow read: if isSignedIn();
+    match /{path=**}/votes/{voteId} {
+      allow get, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -85,7 +86,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Sub-collections (direct path access within a specific session)
+      // Direct access rules (still needed for specific path lookups)
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
