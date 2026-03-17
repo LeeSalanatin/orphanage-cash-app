@@ -22,20 +22,20 @@ service cloud.firestore {
     }
 
     // --- Global Collection Group Rules ---
-    // These MUST be at the root level to authorize collectionGroup() queries database-wide.
-    // We use a unique recursive wildcard {allPaths=**} to avoid shadowing.
+    // These authorize collectionGroup() queries database-wide.
+    // Standardizing on {path=**} for collection group matches.
 
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -79,7 +79,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Explicitly authorize sub-collections for direct session-specific access
+      // Direct sub-collection matches.
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
