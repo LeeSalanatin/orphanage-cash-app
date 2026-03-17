@@ -23,20 +23,20 @@ service cloud.firestore {
 
     // --- Global Access / Collection Group Rules ---
     // Collection Group queries require a recursive wildcard match at the root of the documents block.
-    // Standardizing on {path=**} for maximum compatibility with the security rules engine.
+    // Using a unique wildcard name 'allSegments' to avoid potential conflicts.
 
-    match /{path=**}/preaching_events/{eventId} {
-      allow read, create: if isSignedIn();
+    match /{allSegments=**}/preaching_events/{eventId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
-      allow read, create: if isSignedIn();
+    match /{allSegments=**}/fines/{fineId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
-      allow read, create: if isSignedIn();
+    match /{allSegments=**}/votes/{voteId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
@@ -79,18 +79,15 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
 
-      // Nested sub-collections explicitly defined for clarity and robust session-specific access
+      // Subcollection rules (mostly covered by collection group rules, but defined for specificity)
       match /preaching_events/{eventId} {
-        allow read, create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
       match /fines/{fineId} {
-        allow read, create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
       match /votes/{voteId} {
-        allow read, create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read, write: if isSignedIn();
       }
     }
 
