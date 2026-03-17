@@ -18,21 +18,21 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules (CRITICAL: Must be at the top level for collectionGroup queries) ---
-    // These allow the dashboard to aggregate data across all sessions.
+    // These allow the dashboard to aggregate data across all sessions globally.
     
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -47,7 +47,7 @@ service cloud.firestore {
     }
 
     match /participants/{participantId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
@@ -58,13 +58,13 @@ service cloud.firestore {
     }
 
     match /session_configurations/{configId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /groups/{groupId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.ownerId || 
@@ -75,12 +75,7 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn() && (
-        resource.data.ownerId == request.auth.uid || 
-        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null) || 
-        isAdmin()
-      );
+      allow read: if isSignedIn();
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 

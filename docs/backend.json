@@ -1,379 +1,124 @@
-
 {
   "entities": {
     "User": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user account in the system, primarily for authentication and basic profile information. It is assumed that sensitive authentication data like passwords are managed externally.",
+      "description": "Represents a user account in the system.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the User entity."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address of the user, used for login and communication.",
-          "format": "email"
-        },
-        "fullName": {
-          "type": "string",
-          "description": "The full name of the user."
-        },
-        "isAdmin": {
-          "type": "boolean",
-          "description": "Indicates if the user has administrative privileges."
-        }
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "fullName": { "type": "string" },
+        "isAdmin": { "type": "boolean" }
       },
-      "required": [
-        "id",
-        "email",
-        "fullName",
-        "isAdmin"
-      ]
+      "required": ["id", "email", "fullName", "isAdmin"]
     },
     "Participant": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Participant",
       "type": "object",
-      "description": "Represents an individual who can participate in preaching sessions, vote, incur fines, and receive points. Every participant is linked to a user account.",
+      "description": "Represents an individual who can participate in preaching sessions.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Participant entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User entity this participant is associated with. (Relationship: User 1:1 Participant)"
-        },
-        "name": {
-          "type": "string",
-          "description": "The full name of the participant."
-        },
-        "email": {
-          "type": "string",
-          "description": "The email address associated with this participant for auto-linkage.",
-          "format": "email"
-        },
-        "preachingNickname": {
-          "type": "string",
-          "description": "An optional nickname or alias for the participant used during preaching sessions."
-        },
-        "dateJoined": {
-          "type": "string",
-          "description": "The date and time when the participant joined the PreachPoint system.",
-          "format": "date-time"
-        },
-        "totalPoints": {
-          "type": "number",
-          "description": "Total accumulated points."
-        },
-        "totalFines": {
-          "type": "number",
-          "description": "Total accumulated fines."
-        }
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "preachingNickname": { "type": "string" },
+        "dateJoined": { "type": "string", "format": "date-time" },
+        "totalPoints": { "type": "number" },
+        "totalFines": { "type": "number" }
       },
-      "required": [
-        "id",
-        "dateJoined"
-      ]
+      "required": ["id", "dateJoined"]
     },
     "Group": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Group",
       "type": "object",
-      "description": "Represents a group of participants that can preach, incur fines, or receive points collectively.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Group entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the group."
-        },
-        "description": {
-          "type": "string",
-          "description": "A description of the group."
-        },
-        "totalPoints": {
-          "type": "number",
-          "description": "Total accumulated points for the group."
-        },
-        "totalFines": {
-          "type": "number",
-          "description": "Total accumulated fines for the group."
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "totalPoints": { "type": "number" },
+        "totalFines": { "type": "number" },
+        "members": { "type": "object" }
       },
-      "required": [
-        "id",
-        "name"
-      ]
-    },
-    "GroupMembership": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "GroupMembership",
-      "type": "object",
-      "description": "Links a participant to a specific group, enabling many-to-many relationships between participants and groups.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the GroupMembership entity."
-        },
-        "groupId": {
-          "type": "string",
-          "description": "Reference to the Group entity this membership belongs to. (Relationship: Group 1:N GroupMembership)"
-        },
-        "participantId": {
-          "type": "string",
-          "description": "Reference to the Participant entity who is a member of the group. (Relationship: Participant 1:N GroupMembership)"
-        },
-        "dateJoined": {
-          "type": "string",
-          "description": "The date and time when the participant joined this group.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "groupId",
-        "participantId",
-        "dateJoined"
-      ]
-    },
-    "SessionType": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SessionType",
-      "type": "object",
-      "description": "Defines the broad categories of sessions, such as 'Individual', 'Group', or 'Sunday Preaching', serving as a template for configurations.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the SessionType entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The descriptive name of the session type (e.g., 'Individual', 'Group', 'Sunday Preaching')."
-        },
-        "description": {
-          "type": "string",
-          "description": "A brief explanation of what this session type entails."
-        }
-      },
-      "required": [
-        "id",
-        "name"
-      ]
-    },
-    "SessionConfiguration": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SessionConfiguration",
-      "type": "object",
-      "description": "Defines the specific rules and settings for a particular type of session (e.g., 'Standard Individual Preaching', 'Team Challenge Group', 'Weekly Sunday Sermon').",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the SessionConfiguration entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "A unique name for this session configuration."
-        },
-        "description": {
-          "type": "string",
-          "description": "A detailed description of this session configuration."
-        },
-        "sessionTypeId": {
-          "type": "string",
-          "description": "Reference to the SessionType this configuration belongs to. (Relationship: SessionType 1:N SessionConfiguration)"
-        },
-        "maxPreachingTimeMinutes": {
-          "type": "number",
-          "description": "The maximum allowed preaching time in minutes for events under this configuration."
-        },
-        "maxPreachingTimeSeconds": {
-          "type": "number",
-          "description": "The maximum allowed preaching time in seconds (added to minutes) for events under this configuration."
-        },
-        "fineRules": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "votingConfig": {
-          "type": "object"
-        },
-        "pointDistribution": {
-          "type": "object"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "maxPreachingTimeMinutes"
-      ]
+      "required": ["id", "name"]
     },
     "Session": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Session",
       "type": "object",
-      "description": "Represents an actual instance of a preaching event or session, based on a specific SessionConfiguration.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Session entity."
-        },
-        "title": {
-          "type": "string"
-        },
-        "sessionType": {
-          "type": "string"
-        },
-        "maxPreachingTimeMinutes": {
-          "type": "number"
-        },
-        "maxPreachingTimeSeconds": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string"
-        },
-        "ownerId": {
-          "type": "string"
-        },
-        "members": {
-          "type": "object"
-        }
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "sessionType": { "type": "string" },
+        "status": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "members": { "type": "object" }
       },
-      "required": [
-        "id",
-        "title",
-        "status",
-        "ownerId"
-      ]
+      "required": ["id", "title", "status", "ownerId"]
     },
     "PreachingEvent": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "PreachingEvent",
       "type": "object",
-      "description": "Records the details of a single preaching event within a session, including timing and potential overage.",
+      "description": "Records the details of a single preaching event within a session.",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "participantId": {
-          "type": "string"
-        },
-        "participantName": {
-          "type": "string"
-        },
-        "actualDurationSeconds": {
-          "type": "number"
-        },
-        "overageSeconds": {
-          "type": "number"
-        }
+        "id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "participantId": { "type": "string" },
+        "participantName": { "type": "string" },
+        "preachingGroupId": { "type": "string" },
+        "actualDurationSeconds": { "type": "number" },
+        "actualDurationFormatted": { "type": "string" },
+        "overageSeconds": { "type": "number" },
+        "totalFineAmount": { "type": "number" },
+        "explanation": { "type": "string" },
+        "sessionMembers": { "type": "object" }
       },
-      "required": [
-        "id",
-        "sessionId",
-        "actualDurationSeconds"
-      ]
+      "required": ["id", "sessionId", "actualDurationSeconds", "sessionMembers"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password", "anonymous"]
   },
   "firestore": {
     "structure": [
       {
         "path": "/users/{userId}",
         "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
+          "schema": { "$ref": "#/backend/entities/User" },
           "description": "Stores user profiles."
         }
       },
       {
         "path": "/participants/{participantId}",
         "definition": {
-          "entityName": "Participant",
-          "schema": {
-            "$ref": "#/backend/entities/Participant"
-          },
+          "schema": { "$ref": "#/backend/entities/Participant" },
           "description": "Stores participant-specific data."
-        }
-      },
-      {
-        "path": "/session_configurations/{sessionConfigurationId}",
-        "definition": {
-          "entityName": "SessionConfiguration",
-          "schema": {
-            "$ref": "#/backend/entities/SessionConfiguration"
-          },
-          "description": "Reusable session rules."
         }
       },
       {
         "path": "/groups/{groupId}",
         "definition": {
-          "entityName": "Group",
-          "schema": {
-            "$ref": "#/backend/entities/Group"
-          },
+          "schema": { "$ref": "#/backend/entities/Group" },
           "description": "Manages groups of participants."
         }
       },
       {
         "path": "/sessions/{sessionId}",
         "definition": {
-          "entityName": "Session",
-          "schema": {
-            "$ref": "#/backend/entities/Session"
-          },
+          "schema": { "$ref": "#/backend/entities/Session" },
           "description": "Represents an instance of a preaching session."
         }
       },
       {
         "path": "/sessions/{sessionId}/preaching_events/{preachingEventId}",
         "definition": {
-          "entityName": "PreachingEvent",
-          "schema": {
-            "$ref": "#/backend/entities/PreachingEvent"
-          },
+          "schema": { "$ref": "#/backend/entities/PreachingEvent" },
           "description": "Records individual preaching events within a session."
         }
-      },
-      {
-        "path": "/sessions/{sessionId}/fines/{fineId}",
-        "definition": {
-          "entityName": "Fine",
-          "schema": {
-            "type": "object"
-          },
-          "description": "Records fines incurred during a session."
-        }
-      },
-      {
-        "path": "/sessions/{sessionId}/votes/{voteId}",
-        "definition": {
-          "entityName": "Vote",
-          "schema": {
-            "type": "object"
-          },
-          "description": "Records votes cast within a session."
-        }
       }
-    ],
-    "reasoning": "Standardized structure for managing preaching sessions, participants, and groups with a focus on ease of administration and transparent rule-based fines/rewards."
+    ]
   }
 }
