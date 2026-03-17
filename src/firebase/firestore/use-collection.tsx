@@ -81,7 +81,8 @@ export function useCollection<T = any>(
           } else if (internal?._query?.path?.segments) {
             path = internal._query.path.segments.join('/');
           } else if (typeof internal?.toString === 'function') {
-            path = internal.toString();
+            const str = internal.toString();
+            path = str.includes('collectionGroup') ? str : str;
           }
         } catch (e) {
           path = 'query-extraction-error';
