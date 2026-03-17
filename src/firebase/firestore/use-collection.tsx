@@ -90,8 +90,9 @@ export function useCollection<T = any>(
             const internal = memoizedTargetRefOrQuery as unknown as InternalQuery;
             if (internal._query?.collectionGroup) {
               path = `collectionGroup(${internal._query.collectionGroup})`;
+            } else if (internal.path) {
+              path = internal.path;
             } else if (internal._query?.path) {
-               // Safely try to extract path from internal query if public path is missing
                if (typeof internal._query.path.canonicalString === 'function') {
                  path = internal._query.path.canonicalString();
                } else if (typeof internal._query.path.toString === 'function') {
@@ -99,8 +100,6 @@ export function useCollection<T = any>(
                }
             } else if ('path' in (memoizedTargetRefOrQuery as any)) {
               path = (memoizedTargetRefOrQuery as any).path;
-            } else if (internal.path) {
-              path = internal.path;
             }
           }
         } catch (e) {
