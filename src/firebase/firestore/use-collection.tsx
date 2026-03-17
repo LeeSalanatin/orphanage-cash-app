@@ -31,11 +31,6 @@ export interface UseCollectionResult<T> {
  * 
  * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
  * use useMemo to memoize it per React guidance. Also make sure that its dependencies are stable references.
- *  
- * @template T Optional type for document data. Defaults to any.
- * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} memoizedTargetRefOrQuery -
- * The Firestore CollectionReference or Query. Waits if null/undefined.
- * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
   memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean}) | null | undefined,
@@ -80,9 +75,6 @@ export function useCollection<T = any>(
             path = internal.path;
           } else if (internal?._query?.path?.segments) {
             path = internal._query.path.segments.join('/');
-          } else if (typeof internal?.toString === 'function') {
-            const str = internal.toString();
-            path = str.includes('collectionGroup') ? str : str;
           }
         } catch (e) {
           path = 'query-extraction-error';
