@@ -9,9 +9,12 @@ service cloud.firestore {
     }
 
     function isAdmin() {
+      let email = request.auth.token.email;
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
-        request.auth.token.email in ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com']
+        email == 'yfjcenter@gmail.com' || 
+        email == 'yfj@example.com' || 
+        email == 'admin@example.com'
       );
     }
 
@@ -23,19 +26,20 @@ service cloud.firestore {
 
     // --- Global Collection Group Rules ---
     // These authorize collectionGroup() queries database-wide.
-    // Using {path=**} is the standard convention for recursive wildcards in collection group matches.
+    // They MUST be at the top level and use the ** wildcard for collectionGroup queries.
+    // We use {anyPath=**} to avoid potential conflicts with built-in keywords.
 
-    match /{path=**}/preaching_events/{eventId} {
+    match /{anyPath=**}/preaching_events/{eventId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{anyPath=**}/fines/{fineId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{anyPath=**}/votes/{voteId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
