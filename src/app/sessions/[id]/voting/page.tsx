@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -42,10 +41,8 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'sessions', id, 'preaching_events'),
-      where(`sessionMembers.${user.uid}`, '!=', null)
-    );
+    // Removed restrictive member filter to allow all participants in the session to see the roster for voting
+    return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);

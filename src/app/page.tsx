@@ -57,6 +57,7 @@ export default function Dashboard() {
     if (isAdmin) {
       return query(collection(firestore, 'sessions'), limit(20));
     }
+    // Users can see sessions they are members of
     return query(
       collection(firestore, 'sessions'),
       where(`members.${user.uid}`, '!=', null),
@@ -81,15 +82,12 @@ export default function Dashboard() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    if (isAdmin) {
-      return query(collectionGroup(firestore, 'preaching_events'), limit(100));
-    }
+    // Rules allow signed in users to read events, so we can show a broader activity feed
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where(`sessionMembers.${user.uid}`, '!=', null),
       limit(100)
     );
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);

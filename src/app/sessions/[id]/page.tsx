@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
@@ -67,18 +66,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'sessions', id, 'preaching_events'),
-      where(`sessionMembers.${user.uid}`, '!=', null)
-    );
+    // Show all events for this session so everyone can see history/voting context
+    return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
   const votesRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'sessions', id, 'votes'),
-      where(`sessionMembers.${user.uid}`, '!=', null)
-    );
+    return collection(firestore, 'sessions', id, 'votes');
   }, [firestore, id, user]);
 
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
@@ -985,4 +979,3 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     </div>
   );
 }
-
