@@ -34,8 +34,8 @@ service cloud.firestore {
     }
 
     // --- Collection Group & Sub-collection Rules ---
-    // These use the recursive wildcard to authorize both direct sub-collection lookups
-    // and global collectionGroup queries across the entire database.
+    // These use the recursive wildcard at the top level to authorize both 
+    // direct sub-collection lookups and global collectionGroup queries.
     
     match /{path=**}/preaching_events/{eventId} {
       allow read, create: if isSignedIn();
