@@ -61,10 +61,16 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   }, [participants, events, user]);
 
   const filteredGroups = useMemo(() => {
-    if (!allGroups || !events) return [];
+    if (!allGroups || !events || !user) return [];
     const activeGroupIds = new Set(events.filter(e => e.preachingGroupId).map(e => e.preachingGroupId));
-    return allGroups.filter(g => activeGroupIds.has(g.id));
-  }, [allGroups, events]);
+    return allGroups
+      .filter(g => activeGroupIds.has(g.id))
+      .filter(g => {
+        // Exclude the group if the voter is a member of it
+        const members = g.members || {};
+        return !Object.keys(members).includes(user.uid);
+      });
+  }, [allGroups, events, user]);
 
   function handleSubmitVote() {
     if (!session?.votingConfig?.enabled || !firestore || !user) return;
@@ -106,7 +112,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           </Link>
         </Button>
         <h1 className="text-3xl font-headline font-bold text-primary">Cast Your Vote</h1>
-        <p className="text-muted-foreground">Select the best performers from "{session.title}". (You cannot vote for yourself)</p>
+        <p className="text-muted-foreground">Select the best performers from "{session.title}". (You cannot vote for yourself or your own group)</p>
       </div>
 
       {!session.votingConfig?.enabled ? (
@@ -186,7 +192,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                 ) : (
                   <div className="text-center py-8 bg-muted/20 rounded-lg border border-dashed flex flex-col items-center gap-2">
                     <AlertCircle className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No group preaching records found for this session.</p>
+                    <p className="text-sm text-muted-foreground">No other group preaching records found for this session.</p>
                   </div>
                 )}
               </CardContent>
