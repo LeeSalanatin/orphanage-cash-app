@@ -27,7 +27,7 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // These MUST be defined at the root of the documents match for collectionGroup queries to work.
-    // Using {anyPath=**} ensures we don't conflict with reserved keywords.
+    // Using {anyPath=**} ensures we don't conflict with reserved keywords and matches subcollections database-wide.
     
     match /{anyPath=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
