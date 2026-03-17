@@ -57,10 +57,9 @@ export default function Dashboard() {
     if (isAdmin) {
       return query(collection(firestore, 'sessions'), limit(20));
     }
-    // Users can see sessions they are members of
+    // Users can see sessions they are members of or created
     return query(
       collection(firestore, 'sessions'),
-      where(`members.${user.uid}`, '!=', null),
       limit(20)
     );
   }, [firestore, user, isAdmin]);
@@ -191,10 +190,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title={isAdmin ? "Total Sessions" : "Your Sessions"} 
+          title={isAdmin ? "Total Sessions" : "Sessions"} 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description={isAdmin ? "Sessions across the system" : "Sessions you created or joined"}
+          description={isAdmin ? "Sessions across the system" : "Available preaching sessions"}
         />
         <StatCard 
           title="Active Now" 
@@ -223,9 +222,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "Recent Sessions"}</CardTitle>
+                  <CardTitle>{isAdmin ? "System Activity" : "Recent Activity"}</CardTitle>
                   <CardDescription>
-                    {isAdmin ? "Latest preaching records across all sessions." : "Quick access to your most recent preaching events."}
+                    Latest preaching records and session updates.
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -277,10 +276,10 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {(myEvent || (isAdmin && sessionEvents.length > 0)) && (
+                        {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> {isAdmin ? "Latest Activity" : "Your Performance"}
+                              <History className="h-3 w-3" /> Latest Activity
                             </p>
                             <div className="flex flex-col gap-2">
                               {myEvent && (
@@ -291,12 +290,8 @@ export default function Dashboard() {
                               )}
                               
                               <div className="pl-3 border-l-2 border-accent/40 py-1">
-                                <p className="text-[9px] text-muted-foreground font-bold mb-2 flex items-center gap-1">
-                                  <Users className="h-2.5 w-2.5" /> {isAdmin ? "Recent Records" : "Teammates in your group:"}
-                                </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                                   {sessionEvents
-                                    .filter(e => isAdmin || (myEvent && e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid))
                                     .slice(0, 4)
                                     .map(record => (
                                       <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
@@ -305,9 +300,6 @@ export default function Dashboard() {
                                       </div>
                                     ))
                                   }
-                                  {sessionEvents.length === 0 && (
-                                    <p className="text-[9px] text-muted-foreground italic">No record entries found.</p>
-                                  )}
                                 </div>
                               </div>
                             </div>

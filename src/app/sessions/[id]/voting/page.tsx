@@ -2,13 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { doc, collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle } from 'lucide-react';
+import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -46,12 +46,24 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
+  // Check if user has already voted
+  const userVoteQuery = useMemoFirebase(() => {
+    if (!firestore || !user || !id) return null;
+    return query(
+      collection(firestore, 'sessions', id, 'votes'),
+      where('voterParticipantId', '==', user.uid)
+    );
+  }, [firestore, user, id]);
+
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: events, isLoading: eventsLoading } = useCollection(eventsQuery);
+  const { data: existingVotes, isLoading: voteCheckLoading } = useCollection(userVoteQuery);
 
-  const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading;
+  const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading || voteCheckLoading;
+
+  const hasVoted = existingVotes && existingVotes.length > 0;
 
   // Filter participants to only those who actually preached, EXCLUDING the current voter
   const filteredParticipants = useMemo(() => {
@@ -75,7 +87,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   }, [allGroups, events, user]);
 
   function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled || !firestore || !user) return;
+    if (!session?.votingConfig?.enabled || !firestore || !user || hasVoted) return;
     
     setIsSubmitting(true);
     
@@ -92,7 +104,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
     toast({ title: "Votes Cast Successfully!", description: "Your ballot has been submitted. Returning to session..." });
     
-    // Redirect after a brief delay so they see the success toast
     setTimeout(() => {
       router.push(`/sessions/${id}`);
     }, 1500);
@@ -105,6 +116,31 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   );
 
   if (!session) return <div className="p-20 text-center">Session not found.</div>;
+
+  if (hasVoted) {
+    return (
+      <div className="container mx-auto py-20 px-4 max-w-md">
+        <Card className="text-center shadow-lg border-primary/20 bg-primary/5">
+          <CardHeader>
+            <div className="mx-auto bg-primary/10 p-4 rounded-full w-20 h-20 flex items-center justify-center mb-4">
+              <CheckCircle2 className="h-10 w-10 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Already Voted</CardTitle>
+            <CardDescription>
+              You have already submitted your ballot for this session. One vote per participant is allowed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <Button asChild className="w-full">
+              <Link href={`/sessions/${id}`}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Session
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const topLimit = session.votingConfig?.topIndividualsToVoteFor || 3;
 
@@ -129,7 +165,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
         </Card>
       ) : (
         <div className="space-y-8">
-          {/* Individual Voting Section */}
           {(session.sessionType === 'individual' || session.sessionType === 'group') && (
             <Card className="shadow-md">
               <CardHeader>
@@ -174,7 +209,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
             </Card>
           )}
 
-          {/* Group Voting Section */}
           {session.sessionType === 'group' && (
             <Card className="shadow-md">
               <CardHeader>
