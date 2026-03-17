@@ -41,7 +41,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Removed restrictive member filter to allow all participants in the session to see the roster for voting
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
@@ -52,12 +51,14 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
 
   const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading;
 
-  // Filter participants and groups to only those who actually preached
+  // Filter participants to only those who actually preached, EXCLUDING the current voter
   const filteredParticipants = useMemo(() => {
-    if (!participants || !events) return [];
+    if (!participants || !events || !user) return [];
     const activeIds = new Set(events.map(e => e.participantId));
-    return participants.filter(p => activeIds.has(p.id));
-  }, [participants, events]);
+    return participants
+      .filter(p => activeIds.has(p.id))
+      .filter(p => p.id !== user.uid);
+  }, [participants, events, user]);
 
   const filteredGroups = useMemo(() => {
     if (!allGroups || !events) return [];
@@ -105,7 +106,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           </Link>
         </Button>
         <h1 className="text-3xl font-headline font-bold text-primary">Cast Your Vote</h1>
-        <p className="text-muted-foreground">Select the best performers from "{session.title}".</p>
+        <p className="text-muted-foreground">Select the best performers from "{session.title}". (You cannot vote for yourself)</p>
       </div>
 
       {!session.votingConfig?.enabled ? (
@@ -125,7 +126,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <Star className="h-5 w-5 text-accent fill-accent" />
                   Top Performers (Select up to {topLimit})
                 </CardTitle>
-                <CardDescription>Only preachers who recorded time in this session are listed.</CardDescription>
+                <CardDescription>Only preachers who recorded time in this session (excluding you) are listed.</CardDescription>
               </CardHeader>
               <CardContent>
                 {filteredParticipants.length > 0 ? (
@@ -155,7 +156,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                 ) : (
                   <div className="text-center py-8 bg-muted/20 rounded-lg border border-dashed flex flex-col items-center gap-2">
                     <AlertCircle className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No individual preaching records found for this session.</p>
+                    <p className="text-sm text-muted-foreground">No other individual preaching records found for this session.</p>
                   </div>
                 )}
               </CardContent>

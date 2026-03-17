@@ -82,7 +82,6 @@ export default function Dashboard() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Rules allow signed in users to read events, so we can show a broader activity feed
     return query(
       collectionGroup(firestore, 'preaching_events'),
       limit(100)
@@ -293,7 +292,7 @@ export default function Dashboard() {
                               
                               <div className="pl-3 border-l-2 border-accent/40 py-1">
                                 <p className="text-[9px] text-muted-foreground font-bold mb-2 flex items-center gap-1">
-                                  <Users className="h-2.5 w-2.5" /> {isAdmin ? "Recent Records" : "Teammates in your group:"}
+                                  <UsersIcon className="h-2.5 w-2.5" /> {isAdmin ? "Recent Records" : "Teammates in your group:"}
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                                   {sessionEvents
@@ -401,7 +400,7 @@ export default function Dashboard() {
                   </Button>
                   <Button className="w-full justify-start h-12" variant="outline" asChild>
                     <Link href="/participants">
-                      <Users className="mr-3 h-5 w-5 text-primary" />
+                      <UsersIcon className="mr-3 h-5 w-5 text-primary" />
                       Participant Roster
                     </Link>
                   </Button>
