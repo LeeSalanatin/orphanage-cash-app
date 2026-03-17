@@ -23,20 +23,20 @@ service cloud.firestore {
 
     // --- Global Access / Collection Group Rules ---
     // Authorized at the root level to allow database-wide aggregation (e.g., on the dashboard).
-    // These must use a recursive wildcard (anyPath=**) to match subcollections at any depth.
+    // These must use a recursive wildcard ({allPaths=**}) to match subcollections at any depth.
 
-    match /{anyPath=**}/preaching_events/{eventId} {
-      allow read, create: if isSignedIn();
+    match /{allPaths=**}/preaching_events/{eventId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
-      allow read, create: if isSignedIn();
+    match /{allPaths=**}/fines/{fineId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
-      allow read, create: if isSignedIn();
+    match /{allPaths=**}/votes/{voteId} {
+      allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
