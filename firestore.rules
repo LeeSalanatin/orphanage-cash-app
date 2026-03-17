@@ -26,20 +26,20 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // Rules for collection group queries MUST use the {path=**} recursive wildcard pattern.
-    // These authorize queries that target all collections with a specific name across the database.
+    // Rules for collection group queries MUST use a recursive wildcard pattern.
+    // We use {anyPath=**} to avoid conflict with the reserved 'path' keyword.
     
-    match /{path=**}/preaching_events/{eventId} {
+    match /{anyPath=**}/preaching_events/{eventId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{anyPath=**}/fines/{fineId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{anyPath=**}/votes/{voteId} {
       allow get, list, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
