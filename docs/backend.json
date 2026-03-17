@@ -74,6 +74,8 @@
         "overageSeconds": { "type": "number" },
         "totalFineAmount": { "type": "number" },
         "explanation": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
         "sessionMembers": { "type": "object" }
       },
       "required": ["id", "sessionId", "actualDurationSeconds", "sessionMembers"]

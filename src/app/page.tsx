@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
@@ -35,46 +34,6 @@ export default function Dashboard() {
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'sessions'),
-      where(`members.${user.uid}`, '!=', null),
-      limit(20)
-    );
-  }, [firestore, user]);
-
-  const participantsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const userParticipantRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'participants', user.uid);
-  }, [firestore, user]);
-
-  // Query events across all sessions where the user is a member
-  const eventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collectionGroup(firestore, 'preaching_events'),
-      where(`sessionMembers.${user.uid}`, '!=', null),
-      limit(100)
-    );
-  }, [firestore, user]);
-
-  const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
-  const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
-  const { data: allEvents, isLoading: eventsLoading } = useCollection(eventsQuery);
-
   // Check admin status
   useEffect(() => {
     if (!firestore || !user) return;
@@ -92,6 +51,53 @@ export default function Dashboard() {
     };
     checkAdmin();
   }, [firestore, user]);
+
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    // Admins see all sessions, members see their own
+    if (isAdmin) {
+      return query(collection(firestore, 'sessions'), limit(20));
+    }
+    return query(
+      collection(firestore, 'sessions'),
+      where(`members.${user.uid}`, '!=', null),
+      limit(20)
+    );
+  }, [firestore, user, isAdmin]);
+
+  const participantsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'participants');
+  }, [firestore, user]);
+
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'groups');
+  }, [firestore, user]);
+
+  const userParticipantRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'participants', user.uid);
+  }, [firestore, user]);
+
+  // Query events. Admins see everything, members see what they are part of.
+  const eventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    if (isAdmin) {
+      return query(collectionGroup(firestore, 'preaching_events'), limit(100));
+    }
+    return query(
+      collectionGroup(firestore, 'preaching_events'),
+      where(`sessionMembers.${user.uid}`, '!=', null),
+      limit(100)
+    );
+  }, [firestore, user, isAdmin]);
+
+  const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
+  const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
+  const { data: allEvents, isLoading: eventsLoading } = useCollection(eventsQuery);
 
   const recentSessions = useMemo(() => {
     if (!rawSessions) return [];
@@ -190,10 +196,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Your Sessions" 
+          title={isAdmin ? "Total Sessions" : "Your Sessions"} 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Sessions you created or joined"
+          description={isAdmin ? "Sessions across the system" : "Sessions you created or joined"}
         />
         <StatCard 
           title="Active Now" 
@@ -222,16 +228,16 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Recent Sessions</CardTitle>
-                  <CardDescription>Quick access to your most recent preaching events.</CardDescription>
+                  <CardTitle>{isAdmin ? "System Activity" : "Recent Sessions"}</CardTitle>
+                  <CardDescription>
+                    {isAdmin ? "Latest preaching records across all sessions." : "Quick access to your most recent preaching events."}
+                  </CardDescription>
                 </div>
-                {isAdmin && (
-                  <Button variant="ghost" asChild>
-                    <Link href="/sessions">
-                      View All <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                )}
+                <Button variant="ghost" asChild>
+                  <Link href="/sessions">
+                    View All <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -276,39 +282,40 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Participation Summary */}
-                        {myEvent && (
+                        {/* Admin or Member participation summary */}
+                        {(myEvent || (isAdmin && sessionEvents.length > 0)) && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> Your Performance
+                              <History className="h-3 w-3" /> {isAdmin ? "Latest Activity" : "Your Performance"}
                             </p>
                             <div className="flex flex-col gap-2">
-                              <div className="flex justify-between items-center bg-background p-2 rounded border border-primary/10 shadow-sm">
-                                <span className="text-xs font-semibold text-primary">Your Time</span>
-                                <span className="font-mono font-bold text-sm">{myEvent.actualDurationFormatted}</span>
-                              </div>
-                              
-                              {myEvent.preachingGroupId && (
-                                <div className="pl-3 border-l-2 border-accent/40 py-1">
-                                  <p className="text-[9px] text-muted-foreground font-bold mb-2 flex items-center gap-1">
-                                    <Users className="h-2.5 w-2.5" /> Teammates in {allGroups?.find(g => g.id === myEvent.preachingGroupId)?.name || 'Team'}:
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                                    {sessionEvents
-                                      .filter(e => e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid)
-                                      .map(teammateEvent => (
-                                        <div key={teammateEvent.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
-                                          <span className="truncate max-w-[120px]">{teammateEvent.participantName.split(' - ').pop()}</span>
-                                          <span className="font-mono opacity-80 font-semibold">{teammateEvent.actualDurationFormatted}</span>
-                                        </div>
-                                      ))
-                                    }
-                                    {sessionEvents.filter(e => e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid).length === 0 && (
-                                      <p className="text-[9px] text-muted-foreground italic">No other teammate records found.</p>
-                                    )}
-                                  </div>
+                              {myEvent && (
+                                <div className="flex justify-between items-center bg-background p-2 rounded border border-primary/10 shadow-sm">
+                                  <span className="text-xs font-semibold text-primary">Your Time</span>
+                                  <span className="font-mono font-bold text-sm">{myEvent.actualDurationFormatted}</span>
                                 </div>
                               )}
+                              
+                              <div className="pl-3 border-l-2 border-accent/40 py-1">
+                                <p className="text-[9px] text-muted-foreground font-bold mb-2 flex items-center gap-1">
+                                  <Users className="h-2.5 w-2.5" /> {isAdmin ? "Recent Records" : "Teammates in your group:"}
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                                  {sessionEvents
+                                    .filter(e => isAdmin || (myEvent && e.preachingGroupId === myEvent.preachingGroupId && e.participantId !== user.uid))
+                                    .slice(0, 4)
+                                    .map(record => (
+                                      <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
+                                        <span className="truncate max-w-[120px]">{record.participantName.split(' - ').pop()}</span>
+                                        <span className="font-mono opacity-80 font-semibold">{record.actualDurationFormatted}</span>
+                                      </div>
+                                    ))
+                                  }
+                                  {sessionEvents.length === 0 && (
+                                    <p className="text-[9px] text-muted-foreground italic">No record entries found.</p>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -319,7 +326,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground mb-4">You haven't participated in any sessions yet.</p>
+                  <p className="text-muted-foreground mb-4">No session records found.</p>
                   {isAdmin && (
                     <Button asChild>
                       <Link href="/sessions/new">Create Your First Session</Link>

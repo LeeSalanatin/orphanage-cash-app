@@ -17,23 +17,23 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group Rules (CRITICAL: Must be at the top level for collectionGroup queries) ---
-    // These allow the dashboard to aggregate data across all sessions globally.
+    // --- Collection Group Rules (CRITICAL: Must be at the root for collectionGroup queries) ---
+    // These allow global aggregation of performance data across all sessions.
     
-    match /{path=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
+    match /{allPaths=**}/preaching_events/{eventId} {
+      allow read, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
-      allow read: if isSignedIn();
+    match /{allPaths=**}/fines/{fineId} {
+      allow read, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
-      allow read: if isSignedIn();
+    match /{allPaths=**}/votes/{voteId} {
+      allow read, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -79,7 +79,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Nested subcollection rules for direct path access
+      // Subcollections (also covered by recursive wildcard, but kept for clarity in direct paths)
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
