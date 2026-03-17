@@ -21,22 +21,25 @@ service cloud.firestore {
       );
     }
 
-    // --- Global Access / Collection Group Rules ---
-    // Collection Group queries require a recursive wildcard match at the root of the documents block.
-    // Using the canonical 'path' variable for standard recursive wildcard matching.
+    // --- Global Collection Group Rules ---
+    // These must be at the root to authorize collectionGroup() queries.
+    // Using {anyPath=**} to avoid conflict with 'path' keyword.
 
-    match /{path=**}/preaching_events/{eventId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/preaching_events/{eventId} {
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/fines/{fineId} {
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
-      allow read, create: if isSignedIn();
+    match /{anyPath=**}/votes/{voteId} {
+      allow list, get: if isSignedIn();
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
