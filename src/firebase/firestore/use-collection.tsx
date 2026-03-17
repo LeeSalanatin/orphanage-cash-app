@@ -82,7 +82,7 @@ export function useCollection<T = any>(
         setError(null);
         setIsLoading(false);
       },
-      (error: FirestoreError) => {
+      (serverError: FirestoreError) => {
         // Safe path extraction for reporting
         let path: string = 'unknown';
         try {

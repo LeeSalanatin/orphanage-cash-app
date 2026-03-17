@@ -34,20 +34,20 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // These must be defined at the top level or with recursive wildcards to support collectionGroup() queries.
-    // They authorize queries that span across all session sub-collections.
+    // These authorize queries that span across all session sub-collections (collectionGroup queries).
+    // They MUST be defined with recursive wildcards to be effective.
     
-    match /{allPaths=**}/preaching_events/{eventId} {
+    match /{path=**}/preaching_events/{eventId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
+    match /{path=**}/fines/{fineId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
+    match /{path=**}/votes/{voteId} {
       allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
@@ -91,7 +91,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isExistingOwner(resource.data.ownerId) || isAdmin();
       
-      // Explicitly allow subcollection access if needed directly
+      // Direct subcollection access (e.g. within a specific session view)
       match /preaching_events/{eventId} {
         allow read, create: if isSignedIn();
         allow update, delete: if isAdmin();
