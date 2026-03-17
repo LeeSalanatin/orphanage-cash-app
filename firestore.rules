@@ -34,23 +34,23 @@ service cloud.firestore {
     }
 
     // --- Collection Group & Sub-collection Rules ---
-    // These rules use the recursive wildcard syntax required for collectionGroup queries.
-    // They are placed at the top level to ensure they are hit correctly.
+    // These must use the recursive wildcard syntax to support collectionGroup queries.
+    // They are matched against the collection name across the entire database.
     
     match /{allPaths=**}/preaching_events/{eventId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
     match /{allPaths=**}/fines/{fineId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
     match /{allPaths=**}/votes/{voteId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
