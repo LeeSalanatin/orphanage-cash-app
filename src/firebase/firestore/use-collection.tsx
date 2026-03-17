@@ -72,8 +72,8 @@ export function useCollection<T = any>(
       async (serverError: FirestoreError) => {
         let path: string = 'unknown';
         try {
+          // Attempt to extract path for diagnostic context
           const internal = memoizedTargetRefOrQuery as any;
-          // Extract path for both standard queries and collectionGroup queries
           if (internal._query?.collectionGroup) {
             path = `collectionGroup(${internal._query.collectionGroup})`;
           } else if (internal.path) {
