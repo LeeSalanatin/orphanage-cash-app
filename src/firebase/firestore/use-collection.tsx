@@ -80,9 +80,11 @@ export function useCollection<T = any>(
             path = internal.path;
           } else if (internal._query?.path) {
             path = internal._query.path.toString();
+          } else if (typeof internal.toString === 'function') {
+            path = internal.toString();
           }
         } catch (e) {
-          path = 'query';
+          path = 'query-permission-denied';
         }
 
         const contextualError = new FirestorePermissionError({
