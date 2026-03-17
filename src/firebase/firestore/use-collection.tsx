@@ -87,13 +87,18 @@ export function useCollection<T = any>(
         let path: string = 'unknown';
         try {
           if (memoizedTargetRefOrQuery) {
-            const internal = memoizedTargetRefOrQuery as any as InternalQuery;
+            const internal = memoizedTargetRefOrQuery as unknown as InternalQuery;
             if (internal._query?.collectionGroup) {
               path = `collectionGroup(${internal._query.collectionGroup})`;
             } else if (internal._query?.path) {
-              path = internal._query.path.toString();
-            } else if ('path' in memoizedTargetRefOrQuery) {
-              path = (memoizedTargetRefOrQuery as CollectionReference).path;
+               // Safely try to extract path from internal query if public path is missing
+               if (typeof internal._query.path.canonicalString === 'function') {
+                 path = internal._query.path.canonicalString();
+               } else if (typeof internal._query.path.toString === 'function') {
+                 path = internal._query.path.toString();
+               }
+            } else if ('path' in (memoizedTargetRefOrQuery as any)) {
+              path = (memoizedTargetRefOrQuery as any).path;
             } else if (internal.path) {
               path = internal.path;
             }
