@@ -27,20 +27,21 @@ service cloud.firestore {
 
     // --- Collection Group Rules ---
     // Rules for collection group queries MUST use a recursive wildcard pattern at the top level.
+    // Using 'anyPath' instead of 'path' to avoid potential reserved keyword conflicts.
     
-    match /{path=**}/preaching_events/{eventId} {
+    match /{anyPath=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{anyPath=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{anyPath=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -84,6 +85,23 @@ service cloud.firestore {
       allow get: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isMember(resource.data.get('members', {})) || isAdmin());
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
+      
+      // Explicitly allow subcollection access if not using collectionGroup
+      match /preaching_events/{eventId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /fines/{fineId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
+      match /votes/{voteId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /roles_admin/{userId} {
