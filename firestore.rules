@@ -19,7 +19,7 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group Rules (Standardized for Dashboard and Voting) ---
+    // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
     
     match /{allPaths=**}/preaching_events/{eventId} {
       allow read, list: if isSignedIn();
@@ -51,12 +51,6 @@ service cloud.firestore {
         (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', ''))
       );
       allow delete: if isAdmin();
-    }
-
-    match /session_configurations/{configId} {
-      allow read: if isSignedIn();
-      allow create: if isAdmin();
-      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /groups/{groupId} {

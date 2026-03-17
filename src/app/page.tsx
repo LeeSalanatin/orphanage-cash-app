@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
-import { collection, query, limit, where, doc, getDoc, collectionGroup } from 'firebase/firestore';
+import { collection, query, limit, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -262,7 +262,7 @@ export default function Dashboard() {
                             <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
                               {session.status}
                             </Badge>
-                            {session.status === 'completed' && session.votingConfig?.enabled && (
+                            {session.status === 'completed' && session.votingConfig?.enabled && !session.votingClosed && (
                               <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
                                 <Link href={`/sessions/${session.id}/voting`}>
                                   <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />

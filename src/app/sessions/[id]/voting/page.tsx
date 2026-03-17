@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle, CheckCircle2, Edit3 } from 'lucide-react';
+import { Award, Star, Trophy, ArrowLeft, Loader2, Users, AlertCircle, CheckCircle2, Edit3, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -96,7 +96,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   }, [allGroups, events, user]);
 
   function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled || !firestore || !user) return;
+    if (!session?.votingConfig?.enabled || session?.votingClosed || !firestore || !user) return;
     
     setIsSubmitting(true);
     
@@ -145,20 +145,32 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
         </Button>
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-headline font-bold text-primary">
-            {hasVoted ? 'Review Your Vote' : 'Cast Your Vote'}
+            {session.votingClosed ? 'Voting Closed' : (hasVoted ? 'Review Your Vote' : 'Cast Your Vote')}
           </h1>
           {hasVoted && <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 h-6">Previously Submitted</Badge>}
+          {session.votingClosed && <Badge variant="destructive" className="h-6">Closed</Badge>}
         </div>
         <p className="text-muted-foreground mt-2">
-          {hasVoted ? 'You can modify your selections below and update your ballot.' : `Select the best performers from "${session.title}". (You cannot vote for yourself or your own group)`}
+          {session.votingClosed 
+            ? 'The voting period for this session has ended. You can no longer cast or modify votes.' 
+            : (hasVoted ? 'You can modify your selections below and update your ballot.' : `Select the best performers from "${session.title}". (You cannot vote for yourself or your own group)`)}
         </p>
       </div>
 
-      {!session.votingConfig?.enabled ? (
+      {!session.votingConfig?.enabled || session.votingClosed ? (
         <Card className="text-center py-20 border-dashed">
           <CardContent>
-            <Trophy className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-xl font-bold">Voting Disabled</h3>
+            {session.votingClosed ? (
+              <Lock className="mx-auto h-12 w-12 text-destructive mb-4" />
+            ) : (
+              <Trophy className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            )}
+            <h3 className="text-xl font-bold">{session.votingClosed ? 'Voting Period Ended' : 'Voting Disabled'}</h3>
+            {session.votingClosed && (
+              <p className="text-muted-foreground mt-2 max-w-xs mx-auto">
+                The administrator has finalized the results. Check the session page to see the winners!
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (

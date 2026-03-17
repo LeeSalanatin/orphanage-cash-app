@@ -55,7 +55,9 @@
         "sessionType": { "type": "string" },
         "status": { "type": "string" },
         "ownerId": { "type": "string" },
-        "members": { "type": "object" }
+        "members": { "type": "object" },
+        "votingClosed": { "type": "boolean" },
+        "rewardsDistributed": { "type": "boolean" }
       },
       "required": ["id", "title", "status", "ownerId"]
     },

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
@@ -12,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2, Timer } from 'lucide-react';
+import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2, Timer, Lock, Unlock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const preachingEventsRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Show all events for this session so everyone can see history/voting context
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
@@ -119,7 +119,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const timeStats = useMemo(() => {
     if (!records || records.length === 0) return { individuals: [], group: null };
 
-    // Individual Longest Times
     const individualStats = [...records]
       .sort((a, b) => b.actualDurationSeconds - a.actualDurationSeconds)
       .slice(0, 3)
@@ -130,7 +129,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         formatted: r.actualDurationFormatted
       }));
 
-    // Group Longest Time (Summing all individual contributions within the group)
     const groupDurations: Record<string, { id: string, name: string, total: number }> = {};
     records.forEach(r => {
       if (r.preachingGroupId) {
@@ -479,6 +477,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: `Session ${newStatus}` });
   }
 
+  function toggleVotingClosed() {
+    if (!session || !firestore) return;
+    const newState = !session.votingClosed;
+    updateDocumentNonBlocking(doc(firestore, 'sessions', id), { votingClosed: newState });
+    toast({ title: newState ? "Voting Closed" : "Voting Opened" });
+  }
+
   if (sessionLoading || participantsLoading || recordsLoading || groupsLoading || votesLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -487,6 +492,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!session) return null;
 
+  const isAdmin = user?.uid === session.ownerId;
+  const voteCount = votes?.length || 0;
+  const preachingCount = records?.length || 0;
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -494,6 +503,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-headline font-bold text-primary">{session.title}</h1>
             <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
+            {session.votingClosed && <Badge variant="destructive">Voting Closed</Badge>}
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1 capitalize"><Mic2 className="h-3.5 w-3.5" /> {session.sessionType}</span>
@@ -509,10 +519,20 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               </Link>
             </Button>
           )}
-          <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'} className="shadow-lg">
-            {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-            {session.status === 'active' ? 'End Session' : 'Start Session'}
-          </Button>
+          {isAdmin && (
+            <>
+              {session.status === 'completed' && session.votingConfig?.enabled && (
+                <Button variant="outline" onClick={toggleVotingClosed} className="border-accent text-accent hover:bg-accent/5">
+                  {session.votingClosed ? <Unlock className="mr-2 h-4 w-4" /> : <Lock className="mr-2 h-4 w-4" />}
+                  {session.votingClosed ? 'Reopen Voting' : 'Close Voting'}
+                </Button>
+              )}
+              <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'} className="shadow-lg">
+                {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                {session.status === 'active' ? 'End Session' : 'Start Session'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -527,7 +547,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </TabsList>
 
             <TabsContent value="live" className="space-y-8">
-              {activeParticipantId && (
+              {isAdmin && activeParticipantId && (
                 <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in duration-300">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center text-accent">
@@ -592,7 +612,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                           <span className="font-medium text-muted-foreground">{m.name}</span>
                                           <span className="font-mono font-bold">{m.duration}</span>
                                         </div>
-                                        {user?.uid === session.ownerId && (
+                                        {isAdmin && (
                                           <div className="flex items-center gap-1">
                                             <Button 
                                               variant="ghost" 
@@ -614,7 +634,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                 ) : (
                                   <div className="flex items-center justify-between text-xs bg-muted/40 p-2 rounded">
                                     <span className="font-mono font-bold">{item.formatted}</span>
-                                    {user?.uid === session.ownerId && (
+                                    {isAdmin && (
                                       <div className="flex items-center gap-1">
                                         <Button 
                                           variant="ghost" 
@@ -644,6 +664,32 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </TabsContent>
 
             <TabsContent value="results" className="space-y-8">
+              {session.votingConfig?.enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card className="bg-primary/5 border-primary/10">
+                    <CardContent className="pt-6 text-center">
+                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Total Preachers</p>
+                      <p className="text-3xl font-bold text-primary">{preachingCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-accent/5 border-accent/10">
+                    <CardContent className="pt-6 text-center">
+                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Votes Cast</p>
+                      <p className="text-3xl font-bold text-accent">{voteCount}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className={cn(session.votingClosed ? "bg-destructive/5 border-destructive/10" : "bg-green-500/5 border-green-500/10")}>
+                    <CardContent className="pt-6 text-center">
+                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Voting Status</p>
+                      <p className={cn("text-xl font-bold flex items-center justify-center gap-2", session.votingClosed ? "text-destructive" : "text-green-600")}>
+                        {session.votingClosed ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        {session.votingClosed ? 'Closed' : 'Open'}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border-primary/20 shadow-sm">
                   <CardHeader className="pb-2">
@@ -692,7 +738,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <Trophy className="h-5 w-5 text-primary" />
                         Voting Leaderboard
                       </CardTitle>
-                      {session.ownerId === user?.uid && !session.rewardsDistributed && (
+                      {isAdmin && !session.rewardsDistributed && (
                         <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={handleDistributeRewards} disabled={votes?.length === 0}>
                           Award Points
                         </Button>
@@ -751,18 +797,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <Label>Max Time (Min)</Label>
-                      <Input type="number" value={editMaxTimeMin} onChange={(e) => setEditMaxTimeMin(e.target.value)} />
+                      <Input type="number" value={editMaxTimeMin} onChange={(e) => setEditMaxTimeMin(e.target.value)} disabled={!isAdmin} />
                     </div>
                     <div className="space-y-2">
                       <Label>Max Time (Sec)</Label>
-                      <Input type="number" min="0" max="59" value={editMaxTimeSec} onChange={(e) => setEditMaxTimeSec(e.target.value)} />
+                      <Input type="number" min="0" max="59" value={editMaxTimeSec} onChange={(e) => setEditMaxTimeSec(e.target.value)} disabled={!isAdmin} />
                     </div>
                     <div className="space-y-2">
                       <Label>{session.sessionType === 'sunday preaching' ? 'Fixed Fine (₱)' : 'Fine (₱ per Min)'}</Label>
-                      <Input type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} />
+                      <Input type="number" value={editFineAmount} onChange={(e) => setEditFineAmount(e.target.value)} disabled={!isAdmin} />
                     </div>
                   </div>
-                  <Button className="w-full" onClick={handleSaveSettings}>Save Timing Rules</Button>
+                  {isAdmin && <Button className="w-full" onClick={handleSaveSettings}>Save Timing Rules</Button>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -775,7 +821,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardContent className="space-y-8">
                   <div className="flex items-center justify-between">
                     <Label className="font-bold">Enable Reward System</Label>
-                    <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} />
+                    <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} disabled={!isAdmin} />
                   </div>
                   
                   {editPointsEnabled && (
@@ -787,15 +833,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <Label className="text-xs">Top 1 Individual</Label>
-                            <Input type="number" value={editRewardTop1} onChange={(e) => setEditRewardTop1(e.target.value)} />
+                            <Input type="number" value={editRewardTop1} onChange={(e) => setEditRewardTop1(e.target.value)} disabled={!isAdmin} />
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs">Top 2 Individual</Label>
-                            <Input type="number" value={editRewardTop2} onChange={(e) => setEditRewardTop2(e.target.value)} />
+                            <Input type="number" value={editRewardTop2} onChange={(e) => setEditRewardTop2(e.target.value)} disabled={!isAdmin} />
                           </div>
                           <div className="space-y-2">
                             <Label className="text-xs">Top 3 Individual</Label>
-                            <Input type="number" value={editRewardTop3} onChange={(e) => setEditRewardTop3(e.target.value)} />
+                            <Input type="number" value={editRewardTop3} onChange={(e) => setEditRewardTop3(e.target.value)} disabled={!isAdmin} />
                           </div>
                         </div>
                       </div>
@@ -807,14 +853,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           </h4>
                           <div className="space-y-2">
                             <Label className="text-xs">Top Group Reward</Label>
-                            <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} />
+                            <Input type="number" value={editRewardGroupTop1} onChange={(e) => setEditRewardGroupTop1(e.target.value)} disabled={!isAdmin} />
                             <p className="text-[10px] text-muted-foreground">Reward split ONLY among active members.</p>
                           </div>
                         </div>
                       )}
                     </div>
                   )}
-                  <Button className="w-full h-12" onClick={handleSaveSettings}>Save Reward Settings</Button>
+                  {isAdmin && <Button className="w-full h-12" onClick={handleSaveSettings}>Save Reward Settings</Button>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -845,16 +891,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       </div>
                       <div className="flex items-center gap-2">
                         {activeParticipantId === p.id && !activeGroupId && <span className="font-mono text-sm font-bold text-primary">{formatDuration(timer)}</span>}
-                        <Button 
-                          size="sm" 
-                          variant={activeParticipantId === p.id && !activeGroupId ? "destructive" : "outline"} 
-                          className="h-8 px-2"
-                          disabled={(activeParticipantId !== null && (activeParticipantId !== p.id || activeGroupId)) || session.status !== 'active'} 
-                          onClick={() => activeParticipantId === p.id ? handleStopTracking() : handleStartTracking(p.id)}
-                        >
-                          {activeParticipantId === p.id && !activeGroupId ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          <span className="ml-1 text-[10px]">{activeParticipantId === p.id && !activeGroupId ? 'Stop' : 'Start'}</span>
-                        </Button>
+                        {isAdmin && (
+                          <Button 
+                            size="sm" 
+                            variant={activeParticipantId === p.id && !activeGroupId ? "destructive" : "outline"} 
+                            className="h-8 px-2"
+                            disabled={(activeParticipantId !== null && (activeParticipantId !== p.id || activeGroupId)) || session.status !== 'active'} 
+                            onClick={() => activeParticipantId === p.id ? handleStopTracking() : handleStartTracking(p.id)}
+                          >
+                            {activeParticipantId === p.id && !activeGroupId ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            <span className="ml-1 text-[10px]">{activeParticipantId === p.id && !activeGroupId ? 'Stop' : 'Start'}</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -890,16 +938,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                 {activeParticipantId === m.id && activeGroupId === g.id && (
                                   <span className="font-mono text-xs font-bold text-accent">{formatDuration(timer)}</span>
                                 )}
-                                <Button 
-                                  size="sm" 
-                                  variant={activeParticipantId === m.id && activeGroupId === g.id ? "destructive" : "ghost"} 
-                                  className="h-7 px-2"
-                                  disabled={(activeParticipantId !== null && (activeParticipantId !== m.id || activeGroupId !== g.id)) || session.status !== 'active'} 
-                                  onClick={() => activeParticipantId === m.id ? handleStopTracking() : handleStartTracking(m.id, g.id)}
-                                >
-                                  {activeParticipantId === m.id && activeGroupId === g.id ? <StopCircle className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                                  <span className="ml-1 text-[9px]">{activeParticipantId === m.id && activeGroupId === g.id ? 'Stop' : 'Start'}</span>
-                                </Button>
+                                {isAdmin && (
+                                  <Button 
+                                    size="sm" 
+                                    variant={activeParticipantId === m.id && activeGroupId === g.id ? "destructive" : "ghost"} 
+                                    className="h-7 px-2"
+                                    disabled={(activeParticipantId !== null && (activeParticipantId !== m.id || activeGroupId !== g.id)) || session.status !== 'active'} 
+                                    onClick={() => activeParticipantId === m.id ? handleStopTracking() : handleStartTracking(m.id, g.id)}
+                                  >
+                                    {activeParticipantId === m.id && activeGroupId === g.id ? <StopCircle className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                                    <span className="ml-1 text-[9px]">{activeParticipantId === m.id && activeGroupId === g.id ? 'Stop' : 'Start'}</span>
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -941,7 +991,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               className="sm:mr-auto"
               onClick={() => {
                 setRecordToDelete(editingRecord.id);
-                setEditingRecord(null); // Close the edit dialog so only the alert shows
+                setEditingRecord(null);
               }}
             >
               <Trash2 className="mr-2 h-4 w-4" />
