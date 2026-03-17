@@ -92,9 +92,9 @@ export function useCollection<T = any>(
               path = internal.path;
             } else if (internal._query?.path) {
               if (typeof internal._query.path.canonicalString === 'function') {
-                path = internal._query.path.canonicalString();
+                path = internal._query.path.canonicalString() || 'unknown';
               } else if (typeof internal._query.path.toString === 'function') {
-                path = internal._query.path.toString();
+                path = internal._query.path.toString() || 'unknown';
               }
             }
           }

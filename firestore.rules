@@ -37,21 +37,21 @@ service cloud.firestore {
     // These must use the recursive wildcard syntax to support collectionGroup queries.
     // They are matched against the collection name across the entire database.
     
-    match /{allPaths=**}/preaching_events/{eventId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{path=**}/preaching_events/{eventId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/fines/{fineId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{path=**}/fines/{fineId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
-    match /{allPaths=**}/votes/{voteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{path=**}/votes/{voteId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
 
