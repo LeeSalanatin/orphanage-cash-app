@@ -27,7 +27,8 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // These must be defined at the top level for collectionGroup queries to be authorized across the database.
+    // These must be defined at the top level using the {path=**} recursive wildcard
+    // for collectionGroup queries to be authorized across the database.
     
     match /{path=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
