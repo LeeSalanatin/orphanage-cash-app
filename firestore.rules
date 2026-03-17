@@ -8,10 +8,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
     function isAdmin() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
@@ -25,35 +21,30 @@ service cloud.firestore {
       );
     }
 
-    // --- Collection Group Rules ---
-    // Rules for collection group queries MUST use a recursive wildcard pattern at the root level.
+    // --- Collection Group Rules (MUST be at root with recursive wildcard) ---
     // Authorized here to allow database-wide aggregation (e.g., on the dashboard).
-    // Using {anyPath=**} to avoid potential variable shadowing with 'path'.
     
-    match /{anyPath=**}/preaching_events/{eventId} {
-      allow list, get: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/preaching_events/{eventId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/fines/{fineId} {
-      allow list, get: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/fines/{fineId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{anyPath=**}/votes/{voteId} {
-      allow list, get: if isSignedIn();
-      allow create: if isSignedIn();
+    match /{allPaths=**}/votes/{voteId} {
+      allow read, create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
     // --- Root Collections ---
 
     match /users/{userId} {
-      allow get, list: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
     match /participants/{participantId} {
@@ -87,20 +78,9 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if (resource != null && request.auth.uid == resource.data.ownerId) || isAdmin();
       
-      // Explicitly allowed sub-collections (additive to collection group rules)
-      match /preaching_events/{eventId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
-      }
-      match /fines/{fineId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
-      }
-      match /votes/{voteId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
+      // Direct subcollection access (additive to collection group rules)
+      match /{subCollection}/{docId} {
+        allow read, create: if isSignedIn();
         allow update, delete: if isAdmin();
       }
     }
