@@ -25,22 +25,22 @@ service cloud.firestore {
     }
 
     // --- Collection Group Rules ---
-    // These must be at the root level of the documents match to authorize collectionGroup() queries.
-    // Standardizing the wildcard to ensure it covers all nested instances of these collections.
+    // AUTHORIZATION FOR AGGREGATED QUERIES (Dashboard History, etc.)
+    // These must be at the absolute root of the documents match block.
 
-    match /{path=**}/preaching_events/{eventId} {
+    match /{anyPath=**}/preaching_events/{eventId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/fines/{fineId} {
+    match /{anyPath=**}/fines/{fineId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    match /{path=**}/votes/{voteId} {
+    match /{anyPath=**}/votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
@@ -85,7 +85,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
-      // Sub-collections (direct path access)
+      // Sub-collections (direct path access within a specific session)
       match /preaching_events/{eventId} {
         allow read, write: if isSignedIn();
       }
