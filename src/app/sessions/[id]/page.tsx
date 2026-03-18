@@ -29,7 +29,8 @@ import {
   Calculator,
   History,
   TrendingDown,
-  Trash2
+  Trash2,
+  ChevronRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -91,7 +92,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // Calculate shared fines for the tally view based on SESSION-WIDE group time
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     
@@ -325,7 +325,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
         <TabsContent value="live">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 space-y-6">
               {activeParticipantId && (
                 <Card className="border-accent bg-accent/5 p-10 text-center animate-in zoom-in mb-6">
                   <p className="text-xl text-muted-foreground mb-4">{availableParticipants?.find(p => p.id === activeParticipantId)?.name}</p>
@@ -336,48 +336,62 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   </div>
                 </Card>
               )}
-              <Card>
-                <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {availableParticipants?.map(p => {
-                     const participantGroups = allGroups?.filter(g => g.members && (g.members[p.id] || (p.userId && g.members[p.userId])));
-                     return (
-                        <div key={p.id} className="p-4 border rounded-lg space-y-3 bg-card">
-                          <div className="flex justify-between items-start">
-                            <span className="font-medium">{p.name}</span>
-                            {isAdmin && !activeParticipantId && (
-                              <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id)}>
-                                <Play className="h-4 w-4" />
-                              </Button>
-                            )}
+
+              {session?.sessionType === 'group' ? (
+                <div className="space-y-6">
+                  {allGroups?.map(group => {
+                    const groupMembers = availableParticipants?.filter(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]));
+                    if (!groupMembers || groupMembers.length === 0) return null;
+
+                    return (
+                      <Card key={group.id} className="shadow-md">
+                        <CardHeader className="bg-primary/5 pb-4">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <UsersIcon className="h-5 w-5 text-primary" />
+                            Team: {group.name}
+                          </CardTitle>
+                          {group.description && <CardDescription>{group.description}</CardDescription>}
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {groupMembers.map(p => (
+                              <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                                <span className="font-medium text-sm">{p.name}</span>
+                                {isAdmin && !activeParticipantId && (
+                                  <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id, group.id)}>
+                                    <Play className="h-4 w-4 mr-2" /> Start
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                          {session?.sessionType === 'group' && participantGroups && participantGroups.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {participantGroups.map(g => (
-                                <Button 
-                                  key={g.id} 
-                                  size="sm" 
-                                  variant="secondary" 
-                                  className="text-[10px] h-6 px-2"
-                                  disabled={!!activeParticipantId}
-                                  onClick={() => handleStartTracking(p.id, g.id)}
-                                >
-                                  {g.name}
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                     );
+                        </CardContent>
+                      </Card>
+                    );
                   })}
-                </CardContent>
-              </Card>
+                </div>
+              ) : (
+                <Card>
+                  <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {availableParticipants?.map(p => (
+                      <div key={p.id} className="p-4 border rounded-lg flex justify-between items-center bg-card">
+                        <span className="font-medium">{p.name}</span>
+                        {isAdmin && !activeParticipantId && (
+                          <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id)}>
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!recordToDelete} onOpenChange={o => !o && setRecordToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -395,7 +409,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Repeat Warning Dialog */}
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

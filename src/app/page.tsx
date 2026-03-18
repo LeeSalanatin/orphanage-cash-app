@@ -62,7 +62,6 @@ export default function Dashboard() {
   const { data: userParticipantData, isLoading: userLoading } = useCollection(userParticipantQuery);
   const userData = userParticipantData?.[0];
   
-  // Important: Use the participant ID (which might be a random Firestore ID or the UID)
   const userParticipantId = userData?.id || user?.uid;
 
   // Global events query for history and records
@@ -109,7 +108,7 @@ export default function Dashboard() {
 
   // Comprehensive fine calculation with session-aware group logic
   const stats = useMemo(() => {
-    if (!myEvents || !allSessions || !allGroups || !rawEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
+    if (!myEvents || !allSessions || !allGroups || !rawEvents) return { totalFines: 0, points: userData?.totalPoints || 0 };
     
     let totalFines = 0;
 
