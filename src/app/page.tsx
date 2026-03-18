@@ -73,7 +73,7 @@ export default function Dashboard() {
     );
   }, [firestore, userParticipantId]);
 
-  // Global Records
+  // Global Records for "Longest Time" tallies
   const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
@@ -87,7 +87,7 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
-    // Total Fines: Sum of user's share of fines recorded in events
+    // Total Fines: Sum of user's individual share recorded in each event
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
 
     // Total Time: Sum of preaching duration
@@ -103,7 +103,7 @@ export default function Dashboard() {
     let grpMax = { time: 0, name: '' };
 
     allEvents.forEach(e => {
-      // Simplified name: strip "CCBB - " prefix if exists
+      // Simplified name: strip group prefix for individual records
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
@@ -190,6 +190,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
+          {/* Detailed Time & Fine History */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -235,6 +236,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
+          {/* Records & Tally Rankings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="shadow-sm border-none bg-card">
               <CardHeader>
