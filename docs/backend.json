@@ -23,7 +23,6 @@
         "userId": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
-        "preachingNickname": { "type": "string" },
         "dateJoined": { "type": "string", "format": "date-time" },
         "totalPoints": { "type": "number" },
         "totalFines": { "type": "number" }
@@ -40,9 +39,10 @@
         "description": { "type": "string" },
         "totalPoints": { "type": "number" },
         "totalFines": { "type": "number" },
-        "members": { "type": "object" }
+        "members": { "type": "object" },
+        "ownerId": { "type": "string" }
       },
-      "required": ["id", "name"]
+      "required": ["id", "name", "ownerId"]
     },
     "Session": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -56,7 +56,13 @@
         "ownerId": { "type": "string" },
         "members": { "type": "object" },
         "votingClosed": { "type": "boolean" },
-        "rewardsDistributed": { "type": "boolean" }
+        "rewardsDistributed": { "type": "boolean" },
+        "sessionDate": { "type": "string" },
+        "maxPreachingTimeMinutes": { "type": "number" },
+        "maxPreachingTimeSeconds": { "type": "number" },
+        "fineRules": { "type": "array" },
+        "votingConfig": { "type": "object" },
+        "pointDistribution": { "type": "object" }
       },
       "required": ["id", "title", "status", "ownerId"]
     },
@@ -107,6 +113,10 @@
     "sessions/{sessionId}/preaching_events/{preachingEventId}": {
       "schema": "PreachingEvent",
       "description": "Records individual preaching events within a session."
+    },
+    "session_configurations/{configId}": {
+      "schema": "object",
+      "description": "Reusable session configuration templates."
     }
   }
 }

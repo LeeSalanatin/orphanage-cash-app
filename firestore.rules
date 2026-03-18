@@ -47,8 +47,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.userId || 
         isAdmin() ||
-        (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', '')) ||
-        (user != null && user.email == resource.data.email)
+        (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', ''))
       );
       allow delete: if isAdmin();
     }
@@ -83,6 +82,11 @@ service cloud.firestore {
     match /roles_admin/{userId} {
       allow get, list: if isSignedIn();
       allow create, update, delete: if isAdmin();
+    }
+    
+    match /session_configurations/{configId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
   }
 }

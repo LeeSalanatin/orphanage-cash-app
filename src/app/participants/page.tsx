@@ -375,7 +375,7 @@ export default function ParticipantsPage() {
                 <Loader2 className="h-10 w-10 animate-spin mx-auto text-muted-foreground" />
               </div>
             ) : groups && groups.map((g) => (
-              <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow">
+              <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow h-full flex flex-col">
                 <CardHeader className="flex flex-row items-start justify-between pb-2">
                   <div className="space-y-1">
                     <CardTitle className="text-xl font-bold text-primary">{g.name}</CardTitle>
@@ -398,14 +398,30 @@ export default function ParticipantsPage() {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex-grow">
                   <div className="flex justify-between text-sm mb-4">
                     <span className="text-muted-foreground">Team Points:</span>
                     <span className="font-bold text-accent">{g.totalPoints || 0} pts</span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground bg-muted p-2 rounded flex items-center gap-2">
-                    <Users className="h-3 w-3" />
-                    Members: {Object.keys(g.members || {}).length > 0 ? (Object.keys(g.members || {}).length / (g.members?.owner ? 1 : 1)).toFixed(0) : 0} assigned
+                  
+                  <div className="space-y-2 mt-4 pt-4 border-t">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
+                      <Users className="h-3 w-3" /> Members List
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.keys(g.members || {}).map(mId => {
+                         const p = participants?.find(part => part.id === mId || part.userId === mId);
+                         if (!p) return null;
+                         return (
+                           <Badge key={mId} variant="outline" className="text-[9px] py-0 h-5 bg-background">
+                             {p.name}
+                           </Badge>
+                         );
+                      })}
+                      {Object.keys(g.members || {}).length === 0 && (
+                        <span className="text-[10px] text-muted-foreground italic">No members assigned yet.</span>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
