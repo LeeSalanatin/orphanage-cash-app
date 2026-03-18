@@ -2,7 +2,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Grant universal access to authenticated users to support global tallies and shared group data
+    // Grant universal access to authenticated users as requested
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }

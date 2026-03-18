@@ -106,14 +106,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           id: r.preachingGroupId,
           name: gInfo?.name || 'Unknown',
           totalSeconds: 0,
-          uniqueParticipantIds: new Set(),
-          allGroupMembers: gInfo?.members || {},
-          members: []
+          allGroupMembers: gInfo?.members || {}
         };
       }
       groups[r.preachingGroupId].totalSeconds += r.actualDurationSeconds;
-      groups[r.preachingGroupId].uniqueParticipantIds.add(r.participantId);
-      groups[r.preachingGroupId].members.push(r);
     });
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
@@ -123,7 +119,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      // Fine is split among all group members registered in the group roster
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
@@ -136,7 +131,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
   }, [records, session, allGroups]);
 
-  // Create a map for quick lookups in the table
   const groupStatsMap = useMemo(() => {
     const map: Record<string, { totalFine: number, splitFine: number, groupCode: string }> = {};
     groupDistributions.forEach(d => {
@@ -177,7 +171,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Track participants involved in this specific record for dashboard filtering
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -187,10 +180,26 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     
-    // Individual logic for initial fine (group fines calculated via tally later)
-    const overageSeconds = activeGroupId ? 0 : Math.max(0, timer - maxSeconds);
-    const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
-    const initialFine = activeGroupId ? 0 : (rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60));
+    let fineToRecord = 0;
+    if (!activeGroupId) {
+      // Individual session: Record fine immediately
+      const overageSeconds = Math.max(0, timer - maxSeconds);
+      const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+      fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+    } else {
+      // Group session: Estimate current share of total group fine
+      const existingGroupTime = records
+        .filter(r => r.preachingGroupId === activeGroupId)
+        .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
+      
+      const totalEstimatedTime = existingGroupTime + timer;
+      const overageSeconds = Math.max(0, totalEstimatedTime - maxSeconds);
+      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+      const totalEstimatedFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+      
+      const memberCount = Math.max(1, Object.keys(targetGroup?.members || {}).filter(k => k !== 'owner').length);
+      fineToRecord = totalEstimatedFine / memberCount;
+    }
 
     const eventData = {
       sessionId: id,
@@ -199,11 +208,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       participantName: targetGroup ? `${targetGroup.name} - ${targetParticipant?.name}` : targetParticipant?.name || 'Unknown',
       actualDurationSeconds: timer,
       actualDurationFormatted: formatDuration(timer),
-      overageSeconds,
+      overageSeconds: Math.max(0, timer - maxSeconds),
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
-      totalFineAmount: initialFine,
-      explanation: initialFine > 0 ? `Individual overage: ${formatDuration(overageSeconds)}.` : "Timer recorded.",
+      totalFineAmount: fineToRecord,
+      explanation: fineToRecord > 0 ? `Overage recorded.` : "Timer recorded.",
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' },
       eventParticipants: participantsMap
@@ -262,14 +271,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <TableRow>
                     <TableHead>Participant</TableHead>
                     <TableHead>Time</TableHead>
-                    <TableHead>Group Fine Context (Share / Total)</TableHead>
-                    <TableHead className="text-right">Your Fine (₱)</TableHead>
+                    <TableHead>Group Fine (Share / Total)</TableHead>
+                    <TableHead className="text-right">Total Fine (₱)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {records.map(r => {
                     const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
-                    // Strip prefix for simplified name
                     const simplifiedName = r.participantName.split(' - ').pop();
                     
                     return (
@@ -309,14 +317,39 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Card>
                 <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {availableParticipants?.map(p => (
-                    <div key={p.id} className="p-4 border rounded-lg flex justify-between items-center bg-card">
-                      <span className="font-medium">{p.name}</span>
-                      {isAdmin && (
-                        <Button size="sm" variant="ghost" disabled={!!activeParticipantId} onClick={() => handleStartTracking(p.id)}><Play className="h-4 w-4" /></Button>
-                      )}
-                    </div>
-                  ))}
+                  {availableParticipants?.map(p => {
+                     // Check if this is a group session and they belong to a group
+                     const participantGroups = allGroups?.filter(g => g.members && g.members[p.id]);
+                     
+                     return (
+                        <div key={p.id} className="p-4 border rounded-lg space-y-3 bg-card">
+                          <div className="flex justify-between items-start">
+                            <span className="font-medium">{p.name}</span>
+                            {isAdmin && !activeParticipantId && (
+                              <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id)}>
+                                <Play className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          {session?.sessionType === 'group' && participantGroups && participantGroups.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {participantGroups.map(g => (
+                                <Button 
+                                  key={g.id} 
+                                  size="sm" 
+                                  variant="secondary" 
+                                  className="text-[10px] h-6 px-2"
+                                  disabled={!!activeParticipantId}
+                                  onClick={() => handleStartTracking(p.id, g.id)}
+                                >
+                                  {g.name}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                     );
+                  })}
                 </CardContent>
               </Card>
             </div>

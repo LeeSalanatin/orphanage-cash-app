@@ -67,23 +67,20 @@ export default function Dashboard() {
   const userParticipantId = userData?.id || user?.uid;
 
   // Participation History (Aggregated across all sessions)
-  // Use collectionGroup to find events where the user is a participant
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !userParticipantId) return null;
-    // We filter using the eventParticipants map added during recording
     return query(
       collectionGroup(firestore, 'preaching_events'),
       where(`eventParticipants.${userParticipantId}`, '==', true)
     );
   }, [firestore, userParticipantId]);
 
-  // Global Tallies (Longest Individual & Group)
+  // Global Records (Longest Individual & Group)
   const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
   }, [firestore, user]);
 
-  // Global counts
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'sessions'), limit(100));
@@ -108,7 +105,7 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
-    // Total Fines: Sum of user's shares in these events
+    // Total Fines: Sum of user's individual share of fines
     const totalFines = myEvents.reduce((sum, e) => {
       return sum + (e.totalFineAmount || 0);
     }, 0);
@@ -222,16 +219,16 @@ export default function Dashboard() {
                       <div className="flex items-center gap-4">
                         <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
                         <div>
-                          <p className="font-semibold text-sm">{event.participantName}</p>
+                          <p className="font-semibold text-sm">{event.participantName.split(' - ').pop()}</p>
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                             {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                            {event.preachingGroupId ? 'Group Session' : 'Individual Session'}
+                            {event.preachingGroupId ? `Group: ${event.participantName.split(' - ')[0]}` : 'Individual Preach'}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        {event.totalFineAmount > 0 && <p className="text-[10px] font-bold text-destructive">Fine: ₱{event.totalFineAmount.toFixed(2)}</p>}
+                        {event.totalFineAmount > 0 && <p className="text-[10px] font-bold text-destructive">Fine Share: ₱{event.totalFineAmount.toFixed(2)}</p>}
                       </div>
                     </div>
                   ))}
@@ -258,7 +255,7 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-1 pt-4 border-t">
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Group Performance</p>
-                  <p className="font-bold text-lg">{globalRecords.longestGroup?.name || 'N/A'}</p>
+                  <p className="font-bold text-lg">{globalRecords.longestGroup?.name?.split(' - ')[0] || 'N/A'}</p>
                   <p className="text-xs text-accent font-mono">{formatDuration(globalRecords.longestGroup?.time || 0)}</p>
                 </div>
               </CardContent>
