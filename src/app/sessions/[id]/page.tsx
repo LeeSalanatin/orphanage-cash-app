@@ -39,6 +39,8 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use, useMemo } from 'react';
 
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
+
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useUser();
@@ -91,6 +93,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  // Pre-calculate group distribution for the tally table
   const groupDistributions = useMemo(() => {
     if (!records || session?.sessionType !== 'group') return [];
     
@@ -119,6 +122,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return Object.values(groups).map(g => {
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+      
+      // Fine is split among all group members registered in the group roster
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
@@ -131,6 +136,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
   }, [records, session, allGroups]);
 
+  // Create a map for quick lookups in the table
   const groupStatsMap = useMemo(() => {
     const map: Record<string, { totalFine: number, splitFine: number, groupCode: string }> = {};
     groupDistributions.forEach(d => {
@@ -171,6 +177,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
+    // Track participants involved in this specific record for dashboard filtering
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -179,6 +186,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     }
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+    
+    // Individual logic for initial fine (group fines calculated via tally later)
     const overageSeconds = activeGroupId ? 0 : Math.max(0, timer - maxSeconds);
     const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
     const initialFine = activeGroupId ? 0 : (rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60));
@@ -260,7 +269,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <TableBody>
                   {records.map(r => {
                     const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
+                    // Strip prefix for simplified name
                     const simplifiedName = r.participantName.split(' - ').pop();
+                    
                     return (
                       <TableRow key={r.id}>
                         <TableCell className="font-bold">{simplifiedName}</TableCell>
@@ -315,7 +326,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Already Recorded</AlertDialogTitle><AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Already Recorded</AlertDialogTitle>
+            <AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription>
+          </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>

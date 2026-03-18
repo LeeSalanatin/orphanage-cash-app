@@ -52,7 +52,7 @@ export default function Dashboard() {
     checkAdmin();
   }, [firestore, user]);
 
-  // Find the participant record
+  // Find the participant record to get linked ID
   const userParticipantQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -66,7 +66,24 @@ export default function Dashboard() {
   const userData = userParticipantData?.[0];
   const userParticipantId = userData?.id || user?.uid;
 
-  // Global access: Fetch counts
+  // Participation History (Aggregated across all sessions)
+  // Use collectionGroup to find events where the user is a participant
+  const myEventsQuery = useMemoFirebase(() => {
+    if (!firestore || !userParticipantId) return null;
+    // We filter using the eventParticipants map added during recording
+    return query(
+      collectionGroup(firestore, 'preaching_events'),
+      where(`eventParticipants.${userParticipantId}`, '==', true)
+    );
+  }, [firestore, userParticipantId]);
+
+  // Global Tallies (Longest Individual & Group)
+  const allEventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
+  }, [firestore, user]);
+
+  // Global counts
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'sessions'), limit(100));
@@ -82,21 +99,6 @@ export default function Dashboard() {
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
-  // Participation History (Aggregated across all sessions)
-  const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !userParticipantId) return null;
-    return query(
-      collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${userParticipantId}`, '==', true)
-    );
-  }, [firestore, userParticipantId]);
-
-  // Global Top Records (Longest Individual & Group)
-  const allEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
-  }, [firestore, user]);
-
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
@@ -106,9 +108,8 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
-    // Total Fines: Sum of individual shares across all sessions
+    // Total Fines: Sum of user's shares in these events
     const totalFines = myEvents.reduce((sum, e) => {
-      // If it's a group session, totalFineAmount already holds the shared amount for the participant
       return sum + (e.totalFineAmount || 0);
     }, 0);
 
