@@ -345,7 +345,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const overageSeconds = Math.max(0, totalGroupSeconds - maxSeconds);
     
-    // Default rate if not found: 30 per minute (0.50 per second)
     const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
     
     let totalGroupFine = 0;
@@ -353,6 +352,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       if (rule.type === 'fixed') {
         totalGroupFine = rule.amount;
       } else {
+        // Compute per minute (which is rate / 60 per second)
         totalGroupFine = overageSeconds * (rule.amount / 60);
       }
     }
@@ -366,7 +366,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       updateDocumentNonBlocking(docRef, {
         totalFineAmount: splitFine,
         explanation: totalGroupFine > 0 
-          ? `Group overage: ${formattedOverage}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${numParticipants} members.`
+          ? `Group overage: ${formattedOverage}. Total group fine ₱${totalGroupFine.toFixed(2)} split among ${numParticipants} unique members.`
           : "Group stayed within time limit."
       });
     });
@@ -387,7 +387,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     }
 
     // Default for groups (will be recalculated by split logic)
-    return { totalFineAmount: 0, explanation: "Pending group split...", overageSeconds: 0 };
+    return { totalFineAmount: 0, explanation: "Pending group split computation...", overageSeconds: 0 };
   }
 
   async function handleStopTracking() {
@@ -418,7 +418,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const docRef = await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
     if (activeGroupId) {
-      // Trigger group recalculation with a slight delay to ensure onSnapshot doesn't clash
+      // Trigger group recalculation
       setTimeout(() => recalculateGroupFines(activeGroupId!, { ...eventData, id: docRef!.id }), 500);
     }
 
@@ -453,7 +453,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         });
       }
 
-      toast({ title: "Record Updated", description: "Fines have been recalculated." });
+      toast({ title: "Record Updated", description: "Incentives and fines have been recalculated." });
       setEditingRecord(null);
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Could not update record." });
@@ -637,7 +637,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center text-accent">
                       <div className={cn("w-3 h-3 bg-accent rounded-full mr-2", !isPaused && "animate-pulse")} />
-                      {isPaused ? 'Timer Paused' : 'Live Stopwatch'}
+                      {isPaused ? 'Timer Paused' : 'Live Stopwatch Recording'}
                     </CardTitle>
                     <Button variant="ghost" size="sm" onClick={handleCancelTracking} className="text-muted-foreground hover:text-destructive">
                       <XCircle className="h-4 w-4 mr-1" /> Cancel
@@ -689,7 +689,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                                 </div>
                                 <div className="flex flex-col items-end">
                                   <Badge variant={item.totalFine > 0 ? "destructive" : "outline"} className="text-[10px] h-5">
-                                    {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Fine` : 'No Fine'}
+                                    {item.totalFine > 0 ? `₱${item.totalFine.toFixed(2)} Shared Fine` : 'No Fine'}
                                   </Badge>
                                 </div>
                               </div>
@@ -749,7 +749,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         </div>
                       ))}
                     </div>
-                  ) : <div className="text-center py-10 text-muted-foreground">No records yet.</div>}
+                  ) : <div className="text-center py-10 text-muted-foreground">No preaching history records found.</div>}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -783,9 +783,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <HistoryIcon className="h-5 w-5 text-accent" />
-                    Incentives & Fines Table
+                    Incentives & Shared Fines
                   </CardTitle>
-                  <CardDescription>Final records and group-based fine calculations.</CardDescription>
+                  <CardDescription>Final records and collective fine distributions for this session.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -1143,7 +1143,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <DialogTitle>Edit Recorded Time</DialogTitle>
             <DialogDescription>
               Adjust the preaching duration for <strong>{editingRecord?.participantName}</strong>. 
-              Fines are recalculated based on the cumulative group total.
+              Shared fines are recalculated based on the cumulative group total.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
@@ -1183,7 +1183,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the preaching record and its associated fine.
+              This action cannot be undone. This will permanently delete the preaching record and its associated shared fine impact.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

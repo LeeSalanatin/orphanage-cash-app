@@ -28,7 +28,7 @@
         "totalPoints": { "type": "number" },
         "totalFines": { "type": "number" }
       },
-      "required": ["id", "dateJoined", "email"]
+      "required": ["id", "dateJoined"]
     },
     "Group": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -114,10 +114,6 @@
     "sessions/{sessionId}/preaching_events/{preachingEventId}": {
       "schema": "PreachingEvent",
       "description": "Records individual preaching events within a session."
-    },
-    "session_configurations/{configId}": {
-      "schema": "object",
-      "description": "Reusable session configuration templates."
     }
   }
 }
