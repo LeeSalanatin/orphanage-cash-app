@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -65,15 +66,11 @@ export default function ParticipantsPage() {
     return collection(firestore, 'roles_admin');
   }, [firestore, user]);
 
-  // Restrict group visibility to own groups for non-admins
+  // Global access: Everyone sees all groups
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    if (isAdmin) return collection(firestore, 'groups');
-    return query(
-      collection(firestore, 'groups'),
-      where(`members.${user.uid}`, '!=', null)
-    );
-  }, [firestore, user, isAdmin]);
+    return collection(firestore, 'groups');
+  }, [firestore, user]);
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
   const { data: admins, isLoading: adminsLoading } = useCollection(adminsRef);
@@ -186,7 +183,7 @@ export default function ParticipantsPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">Participants</h1>
-          <p className="text-muted-foreground">Manage individuals, teams, and administrative roles.</p>
+          <p className="text-muted-foreground">Global view of individuals, teams, and administrative roles.</p>
         </div>
         {isAdmin && (
           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-3 py-1 flex gap-2">
@@ -206,7 +203,7 @@ export default function ParticipantsPage() {
             <Card className="shadow-md">
               <CardHeader>
                 <CardTitle>Add Participant</CardTitle>
-                <CardDescription>Register a new preacher. You can edit their name and email later.</CardDescription>
+                <CardDescription>Register a new preacher.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div className="space-y-1">
@@ -325,13 +322,6 @@ export default function ParticipantsPage() {
                       </TableRow>
                     );
                   })}
-                  {!participantsLoading && (!participants || participants.length === 0) && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
-                        No participants registered yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -343,7 +333,7 @@ export default function ParticipantsPage() {
             <Card className="shadow-md">
               <CardHeader>
                 <CardTitle>Create New Group</CardTitle>
-                <CardDescription>Organize participants into teams for group sessions.</CardDescription>
+                <CardDescription>Organize participants into teams.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -357,7 +347,7 @@ export default function ParticipantsPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="groupDescription">Description (e.g., Center, CDO...)</Label>
+                    <Label htmlFor="groupDescription">Description</Label>
                     <Input 
                       id="groupDescription" 
                       value={newGroupDescription} 
@@ -396,7 +386,7 @@ export default function ParticipantsPage() {
                         <Settings2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
                       </Button>
                     )}
-                    {(user?.uid === g.ownerId || isAdmin) && (
+                    {isAdmin && (
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                       </Button>
@@ -423,19 +413,11 @@ export default function ParticipantsPage() {
                            </Badge>
                          );
                       })}
-                      {Object.keys(g.members || {}).length === 0 && (
-                        <span className="text-[10px] text-muted-foreground italic">No members assigned yet.</span>
-                      )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
-            {!groupsLoading && (!groups || groups.length === 0) && (
-              <div className="col-span-full text-center py-10 text-muted-foreground">
-                No groups found for you.
-              </div>
-            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -445,9 +427,6 @@ export default function ParticipantsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Participant Profile</DialogTitle>
-            <DialogDescription>
-              Update name and email details. Changing email will affect account linkage.
-            </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
@@ -459,22 +438,18 @@ export default function ParticipantsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="editEmail" className="flex items-center gap-2">
-                <Mail className="h-3 w-3" /> Email Address
-              </Label>
+              <Label htmlFor="editEmail">Email Address</Label>
               <Input 
                 id="editEmail" 
                 type="email"
                 value={editEmailValue} 
                 onChange={(e) => setEditEmailValue(e.target.value)} 
-                placeholder="Required for linkage"
               />
-              <p className="text-[10px] text-muted-foreground italic">Important: Ensure this matches the email used to sign in.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingParticipant(null)}>Cancel</Button>
-            <Button onClick={handleUpdateProfile}>Save Profile Changes</Button>
+            <Button onClick={handleUpdateProfile}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -484,15 +459,10 @@ export default function ParticipantsPage() {
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Manage Members: {managingGroup?.name}</DialogTitle>
-            <DialogDescription>
-              Assign participants to this group. Members will receive split rewards and fines.
-            </DialogDescription>
           </DialogHeader>
           
           <div className="flex-grow overflow-y-auto py-4 space-y-2 pr-2">
-            {participantsLoading ? (
-              <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
-            ) : participants?.map((p) => (
+            {participants?.map((p) => (
               <div 
                 key={p.id} 
                 className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
@@ -507,7 +477,6 @@ export default function ParticipantsPage() {
                   <Label htmlFor={`member-${p.id}`} className="font-medium cursor-pointer">{p.name}</Label>
                   <p className="text-[10px] text-muted-foreground">{p.email || 'No email'}</p>
                 </div>
-                {p.userId && <Badge variant="outline" className="text-[9px] h-4">Registered</Badge>}
               </div>
             ))}
           </div>

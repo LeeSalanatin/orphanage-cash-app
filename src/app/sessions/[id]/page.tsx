@@ -235,7 +235,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Build a map of all participants involved in this specific record for security rules
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -279,7 +278,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   );
 
   if (!session) return null;
-  const isAdmin = user?.uid === session.ownerId;
+  const isAdmin = user?.uid === session.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -369,7 +368,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Context</TableHead>
+                        <TableHead>Group Fine</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead className="text-right">Share (₱)</TableHead>
                       </TableRow>
@@ -382,7 +381,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <TableRow key={r.id}>
                             <TableCell className="font-medium">{simplifiedName}</TableCell>
                             <TableCell className="text-xs font-mono text-muted-foreground">
-                              {gStats ? `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
+                              {r.preachingGroupId && gStats ? (
+                                `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})`
+                              ) : (
+                                'Individual'
+                              )}
                             </TableCell>
                             <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
                             <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>

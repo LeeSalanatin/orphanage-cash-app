@@ -33,7 +33,7 @@ export default function Dashboard() {
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // Check admin status
+  // Check admin status for UI badges
   useEffect(() => {
     if (!firestore || !user) return;
     const checkAdmin = async () => {
@@ -51,63 +51,54 @@ export default function Dashboard() {
     checkAdmin();
   }, [firestore, user]);
 
-  // Sessions: Admins see all, Users see sessions they are members of
-  const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isAdmin === null) return null;
-    if (isAdmin) return query(collection(firestore, 'sessions'), limit(20));
+  // Find the participant record linked to this user for personal stats
+  const userParticipantQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
     return query(
-      collection(firestore, 'sessions'),
-      where(`members.${user.uid}`, '!=', null),
-      limit(20)
+      collection(firestore, 'participants'),
+      where('userId', '==', user.uid),
+      limit(1)
     );
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user]);
 
-  // Groups: Admins see all, Users see their own
+  const { data: userParticipantData, isLoading: userLoading } = useCollection(userParticipantQuery);
+  const userData = userParticipantData?.[0];
+  const userParticipantId = userData?.id;
+
+  // Global access: Fetch all sessions, groups, and participants without filtering
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'sessions'), limit(20));
+  }, [firestore, user]);
+
   const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isAdmin === null) return null;
-    if (isAdmin) return collection(firestore, 'groups');
-    return query(
-      collection(firestore, 'groups'),
-      where(`members.${user.uid}`, '!=', null)
-    );
-  }, [firestore, user, isAdmin]);
+    if (!firestore || !user) return null;
+    return collection(firestore, 'groups');
+  }, [firestore, user]);
 
   const participantsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const userParticipantRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'participants', user.uid);
-  }, [firestore, user]);
-
-  // Query ALL preaching events across ALL sessions involving the current user to sum personal fines
+  // Personal fines: Still need to filter by the user's participation for the "Your Fines" card
   const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !userParticipantId) return null;
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${user.uid}`, '==', true)
+      where(`eventParticipants.${userParticipantId}`, '==', true)
     );
-  }, [firestore, user]);
+  }, [firestore, userParticipantId]);
 
-  // Feed: Admins see all system activity, Users see their individual and group activity
+  // Global activity feed: Everyone sees everything
   const feedEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isAdmin === null) return null;
-    if (isAdmin) {
-      return query(collectionGroup(firestore, 'preaching_events'), limit(20));
-    }
-    return query(
-      collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${user.uid}`, '==', true),
-      limit(20)
-    );
-  }, [firestore, user, isAdmin]);
+    if (!firestore || !user) return null;
+    return query(collectionGroup(firestore, 'preaching_events'), limit(20));
+  }, [firestore, user]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
-  const { data: myGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: myEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
   const { data: feedEvents, isLoading: feedLoading } = useCollection(feedEventsQuery);
 
@@ -130,11 +121,11 @@ export default function Dashboard() {
   }, [participants]);
 
   const topGroups = useMemo(() => {
-    if (!myGroups) return [];
-    return [...myGroups]
+    if (!allGroups) return [];
+    return [...allGroups]
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
       .slice(0, 5);
-  }, [myGroups]);
+  }, [allGroups]);
 
   const participationBySession = useMemo(() => {
     if (!feedEvents) return {};
@@ -147,19 +138,17 @@ export default function Dashboard() {
   }, [feedEvents]);
 
   const totalFinesSum = useMemo(() => {
-    if (!myEvents || !user) return 0;
-    // Sum the fine records for the current user. 
-    // totalFineAmount is the individual share for both individual and group preaching events.
+    if (!myEvents) return 0;
     return myEvents.reduce((sum, event) => {
       return sum + (event.totalFineAmount || 0);
     }, 0);
-  }, [myEvents, user]);
+  }, [myEvents]);
 
   const stats = {
     totalSessions: rawSessions?.length || 0,
     activeSessions: rawSessions?.filter((s: any) => s.status === 'active').length || 0,
     totalParticipants: participants?.length || 0,
-    totalGroups: myGroups?.length || 0,
+    totalGroups: allGroups?.length || 0,
     myPoints: userData?.totalPoints || 0,
     myFines: totalFinesSum
   };
@@ -217,10 +206,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title={isAdmin ? "Total Sessions" : "My Sessions"} 
+          title="Total Sessions" 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description={isAdmin ? "Sessions across the system" : "Sessions you are part of"}
+          description="Global session count"
         />
         <StatCard 
           title="Active Now" 
@@ -233,13 +222,13 @@ export default function Dashboard() {
           title="Total Preachers" 
           value={stats.totalParticipants.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Total registered in the system"
+          description="Registered participants"
         />
         <StatCard 
-          title="Your Teams" 
+          title="Total Groups" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Groups you belong to"
+          description="Organized teams"
         />
       </div>
 
@@ -249,9 +238,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "My History"}</CardTitle>
+                  <CardTitle>System Activity</CardTitle>
                   <CardDescription>
-                    {isAdmin ? "Latest records across the system." : "Your individual and team preaching records."}
+                    Latest preaching records across the system.
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -266,9 +255,9 @@ export default function Dashboard() {
                 <div className="flex justify-center py-10">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : (recentSessions && recentSessions.length > 0) || (Object.keys(participationBySession).length > 0) ? (
+              ) : recentSessions && recentSessions.length > 0 ? (
                 <div className="space-y-4">
-                  {(isAdmin ? recentSessions : recentSessions.filter(s => !!participationBySession[s.id])).map((session) => {
+                  {recentSessions.map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
                     
                     return (
@@ -320,11 +309,9 @@ export default function Dashboard() {
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground mb-4">No activity found yet.</p>
-                  {isAdmin && (
-                    <Button asChild>
-                      <Link href="/sessions/new">Create Your First Session</Link>
-                    </Button>
-                  )}
+                  <Button asChild>
+                    <Link href="/sessions/new">Create Your First Session</Link>
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -343,11 +330,11 @@ export default function Dashboard() {
                   {topIndividuals.map((p, i) => (
                     <div key={p.id} className={cn(
                       "flex items-center justify-between p-2 rounded-lg transition-colors",
-                      p.id === user.uid ? "bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/50"
+                      p.userId === user.uid ? "bg-primary/5 ring-1 ring-primary/20" : "hover:bg-muted/50"
                     )}>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-bold text-muted-foreground w-6">#{i+1}</span>
-                        <span className="font-medium">{p.name} {p.id === user.uid && "(You)"}</span>
+                        <span className="font-medium">{p.name} {p.userId === user.uid && "(You)"}</span>
                       </div>
                       <span className="text-sm font-bold text-accent">{p.totalPoints || 0} pts</span>
                     </div>
@@ -387,35 +374,24 @@ export default function Dashboard() {
               <CardDescription>Tools for administrators.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isAdmin ? (
-                <>
-                  <Button className="w-full justify-start h-12" variant="outline" asChild>
-                    <Link href="/sessions/new">
-                      <PlusCircle className="mr-3 h-5 w-5 text-primary" />
-                      New Preaching Session
-                    </Link>
-                  </Button>
-                  <Button className="w-full justify-start h-12" variant="outline" asChild>
-                    <Link href="/participants">
-                      <Users className="mr-3 h-5 w-5 text-primary" />
-                      Participant Roster
-                    </Link>
-                  </Button>
-                  <Button className="w-full justify-start h-12" variant="outline" asChild>
-                    <Link href="/configurations">
-                      <Settings2 className="mr-3 h-5 w-5 text-primary" />
-                      Rule Set Templates
-                    </Link>
-                  </Button>
-                </>
-              ) : (
-                <div className="py-4 text-center">
-                  <p className="text-sm text-muted-foreground italic">Administrative actions are restricted.</p>
-                  <Button variant="ghost" className="mt-4 w-full" asChild>
-                    <Link href="/participants">View Your Profile</Link>
-                  </Button>
-                </div>
-              )}
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
+                <Link href="/sessions/new">
+                  <PlusCircle className="mr-3 h-5 w-5 text-primary" />
+                  New Preaching Session
+                </Link>
+              </Button>
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
+                <Link href="/participants">
+                  <Users className="mr-3 h-5 w-5 text-primary" />
+                  Participant Roster
+                </Link>
+              </Button>
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
+                <Link href="/configurations">
+                  <Settings2 className="mr-3 h-5 w-5 text-primary" />
+                  Rule Set Templates
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

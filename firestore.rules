@@ -2,93 +2,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Helper Functions ---
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'yfjcenter@gmail.com' || 
-        request.auth.token.email == 'yfj@example.com' || 
-        request.auth.token.email == 'admin@example.com' ||
-        request.auth.token.email == 'salanatin.leejay12@gmail.com' ||
-        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))
-      );
-    }
-
-    // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
-    
-    match /{allPaths=**}/preaching_events/{eventId} {
-      // Allow list/read for all signed-in users to support collectionGroup queries reliably
-      // Privacy is maintained by UI filtering and specific document access rules
-      allow read, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.sessionOwnerId);
-    }
-
-    match /{allPaths=**}/votes/{voteId} {
-      allow read, list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && request.auth.uid == resource.data.voterParticipantId;
-      allow delete: if isAdmin();
-    }
-
-    // --- Root Collections ---
-
-    match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create, update: if isSignedIn() && request.auth.uid == userId;
-    }
-
-    match /participants/{participantId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.userId || 
-        isAdmin() ||
-        (resource.data.get('userId', null) == null && request.auth.token.email == resource.data.get('email', ''))
-      );
-      allow delete: if isAdmin();
-    }
-
-    match /groups/{groupId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.ownerId || 
-        isAdmin()
-      );
-      allow delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
-    }
-
-    match /sessions/{sessionId} {
-      allow read: if isSignedIn();
-      allow create: if isAdmin() || isSignedIn();
-      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
-
-      match /preaching_events/{eventId} {
-        allow read, write: if isSignedIn();
-      }
-      match /fines/{fineId} {
-        allow read, write: if isSignedIn();
-      }
-      match /votes/{voteId} {
-        allow read, write: if isSignedIn();
-      }
-    }
-
-    match /roles_admin/{userId} {
-      allow get, list: if isSignedIn();
-      allow create, update, delete: if isAdmin();
-    }
-    
-    match /session_configurations/{configId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn() && (request.auth.uid == request.resource.data.ownerId || isAdmin());
+    // Grant global read/write access to all authenticated users as requested.
+    // This allows both admins and regular users to access all sessions, groups, and events.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
