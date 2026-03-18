@@ -13,7 +13,34 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Mic2, Clock, Play, StopCircle, XCircle, Vote, Loader2, Settings2, Trophy, History, Gavel, Users as UsersIcon, Info, Star, CheckCircle2, User, Calendar, Edit2, Save, Trash2, Timer, Lock, Unlock } from 'lucide-react';
+import { 
+  Mic2, 
+  Clock, 
+  Play, 
+  Pause,
+  StopCircle, 
+  XCircle, 
+  Vote, 
+  Loader2, 
+  Settings2, 
+  Trophy, 
+  History, 
+  Gavel, 
+  Users as UsersIcon, 
+  Info, 
+  Star, 
+  CheckCircle2, 
+  User, 
+  Calendar, 
+  Edit2, 
+  Save, 
+  Trash2, 
+  Timer, 
+  Lock, 
+  Unlock,
+  AlertTriangle,
+  History as HistoryIcon
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
@@ -29,6 +56,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Repeat Preaching Confirmation
+  const [repeatPreachContext, setRepeatPreachContext] = useState<{pId: string, gId: string | null} | null>(null);
 
   // Edit States for Session Settings
   const [editTitle, setEditTitle] = useState('');
@@ -253,28 +284,47 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     let interval: any;
-    if (activeParticipantId) {
+    if (activeParticipantId && !isPaused) {
       interval = setInterval(() => {
         setTimer(t => t + 1);
       }, 1000);
-    } else {
-      setTimer(0);
     }
     return () => clearInterval(interval);
-  }, [activeParticipantId]);
+  }, [activeParticipantId, isPaused]);
 
   function handleStartTracking(participantId: string, groupId: string | null = null) {
     if (activeParticipantId) return;
+
+    // Check for existing record
+    const hasExisting = records.some(r => r.participantId === participantId && r.preachingGroupId === groupId);
+    if (hasExisting) {
+      setRepeatPreachContext({ pId: participantId, gId: groupId });
+      return;
+    }
+
+    proceedWithTracking(participantId, groupId);
+  }
+
+  function proceedWithTracking(participantId: string, groupId: string | null = null) {
     setActiveParticipantId(participantId);
     setActiveGroupId(groupId);
+    setIsPaused(false);
+    setTimer(0);
+    setRepeatPreachContext(null);
     toast({ title: "Timer Started", description: "Time is now being recorded." });
   }
 
   function handleCancelTracking() {
     setActiveParticipantId(null);
     setActiveGroupId(null);
+    setIsPaused(false);
     setTimer(0);
     toast({ title: "Tracking Cancelled" });
+  }
+
+  function togglePause() {
+    setIsPaused(!isPaused);
+    toast({ title: isPaused ? "Timer Resumed" : "Timer Paused" });
   }
 
   async function calculateFineForRecord(durationSeconds: number, isGroup: boolean) {
@@ -355,6 +405,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     setActiveParticipantId(null);
     setActiveGroupId(null);
     setTimer(0);
+    setIsPaused(false);
     toast({ title: "Preaching Recorded" });
   }
 
@@ -529,7 +580,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               )}
               <Button onClick={toggleSessionStatus} variant={session.status === 'active' ? 'destructive' : 'default'} className="shadow-lg">
                 {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                {session.status === 'active' ? 'End Session' : 'Start Session'}
+                {session.status === 'active' ? 'End Session' : (session.status === 'completed' ? 'Reopen Session' : 'Start Session')}
               </Button>
             </>
           )}
@@ -551,8 +602,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in duration-300">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center text-accent">
-                      <div className="w-3 h-3 bg-accent rounded-full animate-pulse mr-2" />
-                      Live Stopwatch
+                      <div className={cn("w-3 h-3 bg-accent rounded-full mr-2", !isPaused && "animate-pulse")} />
+                      {isPaused ? 'Timer Paused' : 'Live Stopwatch'}
                     </CardTitle>
                     <Button variant="ghost" size="sm" onClick={handleCancelTracking} className="text-muted-foreground hover:text-destructive">
                       <XCircle className="h-4 w-4 mr-1" /> Cancel
@@ -563,12 +614,18 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       {activeGroupId && <span className="block text-sm text-muted-foreground mb-1">{allGroups?.find(g => g.id === activeGroupId)?.name}</span>}
                       {availableParticipants?.find(p => p.id === activeParticipantId)?.name}
                     </p>
-                    <div className="text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8">
+                    <div className={cn("text-7xl font-mono font-bold tracking-tighter tabular-nums mb-8", isPaused && "opacity-50")}>
                       {formatDuration(timer)}
                     </div>
-                    <Button size="lg" variant="destructive" className="w-full max-w-xs h-14" onClick={handleStopTracking}>
-                      <StopCircle className="mr-2 h-6 w-6" /> Stop & Record
-                    </Button>
+                    <div className="flex gap-4 w-full max-w-sm">
+                      <Button size="lg" variant="secondary" className="flex-1 h-14" onClick={togglePause}>
+                        {isPaused ? <Play className="mr-2 h-6 w-6" /> : <Pause className="mr-2 h-6 w-6" />}
+                        {isPaused ? 'Resume' : 'Pause'}
+                      </Button>
+                      <Button size="lg" variant="destructive" className="flex-1 h-14" onClick={handleStopTracking}>
+                        <StopCircle className="mr-2 h-6 w-6" /> Stop
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -664,31 +721,89 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </TabsContent>
 
             <TabsContent value="results" className="space-y-8">
-              {session.votingConfig?.enabled && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Card className="bg-primary/5 border-primary/10">
-                    <CardContent className="pt-6 text-center">
-                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Total Preachers</p>
-                      <p className="text-3xl font-bold text-primary">{preachingCount}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-accent/5 border-accent/10">
-                    <CardContent className="pt-6 text-center">
-                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Votes Cast</p>
-                      <p className="text-3xl font-bold text-accent">{voteCount}</p>
-                    </CardContent>
-                  </Card>
-                  <Card className={cn(session.votingClosed ? "bg-destructive/5 border-destructive/10" : "bg-green-500/5 border-green-500/10")}>
-                    <CardContent className="pt-6 text-center">
-                      <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Voting Status</p>
-                      <p className={cn("text-xl font-bold flex items-center justify-center gap-2", session.votingClosed ? "text-destructive" : "text-green-600")}>
-                        {session.votingClosed ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        {session.votingClosed ? 'Closed' : 'Open'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="bg-primary/5 border-primary/10">
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Total Preachers</p>
+                    <p className="text-3xl font-bold text-primary">{preachingCount}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-accent/5 border-accent/10">
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Votes Cast</p>
+                    <p className="text-3xl font-bold text-accent">{voteCount}</p>
+                  </CardContent>
+                </Card>
+                <Card className={cn(session.votingClosed ? "bg-destructive/5 border-destructive/10" : "bg-green-500/5 border-green-500/10")}>
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-xs uppercase font-bold text-muted-foreground mb-1">Voting Status</p>
+                    <p className={cn("text-xl font-bold flex items-center justify-center gap-2", session.votingClosed ? "text-destructive" : "text-green-600")}>
+                      {session.votingClosed ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                      {session.votingClosed ? 'Closed' : 'Open'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border-accent/20">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <HistoryIcon className="h-5 w-5 text-accent" />
+                    Incentives & Fines Table
+                  </CardTitle>
+                  <CardDescription>Final records and automatic fine calculations.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Participant</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Fine (₱)</TableHead>
+                        <TableHead>Note</TableHead>
+                        {isAdmin && <TableHead className="text-right">Action</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {records.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-medium text-xs">{r.participantName}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
+                          <TableCell className="text-destructive font-bold text-xs">
+                            {r.totalFineAmount > 0 ? `₱${r.totalFineAmount.toFixed(2)}` : '—'}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate text-[10px] text-muted-foreground" title={r.explanation}>
+                            {r.explanation}
+                          </TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  setEditingRecord(r);
+                                  setNewMin(Math.floor(r.actualDurationSeconds / 60).toString());
+                                  setNewSec((r.actualDurationSeconds % 60).toString());
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                      {records.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground italic text-xs">
+                            No preaching records generated yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border-primary/20 shadow-sm">
@@ -964,6 +1079,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           </Card>
         </div>
       </div>
+
+      {/* Repeat Preaching Confirmation */}
+      <AlertDialog open={!!repeatPreachContext} onOpenChange={(o) => !o && setRepeatPreachContext(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              Duplicate Preaching Detected
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{availableParticipants?.find(p => p.id === repeatPreachContext?.pId)?.name}</strong> has already recorded preaching time in this session. 
+              Do you want to record another entry for them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>No, Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>
+              Yes, Preach Again
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Record Dialog */}
       <Dialog open={!!editingRecord} onOpenChange={(o) => !o && setEditingRecord(null)}>
