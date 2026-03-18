@@ -198,11 +198,24 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           id: m.id,
           name: m.participantName.split(' - ').pop(),
           duration: m.actualDurationFormatted,
-          fine: splitFine // Use the split fine here
+          fine: splitFine
         }))
       };
     });
   }, [records, session, allGroups]);
+
+  // Map to help Results table get group context
+  const groupStatsMap = useMemo(() => {
+    const map: Record<string, { totalFine: number, splitFine: number, groupCode: string }> = {};
+    groupDistributions.forEach(d => {
+      map[d.id] = { 
+        totalFine: d.totalFine, 
+        splitFine: d.splitFine, 
+        groupCode: d.name 
+      };
+    });
+    return map;
+  }, [groupDistributions]);
 
   useEffect(() => {
     let interval: any;
@@ -217,7 +230,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   function handleStartTracking(participantId: string, groupId: string | null = null) {
     if (activeParticipantId) return;
 
-    // Check for existing record
     const hasExisting = records.some(r => r.participantId === participantId && r.preachingGroupId === groupId);
     if (hasExisting) {
       setRepeatPreachContext({ pId: participantId, gId: groupId });
@@ -332,7 +344,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
     if (activeGroupId) {
-      // Small delay to let snapshot update
       setTimeout(() => recalculateGroupFines(activeGroupId!), 800);
     }
 
@@ -577,6 +588,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
+                        <TableHead>Group Fine (Share/Total)</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead>Fine (₱)</TableHead>
                         <TableHead>Note</TableHead>
@@ -584,29 +596,39 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {records.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium text-xs">{r.participantName}</TableCell>
-                          <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
-                          <TableCell className="text-destructive font-bold text-xs">
-                            {r.totalFineAmount > 0 ? `₱${r.totalFineAmount.toFixed(2)}` : '—'}
-                          </TableCell>
-                          <TableCell className="max-w-[200px] truncate text-[10px] text-muted-foreground">
-                            {r.explanation}
-                          </TableCell>
-                          {isAdmin && (
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                                setEditingRecord(r);
-                                setNewMin(Math.floor(r.actualDurationSeconds / 60).toString());
-                                setNewSec((r.actualDurationSeconds % 60).toString());
-                              }}>
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
+                      {records.map((r) => {
+                        const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
+                        const shortName = r.participantName.split(' - ').pop();
+                        
+                        return (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-medium text-xs">
+                              {shortName}
                             </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
+                            <TableCell className="text-xs text-muted-foreground font-mono">
+                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)}/${gStats.totalFine.toFixed(2)})` : 'Individual'}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
+                            <TableCell className="text-destructive font-bold text-xs">
+                              {r.totalFineAmount > 0 ? `₱${r.totalFineAmount.toFixed(2)}` : '—'}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate text-[10px] text-muted-foreground">
+                              {r.explanation}
+                            </TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                                  setEditingRecord(r);
+                                  setNewMin(Math.floor(r.actualDurationSeconds / 60).toString());
+                                  setNewSec((r.actualDurationSeconds % 60).toString());
+                                }}>
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CardContent>
