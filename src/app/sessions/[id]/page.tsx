@@ -116,6 +116,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
+      // Calculate split fine (excluding owner marker)
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
@@ -168,6 +169,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
+    // Build a map of all participants for access rules
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -177,12 +179,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     
+    // Logic for fine share
     let fineToRecord = 0;
     if (!activeGroupId) {
       const overageSeconds = Math.max(0, timer - maxSeconds);
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
+      // For groups, we sum existing time in session plus this new timer
       const existingGroupTime = records
         .filter(r => r.preachingGroupId === activeGroupId)
         .reduce((sum, r) => sum + r.actualDurationSeconds, 0);

@@ -15,9 +15,7 @@ import {
   Star, 
   History as HistoryIcon,
   Timer,
-  Award,
   Gavel,
-  TrendingUp,
   User as UserIcon,
   TrendingDown
 } from 'lucide-react';
@@ -75,7 +73,7 @@ export default function Dashboard() {
     );
   }, [firestore, userParticipantId]);
 
-  // Global Records (Longest Individual & Group)
+  // Global Records
   const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
@@ -89,10 +87,10 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
-    // Total Fines: Sum of user's individual share of fines recorded in events
+    // Total Fines: Sum of user's share of fines recorded in events
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
 
-    // Time History: Sum of preaching duration
+    // Total Time: Sum of preaching duration
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
 
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
@@ -105,6 +103,7 @@ export default function Dashboard() {
     let grpMax = { time: 0, name: '' };
 
     allEvents.forEach(e => {
+      // Simplified name: strip "CCBB - " prefix if exists
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
@@ -132,7 +131,7 @@ export default function Dashboard() {
     return (
       <div className="container mx-auto py-20 px-4 text-center">
         <h1 className="text-4xl font-bold mb-4 text-primary">PreachPoint</h1>
-        <p className="text-muted-foreground mb-8 text-lg">The professional tool for preaching time management.</p>
+        <p className="text-muted-foreground mb-8 text-lg">Manage preaching sessions, fines, and voting rewards.</p>
         <div className="flex justify-center gap-4">
           <Button asChild size="lg"><Link href="/login">Sign In</Link></Button>
           <Button asChild variant="outline" size="lg"><Link href="/signup">Create Account</Link></Button>
@@ -197,7 +196,7 @@ export default function Dashboard() {
                 <HistoryIcon className="h-5 w-5 text-primary" />
                 Time & Fine History
               </CardTitle>
-              <CardDescription>Records of your participation in all sessions.</CardDescription>
+              <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -212,7 +211,7 @@ export default function Dashboard() {
                           <p className="font-semibold text-sm">{event.participantName.split(' - ').pop()}</p>
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                             {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Preach'}
+                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
                           </p>
                         </div>
                       </div>
@@ -294,13 +293,11 @@ export default function Dashboard() {
                   <Users className="mr-3 h-5 w-5 text-primary" /> Roster & Roles
                 </Link>
               </Button>
-              {isAdmin && (
-                <Button className="w-full justify-start h-12" variant="outline" asChild>
-                  <Link href="/configurations">
-                    <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
-                  </Link>
-                </Button>
-              )}
+              <Button className="w-full justify-start h-12" variant="outline" asChild>
+                <Link href="/configurations">
+                  <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
+                </Link>
+              </Button>
             </CardContent>
           </Card>
           
@@ -319,7 +316,7 @@ export default function Dashboard() {
                   <span className="font-bold">{allGroups?.length || 0}</span>
                 </div>
                 <div className="pt-4 border-t text-[10px] text-muted-foreground italic">
-                  Keep preaching to earn more points and climb the rankings!
+                  Participation in group sessions splits fines among members, reducing individual impact!
                 </div>
               </div>
             </CardContent>
