@@ -148,11 +148,9 @@ export default function Dashboard() {
 
   const totalFinesSum = useMemo(() => {
     if (!myEvents || !user) return 0;
-    // Sum only the specific records where the current user was the participant
-    // or their share of a group fine if the record is a group record.
-    // In our logic, 'totalFineAmount' in preaching_events is the individual share.
+    // Sum the fine records for the current user. 
+    // totalFineAmount is the individual share for both individual and group preaching events.
     return myEvents.reduce((sum, event) => {
-      // If it's a direct individual record or a group record where the user is a member
       if (event.participantId === user.uid || (event.eventParticipants && event.eventParticipants[user.uid] === true)) {
         return sum + (event.totalFineAmount || 0);
       }
@@ -271,12 +269,12 @@ export default function Dashboard() {
                 <div className="flex justify-center py-10">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : recentSessions && recentSessions.length > 0 ? (
+              ) : (recentSessions && recentSessions.length > 0) || (Object.keys(participationBySession).length > 0) ? (
                 <div className="space-y-4">
-                  {recentSessions.map((session) => {
+                  {/* For participants, we only show sessions they actually preached in */}
+                  {(isAdmin ? recentSessions : recentSessions.filter(s => !!participationBySession[s.id])).map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
-                    if (sessionEvents.length === 0 && !isAdmin) return null;
-
+                    
                     return (
                       <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

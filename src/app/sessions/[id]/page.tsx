@@ -382,7 +382,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <TableRow key={r.id}>
                             <TableCell className="font-medium">{simplifiedName}</TableCell>
                             <TableCell className="text-xs font-mono text-muted-foreground">
-                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
+                              {gStats ? `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
                             </TableCell>
                             <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
                             <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
