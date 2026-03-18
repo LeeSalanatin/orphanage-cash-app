@@ -19,7 +19,8 @@ import {
   User as UserIcon,
   TrendingDown,
   TrendingUp,
-  Calendar
+  Calendar,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -66,17 +67,11 @@ export default function Dashboard() {
   // Important: We use the ID of the participant document for filtering records
   const userParticipantId = userData?.id || user?.uid;
 
-  // Participation History - Fetch events where the user was a participant
+  // Participation History - Fetch all events to aggregate personal totals
   const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !userParticipantId) return null;
-    // We fetch all records to sum totals. Fines are aggregated based on individual shares.
-    return collectionGroup(firestore, 'preaching_events');
-  }, [firestore, user, userParticipantId]);
-
-  // Global Records - Fetch recent events to calculate benchmarks
-  const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
+    // We fetch all records via collectionGroup. Filtering happens in-memory for accuracy.
+    return collectionGroup(firestore, 'preaching_events');
   }, [firestore, user]);
 
   const participantsQuery = useMemoFirebase(() => {
@@ -91,14 +86,13 @@ export default function Dashboard() {
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: rawMyEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
-  const { data: allEvents, isLoading: allEventsLoading } = useCollection(allEventsQuery);
+  const { data: rawEvents, isLoading: eventsLoading } = useCollection(myEventsQuery);
 
   // Filter my events in memory to ensure we catch both UID and ID matches
   const myEvents = useMemo(() => {
-    if (!rawMyEvents || !userParticipantId) return [];
-    return rawMyEvents.filter(e => e.eventParticipants?.[userParticipantId] === true || e.participantId === userParticipantId);
-  }, [rawMyEvents, userParticipantId]);
+    if (!rawEvents || !userParticipantId) return [];
+    return rawEvents.filter(e => e.eventParticipants?.[userParticipantId] === true || e.participantId === userParticipantId);
+  }, [rawEvents, userParticipantId]);
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
@@ -108,10 +102,10 @@ export default function Dashboard() {
   }, [myEvents, userData]);
 
   const globalRecords = useMemo(() => {
-    if (!allEvents) return { longestIndividual: null, longestGroup: null };
+    if (!rawEvents) return { longestIndividual: null, longestGroup: null };
     let indMax = { time: 0, name: '', session: '' };
     let grpMax = { time: 0, name: '', session: '' };
-    allEvents.forEach(e => {
+    rawEvents.forEach(e => {
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
@@ -132,7 +126,7 @@ export default function Dashboard() {
       }
     });
     return { longestIndividual: indMax, longestGroup: grpMax };
-  }, [allEvents]);
+  }, [rawEvents]);
 
   function formatDuration(seconds: number) {
     const m = Math.floor(seconds / 60);
@@ -140,7 +134,7 @@ export default function Dashboard() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const loading = authLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || allEventsLoading || isAdmin === null;
+  const loading = authLoading || participantsLoading || groupsLoading || userLoading || eventsLoading || isAdmin === null;
 
   if (!user && !authLoading) {
     return (
@@ -158,7 +152,10 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="text-center space-y-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground animate-pulse">Syncing your preaching data...</p>
+        </div>
       </div>
     );
   }
