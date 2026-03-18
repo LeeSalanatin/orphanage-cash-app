@@ -130,7 +130,6 @@ export default function Dashboard() {
     // Show only user's groups if not admin
     const list = isAdmin ? participants : myGroups;
     if (!myGroups && !isAdmin) return [];
-    // Note: For actual group rankings, usually we show all, but user requested "only see their group"
     return [...(myGroups || [])]
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
       .slice(0, 5);
