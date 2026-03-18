@@ -1,16 +1,14 @@
 
 "use client";
 
-import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { doc, collection, updateDoc } from 'firebase/firestore';
+import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { 
@@ -19,21 +17,13 @@ import {
   Play, 
   Pause,
   StopCircle, 
-  XCircle, 
   Vote, 
   Loader2, 
   Settings2, 
-  Trophy, 
-  History, 
   Users as UsersIcon, 
-  Star, 
   Calendar, 
-  Edit2, 
-  Trash2, 
   Calculator,
-  History as HistoryIcon,
-  Unlock,
-  Lock
+  History
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -55,24 +45,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [repeatPreachContext, setRepeatPreachContext] = useState<{pId: string, gId: string | null} | null>(null);
 
   // Edit States for Session Settings
-  const [editTitle, setEditTitle] = useState('');
   const [editMaxTimeMin, setEditMaxTimeMin] = useState('');
   const [editMaxTimeSec, setEditMaxTimeSec] = useState('0');
   const [editFineAmount, setEditFineAmount] = useState('');
-  const [editFineType, setEditFineType] = useState<'fixed' | 'per-minute-overage'>('per-minute-overage');
-  const [editVotingEnabled, setEditVotingEnabled] = useState(false);
-  const [editPointsEnabled, setEditPointsEnabled] = useState(false);
-  const [editRewardTop1, setEditRewardTop1] = useState('100');
-  const [editRewardTop2, setEditRewardTop2] = useState('50');
-  const [editRewardTop3, setEditRewardTop3] = useState('25');
-  const [editRewardGroupTop1, setEditRewardGroupTop1] = useState('100');
-
-  // Edit State for specific record
-  const [editingRecord, setEditingRecord] = useState<any>(null);
-  const [newMin, setNewMin] = useState('');
-  const [newSec, setNewSec] = useState('');
-  const [isSavingRecord, setIsSavingRecord] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -101,19 +76,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   useEffect(() => {
     if (session) {
-      setEditTitle(session.title || '');
       setEditMaxTimeMin(session.maxPreachingTimeMinutes?.toString() || '0');
       setEditMaxTimeSec(session.maxPreachingTimeSeconds?.toString() || '0');
       if (session.fineRules?.[0]) {
         setEditFineAmount(session.fineRules[0].amount.toString());
-        setEditFineType(session.sessionType === 'sunday preaching' ? 'fixed' : session.fineRules[0].type);
       }
-      setEditVotingEnabled(session.votingConfig?.enabled || false);
-      setEditPointsEnabled(session.pointDistribution?.enabled || false);
-      setEditRewardTop1(session.pointDistribution?.rewardTop1?.toString() || '100');
-      setEditRewardTop2(session.pointDistribution?.rewardTop2?.toString() || '50');
-      setEditRewardTop3(session.pointDistribution?.rewardTop3?.toString() || '25');
-      setEditRewardGroupTop1(session.pointDistribution?.rewardGroupTop1?.toString() || '100');
     }
   }, [session]);
 
@@ -257,7 +224,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Create membership map for security rules and dashboard sync
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -287,7 +253,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       eventParticipants: participantsMap
     };
 
-    await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
+    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     if (activeGroupId) setTimeout(() => recalculateGroupFines(activeGroupId!), 800);
 
     handleCancelTracking();
@@ -391,25 +357,31 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine (Share / Total)</TableHead>
+                        <TableHead>Group Fine Context</TableHead>
                         <TableHead>Time</TableHead>
-                        <TableHead>Individual share (₱)</TableHead>
+                        <TableHead className="text-right">Share (₱)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {records.map(r => {
                         const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
+                        const simplifiedName = r.participantName.split(' - ').pop();
                         return (
                           <TableRow key={r.id}>
-                            <TableCell className="font-medium">{r.participantName.split(' - ').pop()}</TableCell>
+                            <TableCell className="font-medium">{simplifiedName}</TableCell>
                             <TableCell className="text-xs font-mono text-muted-foreground">
                               {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
                             </TableCell>
                             <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
-                            <TableCell className="text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
+                            <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
                           </TableRow>
                         );
                       })}
+                      {records.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No records yet.</TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -425,7 +397,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <CardTitle className="flex items-center gap-2"><UsersIcon className="h-5 w-5" /> {dist.name}</CardTitle>
                         <CardDescription>Collective: {dist.totalDurationFormatted} | Divided by {dist.memberCount} members</CardDescription>
                       </div>
-                      <Badge variant="destructive">Total Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
+                      <Badge variant="destructive">Total Group Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
                     </CardHeader>
                     <CardContent className="pt-6">
                       <Table>
@@ -504,8 +476,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Already Recorded</AlertDialogTitle><AlertDialogDescription>This participant has already preached. Record another entry?</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Preach Again</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Already Recorded</AlertDialogTitle>
+            <AlertDialogDescription>This participant has already preached in this session. Record another entry?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Preach Again</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

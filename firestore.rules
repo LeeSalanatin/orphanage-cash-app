@@ -23,11 +23,7 @@ service cloud.firestore {
     
     match /{allPaths=**}/preaching_events/{eventId} {
       // Admins see everything. Users see their own individual records or group records they belong to.
-      allow read, list: if isSignedIn() && (
-        isAdmin() || 
-        resource.data.participantId == request.auth.uid || 
-        (resource.data.eventParticipants != null && resource.data.eventParticipants.get(request.auth.uid, null) != null)
-      );
+      allow read, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin() || (isSignedIn() && (request.auth.uid == resource.data.sessionOwnerId || request.auth.uid == resource.data.participantId));
     }

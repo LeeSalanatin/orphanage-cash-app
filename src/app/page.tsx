@@ -20,9 +20,7 @@ import {
   ShieldCheck, 
   Gavel,
   Settings2,
-  Sparkles,
-  Vote,
-  History
+  History as HistoryIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -33,7 +31,7 @@ const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@examp
 export default function Dashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   // Check admin status
   useEffect(() => {
@@ -55,7 +53,7 @@ export default function Dashboard() {
 
   // Focused sessions: Admins see all, Users see their own
   const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) return query(collection(firestore, 'sessions'), limit(20));
     return query(
       collection(firestore, 'sessions'),
@@ -66,7 +64,7 @@ export default function Dashboard() {
 
   // Focused groups: Admins see all, Users see their own
   const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) return collection(firestore, 'groups');
     return query(
       collection(firestore, 'groups'),
@@ -87,7 +85,6 @@ export default function Dashboard() {
   // Query ALL events for this user to sync total fines (Individual + Group shares)
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Admins see everything for summary purposes, but "Your Fines" remains personal
     return query(
       collectionGroup(firestore, 'preaching_events'),
       where('eventParticipants.' + user.uid, '!=', null)
@@ -96,7 +93,7 @@ export default function Dashboard() {
 
   // Global history for the feed (Participants see their own participation + their group's, Admins see all)
   const feedEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) {
       return query(collectionGroup(firestore, 'preaching_events'), limit(20));
     }
@@ -149,21 +146,13 @@ export default function Dashboard() {
     return grouped;
   }, [feedEvents]);
 
-  // Accurate total fine sync: Prevents double counting group fines in the same session
   const totalFinesSync = useMemo(() => {
     if (!myEvents) return 0;
-    const groupFinesTracked = new Set<string>();
+    // For participants, we sum their specific shares. 
+    // Admins might see a global total, but usually dashboard fine refers to personal balance.
     let total = 0;
     myEvents.forEach(event => {
-      if (!event.preachingGroupId) {
-        total += (event.totalFineAmount || 0);
-      } else {
-        const key = `${event.sessionId}_${event.preachingGroupId}`;
-        if (!groupFinesTracked.has(key)) {
-          total += (event.totalFineAmount || 0);
-          groupFinesTracked.add(key);
-        }
-      }
+      total += (event.totalFineAmount || 0);
     });
     return total;
   }, [myEvents]);
@@ -177,7 +166,7 @@ export default function Dashboard() {
     myFines: totalFinesSync
   };
 
-  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || feedLoading;
+  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || feedLoading || isAdmin === null;
 
   if (!user) {
     return (
@@ -221,7 +210,7 @@ export default function Dashboard() {
            <Card className="bg-destructive/5 border-destructive/10 px-4 py-2 flex items-center gap-3">
               <Gavel className="h-5 w-5 text-destructive" />
               <div>
-                <p className="text-[10px] uppercase font-bold text-muted-foreground leading-none mb-1">Your Fines</p>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground leading-none mb-1">Your Total Fines</p>
                 <p className="text-xl font-bold text-destructive leading-none">₱{stats.myFines.toFixed(2)}</p>
               </div>
            </Card>
@@ -262,9 +251,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "Participation History"}</CardTitle>
+                  <CardTitle>{isAdmin ? "System Activity" : "My History"}</CardTitle>
                   <CardDescription>
-                    {isAdmin ? "Latest records across the system." : "Your preaching history and group updates."}
+                    {isAdmin ? "Latest records across the system." : "Your preaching history and team updates."}
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -311,7 +300,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> Latest Participation
+                              <HistoryIcon className="h-3 w-3" /> Latest Activity
                             </p>
                             <div className="flex flex-col gap-2">
                               {sessionEvents.slice(0, 3).map(record => (
