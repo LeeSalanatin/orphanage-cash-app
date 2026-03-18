@@ -49,14 +49,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-
-  // Repeat Preaching Confirmation
   const [repeatPreachContext, setRepeatPreachContext] = useState<{pId: string, gId: string | null} | null>(null);
-
-  // Edit States for Session Settings
-  const [editMaxTimeMin, setEditMaxTimeMin] = useState('');
-  const [editMaxTimeSec, setEditMaxTimeSec] = useState('0');
-  const [editFineAmount, setEditFineAmount] = useState('');
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -83,16 +76,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const { data: allGroups, isLoading: groupsLoading } = useCollection(allGroupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
 
-  useEffect(() => {
-    if (session) {
-      setEditMaxTimeMin(session.maxPreachingTimeMinutes?.toString() || '0');
-      setEditMaxTimeSec(session.maxPreachingTimeSeconds?.toString() || '0');
-      if (session.fineRules?.[0]) {
-        setEditFineAmount(session.fineRules[0].amount.toString());
-      }
-    }
-  }, [session]);
-
   const records = useMemo(() => {
     if (!rawRecords) return [];
     return [...rawRecords].sort((a, b) => {
@@ -118,7 +101,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         const gInfo = allGroups?.find(g => g.id === r.preachingGroupId);
         groups[r.preachingGroupId] = {
           id: r.preachingGroupId,
-          name: gInfo?.name || 'Unknown Group',
+          name: gInfo?.name || 'Unknown',
           totalSeconds: 0,
           uniqueParticipantIds: new Set(),
           allGroupMembers: gInfo?.members || {},
@@ -136,23 +119,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return Object.values(groups).map(g => {
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
-      
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
       return {
         ...g,
         totalFine,
-        overageSeconds,
-        memberCount,
         splitFine,
-        totalDurationFormatted: formatDuration(g.totalSeconds),
-        memberList: g.members.map((m: any) => ({
-          id: m.id,
-          name: m.participantName.split(' - ').pop(),
-          duration: m.actualDurationFormatted,
-          fine: splitFine
-        }))
+        totalDurationFormatted: formatDuration(g.totalSeconds)
       };
     });
   }, [records, session, allGroups]);
@@ -191,51 +165,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     setRepeatPreachContext(null);
   }
 
-  function handleCancelTracking() {
-    setActiveParticipantId(null);
-    setActiveGroupId(null);
-    setTimer(0);
-  }
-
-  function togglePause() {
-    setIsPaused(!isPaused);
-  }
-
-  async function recalculateGroupFines(groupId: string) {
-    if (!session || !firestore || !records) return;
-    const groupRecords = records.filter(r => r.preachingGroupId === groupId);
-    const targetGroup = allGroups?.find(g => g.id === groupId);
-    const memberIds = Object.keys(targetGroup?.members || {}).filter(k => k !== 'owner');
-    const memberCount = Math.max(1, memberIds.length);
-
-    const totalGroupSeconds = groupRecords.reduce((sum, r) => sum + r.actualDurationSeconds, 0);
-    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-    const overageSeconds = Math.max(0, totalGroupSeconds - maxSeconds);
-    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0];
-    
-    let totalGroupFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
-    const splitFine = totalGroupFine / memberCount;
-
-    groupRecords.forEach(r => {
-      const docRef = doc(firestore, 'sessions', id, 'preaching_events', r.id);
-      updateDocumentNonBlocking(docRef, {
-        totalFineAmount: splitFine,
-        groupTotalFine: totalGroupFine,
-        groupMemberShare: splitFine,
-        explanation: totalGroupFine > 0 
-          ? `Group overage: ${formatDuration(overageSeconds)}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${memberCount} members.`
-          : "Group stayed within time limit."
-      });
-    });
-  }
-
   async function handleStopTracking() {
     if (!activeParticipantId || !session || !firestore || !user) return;
     
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Create a participation map for security rules and dashboard aggregation
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -259,246 +194,131 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
       totalFineAmount: initialFine,
-      explanation: initialFine > 0 ? `Individual overage of ${formatDuration(overageSeconds)}.` : "Timer recorded.",
+      explanation: initialFine > 0 ? `Individual overage: ${formatDuration(overageSeconds)}.` : "Timer recorded.",
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' },
       eventParticipants: participantsMap
     };
 
     addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
-    if (activeGroupId) setTimeout(() => recalculateGroupFines(activeGroupId!), 800);
-
-    handleCancelTracking();
+    setActiveParticipantId(null);
+    setActiveGroupId(null);
+    setTimer(0);
     toast({ title: "Recording Saved" });
   }
 
   if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) return (
-    <div className="flex h-[80vh] items-center justify-center">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-    </div>
+    <div className="flex h-[80vh] items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
   );
 
-  if (!session) return null;
-  const isAdmin = user?.uid === session.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
+  const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary flex items-center gap-3">
-            {session.title}
-            <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>{session.status}</Badge>
+            {session?.title}
+            <Badge variant={session?.status === 'active' ? 'default' : 'secondary'}>{session?.status}</Badge>
           </h1>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-            <span className="flex items-center gap-1 capitalize"><Mic2 className="h-3.5 w-3.5" /> {session.sessionType}</span>
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {session.sessionDate}</span>
-            <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Limit: {session.maxPreachingTimeMinutes}m {session.maxPreachingTimeSeconds}s</span>
-          </div>
+          <p className="text-muted-foreground text-sm flex items-center gap-2 mt-1">
+            <Mic2 className="h-4 w-4" /> {session?.sessionType} Session • <Calendar className="h-4 w-4" /> {session?.sessionDate}
+          </p>
         </div>
         <div className="flex gap-2">
-          {session.votingConfig?.enabled && (
+          {session?.votingConfig?.enabled && (
             <Button variant="outline" asChild><Link href={`/sessions/${id}/voting`}><Vote className="mr-2 h-4 w-4" /> Voting</Link></Button>
           )}
           {isAdmin && (
-            <Button onClick={() => updateDocumentNonBlocking(doc(firestore, 'sessions', id), { status: session.status === 'active' ? 'completed' : 'active' })} 
-                    variant={session.status === 'active' ? 'destructive' : 'default'}>
-              {session.status === 'active' ? <StopCircle className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-              {session.status === 'active' ? 'End Session' : 'Start Session'}
+            <Button onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { status: session?.status === 'active' ? 'completed' : 'active' })} 
+                    variant={session?.status === 'active' ? 'destructive' : 'default'}>
+              {session?.status === 'active' ? 'End Session' : 'Start Session'}
             </Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="live">
-            <TabsList className="mb-6 grid w-full grid-cols-4">
-              <TabsTrigger value="live"><History className="h-4 w-4 mr-2" /> Live</TabsTrigger>
-              <TabsTrigger value="results"><Calculator className="h-4 w-4 mr-2" /> Results</TabsTrigger>
-              <TabsTrigger value="distributions" disabled={session.sessionType !== 'group'}><UsersIcon className="h-4 w-4 mr-2" /> Groups</TabsTrigger>
-              <TabsTrigger value="timing"><Settings2 className="h-4 w-4 mr-2" /> Rules</TabsTrigger>
-            </TabsList>
+      <Tabs defaultValue="results">
+        <TabsList className="mb-6">
+          <TabsTrigger value="results"><Calculator className="h-4 w-4 mr-2" /> Incentives & Fines</TabsTrigger>
+          <TabsTrigger value="live"><History className="h-4 w-4 mr-2" /> Live Clock</TabsTrigger>
+        </TabsList>
 
-            <TabsContent value="live" className="space-y-6">
-              {isAdmin && activeParticipantId && (
-                <Card className="border-accent border-2 bg-accent/5 shadow-xl animate-in zoom-in">
-                  <CardContent className="flex flex-col items-center py-10">
-                    <p className="text-xl font-medium text-muted-foreground mb-2">
-                      {activeGroupId && <span className="text-accent font-bold mr-2">[{allGroups?.find(g => g.id === activeGroupId)?.name}]</span>}
-                      {availableParticipants?.find(p => p.id === activeParticipantId)?.name}
-                    </p>
-                    <div className={cn("text-7xl font-mono font-bold tabular-nums mb-8", isPaused && "opacity-50")}>
-                      {formatDuration(timer)}
-                    </div>
-                    <div className="flex gap-4 w-full max-sm:px-4">
-                      <Button size="lg" variant="secondary" className="flex-1 h-14" onClick={togglePause}>
-                        {isPaused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
-                      </Button>
-                      <Button size="lg" variant="destructive" className="flex-1 h-14" onClick={handleStopTracking}>
-                        <StopCircle className="h-6 w-6" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Card>
-                <CardHeader><CardTitle>Session History</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  {records.map(r => (
-                    <div key={r.id} className="p-4 rounded-lg border bg-card flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-primary/10 p-2 rounded-full"><Mic2 className="h-4 w-4 text-primary" /></div>
-                        <div>
-                          <p className="font-bold">{r.participantName.split(' - ').pop()}</p>
-                          <p className="text-xs text-muted-foreground">{r.actualDurationFormatted}</p>
-                        </div>
-                      </div>
-                      {r.totalFineAmount > 0 && <Badge variant="destructive">₱{r.totalFineAmount.toFixed(2)}</Badge>}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="results">
-              <Card>
-                <CardHeader><CardTitle>Incentives & Fines</CardTitle></CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Participant</TableHead>
-                        <TableHead>Group Context (Share / Total)</TableHead>
-                        <TableHead>Time</TableHead>
-                        <TableHead className="text-right">Your Fine (₱)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {records.map(r => {
-                        const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
-                        const simplifiedName = r.participantName.split(' - ').pop();
-                        return (
-                          <TableRow key={r.id}>
-                            <TableCell className="font-medium">{simplifiedName}</TableCell>
-                            <TableCell className="text-xs font-mono text-muted-foreground">
-                              {r.preachingGroupId && gStats ? (
-                                `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})`
-                              ) : (
-                                'Individual'
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
-                            <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      {records.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No records yet.</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="distributions">
-              <div className="space-y-6">
-                {groupDistributions.map(dist => (
-                  <Card key={dist.id}>
-                    <CardHeader className="bg-primary/5 flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2"><UsersIcon className="h-5 w-5" /> {dist.name}</CardTitle>
-                        <CardDescription>Collective: {dist.totalDurationFormatted} | Divided by {dist.memberCount} members</CardDescription>
-                      </div>
-                      <Badge variant="destructive">Total Group Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <Table>
-                        <TableBody>
-                          {dist.memberList.map((m: any) => (
-                            <TableRow key={m.id}>
-                              <TableCell>{m.name}</TableCell>
-                              <TableCell className="text-right font-bold text-destructive">₱{m.fine.toFixed(2)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="timing">
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2"><Label>Limit (Min)</Label><Input type="number" value={editMaxTimeMin} onChange={e => setEditMaxTimeMin(e.target.value)} disabled={!isAdmin} /></div>
-                     <div className="space-y-2"><Label>Limit (Sec)</Label><Input type="number" value={editMaxTimeSec} onChange={e => setEditMaxTimeSec(e.target.value)} disabled={!isAdmin} /></div>
-                   </div>
-                   <div className="space-y-2"><Label>Fine (₱)</Label><Input type="number" value={editFineAmount} onChange={e => setEditFineAmount(e.target.value)} disabled={!isAdmin} /></div>
-                   {isAdmin && <Button onClick={() => updateDocumentNonBlocking(doc(firestore, 'sessions', id), { 
-                     maxPreachingTimeMinutes: parseInt(editMaxTimeMin), 
-                     maxPreachingTimeSeconds: parseInt(editMaxTimeSec),
-                     fineRules: [{ ...session.fineRules[0], amount: parseFloat(editFineAmount) }]
-                   })} className="w-full">Update Rules</Button>}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="space-y-8">
+        <TabsContent value="results">
           <Card>
-            <CardHeader><CardTitle>Stopwatch Roster</CardTitle></CardHeader>
-            <CardContent className="p-0">
-              <Tabs defaultValue="individuals">
-                <TabsList className="w-full grid grid-cols-2 rounded-none">
-                  <TabsTrigger value="individuals">Preachers</TabsTrigger>
-                  <TabsTrigger value="groups">Groups</TabsTrigger>
-                </TabsList>
-                <TabsContent value="individuals" className="p-4 space-y-2">
-                  {availableParticipants?.map(p => (
-                    <div key={p.id} className={cn("flex items-center justify-between p-3 border rounded-lg", activeParticipantId === p.id && !activeGroupId && "border-primary bg-primary/5")}>
-                      <span className="text-sm font-medium">{p.name}</span>
-                      {isAdmin && <Button size="sm" variant={activeParticipantId === p.id ? "destructive" : "outline"} disabled={activeParticipantId !== null && activeParticipantId !== p.id} onClick={() => handleStartTracking(p.id)}>{activeParticipantId === p.id ? <StopCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button>}
-                    </div>
-                  ))}
-                </TabsContent>
-                <TabsContent value="groups" className="p-4 space-y-4">
-                  {allGroups?.map(g => (
-                    <div key={g.id} className="space-y-2">
-                      <p className="text-xs font-bold text-primary uppercase">{g.name}</p>
-                      {Object.keys(g.members).filter(k => k !== 'owner').map(mId => {
-                        const p = availableParticipants?.find(ap => ap.id === mId || ap.userId === mId);
-                        return p && (
-                          <div key={p.id} className={cn("flex items-center justify-between p-2 border rounded-md", activeParticipantId === p.id && activeGroupId === g.id && "border-accent bg-accent/5")}>
-                            <span className="text-xs">{p.name}</span>
-                            {isAdmin && <Button size="sm" variant="ghost" className="h-7 w-7" disabled={activeParticipantId !== null} onClick={() => handleStartTracking(p.id, g.id)}><Play className="h-3 w-3" /></Button>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </TabsContent>
-              </Tabs>
+            <CardHeader><CardTitle>Session Tally</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Participant</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Group Fine Context (Share / Total)</TableHead>
+                    <TableHead className="text-right">Your Fine (₱)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records.map(r => {
+                    const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
+                    const simplifiedName = r.participantName.split(' - ').pop();
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-bold">{simplifiedName}</TableCell>
+                        <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">
+                          {r.preachingGroupId && gStats ? (
+                            `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})`
+                          ) : (
+                            'Individual Rate'
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="live">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              {activeParticipantId && (
+                <Card className="border-accent bg-accent/5 p-10 text-center animate-in zoom-in mb-6">
+                  <p className="text-xl text-muted-foreground mb-4">{availableParticipants?.find(p => p.id === activeParticipantId)?.name}</p>
+                  <p className="text-8xl font-mono font-bold tabular-nums mb-8">{formatDuration(timer)}</p>
+                  <div className="flex gap-4 justify-center">
+                    <Button size="lg" variant="secondary" onClick={() => setIsPaused(!isPaused)}>{isPaused ? 'Resume' : 'Pause'}</Button>
+                    <Button size="lg" variant="destructive" onClick={handleStopTracking}>Stop & Save</Button>
+                  </div>
+                </Card>
+              )}
+              <Card>
+                <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {availableParticipants?.map(p => (
+                    <div key={p.id} className="p-4 border rounded-lg flex justify-between items-center bg-card">
+                      <span className="font-medium">{p.name}</span>
+                      {isAdmin && (
+                        <Button size="sm" variant="ghost" disabled={!!activeParticipantId} onClick={() => handleStartTracking(p.id)}><Play className="h-4 w-4" /></Button>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Already Recorded</AlertDialogTitle>
-            <AlertDialogDescription>This participant has already preached in this session. Record another entry?</AlertDialogDescription>
-          </AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Already Recorded</AlertDialogTitle><AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Preach Again</AlertDialogAction>
+            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

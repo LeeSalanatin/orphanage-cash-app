@@ -2,13 +2,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Universal access for authenticated users to standard paths.
+    // Grant universal access to authenticated users to support global tallies and shared group data
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
 
-    // Explicit rules for collection group queries are required by Firestore.
-    // This allows the dashboard to aggregate preaching_events and votes across all sessions.
+    // Explicitly allow collection group queries for aggregation and dashboard feeds
     match /{path=**}/preaching_events/{event} {
       allow read, list: if request.auth != null;
     }

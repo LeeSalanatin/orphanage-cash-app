@@ -64,7 +64,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   const { data: existingVotes, isLoading: voteCheckLoading } = useCollection(userVoteQuery);
 
   const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading || voteCheckLoading;
-
   const hasVoted = existingVotes && existingVotes.length > 0;
 
   useEffect(() => {
@@ -100,7 +99,6 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     if (!session?.votingConfig?.enabled || session?.votingClosed || !firestore || !user) return;
     
     setIsSubmitting(true);
-    
     const voteData = {
       sessionId: id,
       voteData: votes,
@@ -124,14 +122,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     setTimeout(() => router.push(`/sessions/${id}`), 1000);
   }
 
-  if (loading) return (
-    <div className="flex h-[80vh] items-center justify-center">
-      <Loader2 className="h-10 w-10 animate-spin text-primary" />
-    </div>
-  );
-
-  if (!session) return null;
-  const topLimit = session.votingConfig?.topIndividualsToVoteFor || 3;
+  if (loading) return <div className="flex h-[80vh] items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
@@ -140,30 +131,28 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           <Link href={`/sessions/${id}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Link>
         </Button>
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-headline font-bold text-primary">
-            {session.votingClosed ? 'Voting Closed' : (hasVoted ? 'Review Your Vote' : 'Cast Your Vote')}
-          </h1>
-          {hasVoted && <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">Submitted</Badge>}
+          <h1 className="text-3xl font-headline font-bold text-primary">Session Ballot</h1>
+          {hasVoted && <Badge variant="outline" className="bg-primary/5 text-primary">Voted</Badge>}
         </div>
       </div>
 
-      {!session.votingConfig?.enabled || session.votingClosed ? (
+      {!session?.votingConfig?.enabled || session?.votingClosed ? (
         <Card className="text-center py-20 border-dashed">
           <Lock className="mx-auto h-12 w-12 text-destructive mb-4" />
-          <h3 className="text-xl font-bold">Voting is currently unavailable.</h3>
+          <h3 className="text-xl font-bold">Voting is currently locked.</h3>
         </Card>
       ) : (
         <div className="space-y-8">
           <Card>
-            <CardHeader><CardTitle>Top Individuals (Select up to {topLimit})</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Top Preachers</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredParticipants.map(p => {
                 const isSelected = votes.individual.includes(p.id);
                 return (
                   <div key={p.id} onClick={() => {
                     if (isSelected) setVotes({ ...votes, individual: votes.individual.filter((id: string) => id !== p.id) });
-                    else if (votes.individual.length < topLimit) setVotes({ ...votes, individual: [...votes.individual, p.id] });
-                  }} className={cn("p-4 rounded-lg border-2 cursor-pointer flex justify-between items-center transition-all", isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border")}>
+                    else if (votes.individual.length < 3) setVotes({ ...votes, individual: [...votes.individual, p.id] });
+                  }} className={cn("p-4 rounded-lg border-2 cursor-pointer flex justify-between items-center transition-all", isSelected ? "border-primary bg-primary/5" : "border-border")}>
                     <span className="font-medium">{p.name}</span>
                     {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
                   </div>
@@ -173,7 +162,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Top Group</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Best Group</CardTitle></CardHeader>
             <CardContent>
               <RadioGroup value={votes.group} onValueChange={v => setVotes({ ...votes, group: v })}>
                 {filteredGroups.map(g => (
@@ -186,8 +175,8 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
             </CardContent>
           </Card>
 
-          <Button size="lg" className="w-full h-16 text-xl font-bold shadow-xl" onClick={handleSubmitVote} disabled={isSubmitting || (votes.individual.length === 0 && !votes.group)}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : (hasVoted ? 'Update Vote' : 'Submit Ballot')}
+          <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleSubmitVote} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="animate-spin" /> : 'Confirm Ballot'}
           </Button>
         </div>
       )}
