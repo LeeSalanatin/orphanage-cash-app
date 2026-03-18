@@ -18,7 +18,6 @@ import {
   Gavel,
   User as UserIcon,
   TrendingDown,
-  Calendar,
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,8 +65,8 @@ export default function Dashboard() {
   // Important: We use the ID of the participant document for filtering records
   const userParticipantId = userData?.id || user?.uid;
 
-  // Participation History - Fetch all events to aggregate personal totals
-  const myEventsQuery = useMemoFirebase(() => {
+  // Global events query for history and records
+  const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collectionGroup(firestore, 'preaching_events');
   }, [firestore, user]);
@@ -84,13 +83,17 @@ export default function Dashboard() {
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: rawEvents, isLoading: eventsLoading } = useCollection(myEventsQuery);
+  const { data: rawEvents, isLoading: eventsLoading } = useCollection(allEventsQuery);
 
-  // Filter my events in memory to ensure we catch both UID and ID matches
+  // Filter my events in memory to ensure we catch both UID and roster ID matches
   const myEvents = useMemo(() => {
     if (!rawEvents || !userParticipantId) return [];
-    return rawEvents.filter(e => e.eventParticipants?.[userParticipantId] === true || e.participantId === userParticipantId);
-  }, [rawEvents, userParticipantId]);
+    return rawEvents.filter(e => {
+      const isParticipant = e.participantId === userParticipantId || e.participantId === user?.uid;
+      const isMember = e.eventParticipants && (e.eventParticipants[userParticipantId] === true || e.eventParticipants[user?.uid || ''] === true);
+      return isParticipant || isMember;
+    });
+  }, [rawEvents, userParticipantId, user]);
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
@@ -138,7 +141,7 @@ export default function Dashboard() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const loading = authLoading || participantsLoading || groupsLoading || userLoading || eventsLoading || isAdmin === null;
+  const loading = authLoading || userLoading || isAdmin === null;
 
   if (!user && !authLoading) {
     return (
@@ -223,7 +226,9 @@ export default function Dashboard() {
               <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
             </CardHeader>
             <CardContent>
-              {myEvents && myEvents.length > 0 ? (
+              {eventsLoading ? (
+                 <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+              ) : myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
                   {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => (
                     <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
@@ -242,7 +247,7 @@ export default function Dashboard() {
                       <div className="text-right">
                         <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
                         <p className="text-[10px] font-bold text-destructive">
-                          Share: ₱{(event.totalFineAmount || 0).toFixed(2)}
+                          Fine: ₱{(event.totalFineAmount || 0).toFixed(2)}
                         </p>
                       </div>
                     </div>

@@ -281,6 +281,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       ? r.participantName.split(' - ').pop() 
                       : r.participantName;
                     
+                    // If we have live group stats, use them. Otherwise fallback to saved individual share
                     const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
                     const teamTotal = r.preachingGroupId && gStats ? gStats.totalFine : (r.totalFineAmount || 0);
 

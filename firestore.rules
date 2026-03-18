@@ -3,7 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Allow all authenticated users full access to all collections and documents
-    // This is the most permissive and reliable way to handle collectionGroup queries
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
