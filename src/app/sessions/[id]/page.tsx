@@ -327,64 +327,52 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: isPaused ? "Timer Resumed" : "Timer Paused" });
   }
 
-  async function calculateFineForRecord(durationSeconds: number, isGroup: boolean, recordIdToExclude: string | null = null) {
+  async function recalculateGroupFines(groupId: string, newRecord?: any) {
+    if (!session || !firestore) return;
+
+    const groupRecords = records.filter(r => r.preachingGroupId === groupId);
+    if (newRecord) groupRecords.push(newRecord);
+
+    const uniqueParticipants = new Set(groupRecords.map(r => r.participantId));
+    const numParticipants = uniqueParticipants.size;
+    if (numParticipants === 0) return;
+
+    const totalGroupSeconds = groupRecords.reduce((sum, r) => sum + r.actualDurationSeconds, 0);
+    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+    const overageSeconds = Math.max(0, totalGroupSeconds - maxSeconds);
+    
+    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30 };
+    const totalGroupFine = (overageSeconds * (rule.amount / 60));
+    const splitFine = totalGroupFine / numParticipants;
+
+    // Update all events for this group in this session
+    groupRecords.forEach(r => {
+      const docRef = doc(firestore, 'sessions', id, 'preaching_events', r.id);
+      updateDocumentNonBlocking(docRef, {
+        totalFineAmount: splitFine,
+        explanation: `Group split fine: ${formatDuration(overageSeconds)} total overage split between ${numParticipants} members.`
+      });
+    });
+  }
+
+  async function calculateFineForRecord(durationSeconds: number, isGroup: boolean) {
     if (!session) return { totalFineAmount: 0, explanation: "", overageSeconds: 0 };
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     
-    // Calculate total time for the group so far in this session
-    let existingSeconds = 0;
-    if (isGroup && (activeGroupId || editingRecord?.preachingGroupId)) {
-      const gId = activeGroupId || editingRecord?.preachingGroupId;
-      existingSeconds = records
-        .filter(r => r.preachingGroupId === gId && r.id !== recordIdToExclude)
-        .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
+    // For individual sessions, calculate normally.
+    // For group sessions, we will recalculate EVERYTHING in recalculateGroupFines after saving.
+    if (!isGroup) {
+      const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
+      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'individual') || session.fineRules?.[0] || { amount: 30 };
+      const fineAmount = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+      
+      let explanation = fineAmount > 0 ? `Individual overage of ${formatDuration(overageSeconds)}.` : "No fine incurred.";
+      return { totalFineAmount: fineAmount, explanation, overageSeconds };
     }
 
-    const totalSeconds = durationSeconds + existingSeconds;
-    const overageTotal = Math.max(0, totalSeconds - maxSeconds);
-    const overageExisting = Math.max(0, existingSeconds - maxSeconds);
-    const incrementalOverage = overageTotal - overageExisting;
-
-    const rule = session.fineRules?.find((r: any) => 
-      isGroup ? r.appliesTo === 'group' : r.appliesTo === 'individual'
-    ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 30 };
-    
-    let totalFineAmount = 0;
-    let fineCalculationDetails = "";
-
-    if (incrementalOverage > 0) {
-      if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
-        // If it's a fixed fine, only charge it if we haven't crossed the limit yet
-        totalFineAmount = overageExisting === 0 ? rule.amount : 0;
-        fineCalculationDetails = totalFineAmount > 0 ? `Fixed fine for crossing ${formatDuration(maxSeconds)} limit.` : "Fixed fine already applied to group.";
-      } else {
-        const ratePerSecond = rule.amount / 60;
-        totalFineAmount = incrementalOverage * ratePerSecond;
-        fineCalculationDetails = `Accrued ${formatDuration(incrementalOverage)} overage at ₱${rule.amount}/min.`;
-      }
-    }
-
-    let explanation = totalFineAmount > 0 ? fineCalculationDetails : "No incremental fine incurred.";
-    if (totalFineAmount > 0) {
-      try {
-        const aiResponse = await generateFineExplanation({
-          sessionType: session.sessionType,
-          participantName: isGroup ? "Group Member" : "Participant",
-          preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
-          maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
-          fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min`,
-          fineAmount: parseFloat(totalFineAmount.toFixed(2)),
-          overageMinutes: parseFloat((incrementalOverage / 60).toFixed(2)),
-          rulesSummary: isGroup ? `Group session: Limit is ${formatDuration(maxSeconds)} total for team.` : `Maximum allowed time is ${formatDuration(maxSeconds)}.`
-        });
-        explanation = aiResponse.explanation;
-      } catch (e) {
-        // fallback to details
-      }
-    }
-
-    return { totalFineAmount, explanation, overageSeconds: incrementalOverage };
+    // Default for groups (will be overwritten by split logic)
+    return { totalFineAmount: 0, explanation: "Calculating group split...", overageSeconds: 0 };
   }
 
   async function handleStopTracking() {
@@ -412,8 +400,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
-    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
+    const docRef = await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
+    if (activeGroupId) {
+      recalculateGroupFines(activeGroupId, { ...eventData, id: docRef!.id });
+    }
+
     setActiveParticipantId(null);
     setActiveGroupId(null);
     setTimer(0);
@@ -427,17 +419,26 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     setIsSavingRecord(true);
     try {
       const durationSeconds = (parseInt(newMin) || 0) * 60 + (parseInt(newSec) || 0);
-      const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, !!editingRecord.preachingGroupId, editingRecord.id);
-
-      updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id), {
+      
+      const docRef = doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id);
+      updateDocumentNonBlocking(docRef, {
         actualDurationSeconds: durationSeconds,
         actualDurationFormatted: formatDuration(durationSeconds),
-        overageSeconds,
-        totalFineAmount,
-        explanation
       });
 
-      toast({ title: "Record Updated", description: "Time and fine have been recalculated based on group totals." });
+      if (editingRecord.preachingGroupId) {
+        // Recalculate group split after individual update
+        setTimeout(() => recalculateGroupFines(editingRecord.preachingGroupId), 500);
+      } else {
+        const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, false);
+        updateDocumentNonBlocking(docRef, {
+          totalFineAmount,
+          explanation,
+          overageSeconds
+        });
+      }
+
+      toast({ title: "Record Updated", description: "Fines have been recalculated." });
       setEditingRecord(null);
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Could not update record." });
@@ -448,7 +449,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   function handleDeleteRecord(recordId: string) {
     if (!firestore) return;
+    const record = records.find(r => r.id === recordId);
     deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordId));
+    
+    if (record?.preachingGroupId) {
+       setTimeout(() => recalculateGroupFines(record.preachingGroupId), 500);
+    }
+    
     toast({ title: "Record Deleted" });
     setRecordToDelete(null);
     setEditingRecord(null);
