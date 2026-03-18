@@ -2,10 +2,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Universal access for authenticated users as requested.
-    // This allows both admins and regular users to access all sessions, groups, and events.
+    // Universal access for authenticated users to standard paths.
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // Explicit rules for collection group queries are required by Firestore.
+    // This allows the dashboard to aggregate preaching_events and votes across all sessions.
+    match /{path=**}/preaching_events/{event} {
+      allow read, list: if request.auth != null;
+    }
+    
+    match /{path=**}/votes/{vote} {
+      allow read, list: if request.auth != null;
     }
   }
 }

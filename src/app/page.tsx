@@ -68,7 +68,6 @@ export default function Dashboard() {
   // Global access: Fetch counts for the system
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Users can see all sessions as requested
     return query(collection(firestore, 'sessions'), limit(50));
   }, [firestore, user]);
 
@@ -91,12 +90,26 @@ export default function Dashboard() {
     );
   }, [firestore, userParticipantId]);
 
-  // Activity feed: Show latest records
+  // Activity feed: Show global records for admins, personal for users
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Global access: show latest 20 preaching events
-    return query(collectionGroup(firestore, 'preaching_events'), limit(20));
-  }, [firestore, user]);
+    
+    // For admins, show latest 20 preaching events globally
+    if (isAdmin) {
+      return query(collectionGroup(firestore, 'preaching_events'), limit(20));
+    }
+    
+    // For users, show only their own involvement
+    if (userParticipantId) {
+      return query(
+        collectionGroup(firestore, 'preaching_events'), 
+        where(`eventParticipants.${userParticipantId}`, '==', true),
+        limit(20)
+      );
+    }
+    
+    return null;
+  }, [firestore, user, isAdmin, userParticipantId]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
@@ -141,6 +154,8 @@ export default function Dashboard() {
 
   const totalFinesSum = useMemo(() => {
     if (!myEvents) return 0;
+    // We sum up the fine for this specific participant from each event
+    // If it's a group session, totalFineAmount already contains the split share
     return myEvents.reduce((sum, event) => {
       return sum + (event.totalFineAmount || 0);
     }, 0);
@@ -240,14 +255,14 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Global Activity</CardTitle>
+                  <CardTitle>Activity Feed</CardTitle>
                   <CardDescription>
-                    Latest records across all preaching sessions.
+                    {isAdmin ? 'Global records across all preaching sessions.' : 'Your participation history and results.'}
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
                   <Link href="/sessions">
-                    View All <ArrowRight className="ml-2 h-4 w-4" />
+                    View Sessions <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
               </div>
@@ -257,9 +272,9 @@ export default function Dashboard() {
                 <div className="flex justify-center py-10">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : recentSessions && recentSessions.length > 0 ? (
+              ) : Object.keys(participationBySession).length > 0 ? (
                 <div className="space-y-4">
-                  {recentSessions.map((session) => {
+                  {recentSessions.filter(s => participationBySession[s.id]).map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
                     
                     return (
@@ -285,24 +300,22 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {sessionEvents.length > 0 && (
-                          <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
-                            <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <HistoryIcon className="h-3 w-3" /> Record Details
-                            </p>
-                            <div className="flex flex-col gap-2">
-                              {sessionEvents.slice(0, 3).map(record => (
-                                <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
-                                  <span className="truncate max-w-[150px] font-medium">{record.participantName.split(' - ').pop()}</span>
-                                  <div className="flex gap-2 items-center">
-                                    <span className="font-mono opacity-80">{record.actualDurationFormatted}</span>
-                                    {record.totalFineAmount > 0 && <span className="text-destructive font-bold">₱{record.totalFineAmount.toFixed(2)}</span>}
-                                  </div>
+                        <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
+                            <HistoryIcon className="h-3 w-3" /> Record Details
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            {sessionEvents.map(record => (
+                              <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
+                                <span className="truncate max-w-[150px] font-medium">{record.participantName.split(' - ').pop()}</span>
+                                <div className="flex gap-2 items-center">
+                                  <span className="font-mono opacity-80">{record.actualDurationFormatted}</span>
+                                  {record.totalFineAmount > 0 && <span className="text-destructive font-bold">₱{record.totalFineAmount.toFixed(2)}</span>}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            ))}
                           </div>
-                        )}
+                        </div>
                       </div>
                     );
                   })}
@@ -311,9 +324,11 @@ export default function Dashboard() {
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground mb-4">No preaching activity found yet.</p>
-                  <Button asChild>
-                    <Link href="/sessions/new">Create Your First Session</Link>
-                  </Button>
+                  {isAdmin && (
+                    <Button asChild>
+                      <Link href="/sessions/new">Create Your First Session</Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
