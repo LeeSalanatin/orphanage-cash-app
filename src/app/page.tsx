@@ -4,7 +4,6 @@ import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebas
 import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/badge'; // Note: Re-importing as Button below for UI consistency
 import { 
   Mic2, 
   Users, 

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -17,6 +19,14 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
 import { 
   Mic2, 
   Clock, 
@@ -30,7 +40,8 @@ import {
   History,
   TrendingDown,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  Edit2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -51,6 +62,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [isPaused, setIsPaused] = useState(false);
   const [repeatPreachContext, setRepeatPreachContext] = useState<{pId: string, gId: string | null} | null>(null);
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  
+  // Edit Time State
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [editMin, setEditMin] = useState('');
+  const [editSec, setEditSec] = useState('');
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -211,6 +227,36 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Recording Saved" });
   }
 
+  function handleEditClick(record: any) {
+    setEditingRecord(record);
+    setEditMin(Math.floor(record.actualDurationSeconds / 60).toString());
+    setEditSec((record.actualDurationSeconds % 60).toString());
+  }
+
+  function saveEditedTime() {
+    if (!firestore || !id || !editingRecord) return;
+    const newSeconds = (parseInt(editMin) || 0) * 60 + (parseInt(editSec) || 0);
+    
+    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+    const newOverage = Math.max(0, newSeconds - maxSeconds);
+    
+    let newFine = 0;
+    if (!editingRecord.preachingGroupId) {
+      const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+      newFine = rule.type === 'fixed' ? (newOverage > 0 ? rule.amount : 0) : newOverage * (rule.amount / 60);
+    }
+
+    updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id), {
+      actualDurationSeconds: newSeconds,
+      actualDurationFormatted: formatDuration(newSeconds),
+      overageSeconds: newOverage,
+      totalFineAmount: newFine
+    });
+
+    setEditingRecord(null);
+    toast({ title: "Time Updated" });
+  }
+
   function confirmDeleteRecord() {
     if (!firestore || !id || !recordToDelete) return;
     deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordToDelete));
@@ -307,9 +353,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <TableCell className="text-destructive font-bold">₱{displayFine.toFixed(2)}</TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setRecordToDelete(r.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => handleEditClick(r)}>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setRecordToDelete(r.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -437,6 +488,29 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editingRecord} onOpenChange={o => !o && setEditingRecord(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Preaching Time</DialogTitle>
+            <DialogDescription>Manually adjust the duration for {editingRecord?.participantName}.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Minutes</Label>
+              <Input type="number" value={editMin} onChange={(e) => setEditMin(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Seconds</Label>
+              <Input type="number" min="0" max="59" value={editSec} onChange={(e) => setEditSec(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRecord(null)}>Cancel</Button>
+            <Button onClick={saveEditedTime}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
