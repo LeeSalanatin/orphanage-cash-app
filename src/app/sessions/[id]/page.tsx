@@ -204,7 +204,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     });
   }, [records, session, allGroups]);
 
-  // Map to help Results table get group context
   const groupStatsMap = useMemo(() => {
     const map: Record<string, { totalFine: number, splitFine: number, groupCode: string }> = {};
     groupDistributions.forEach(d => {
