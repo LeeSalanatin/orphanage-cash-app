@@ -93,7 +93,7 @@ export default function Dashboard() {
     );
   }, [firestore, user]);
 
-  // Global history for the feed (Participants see their own, Admins see all)
+  // Global history for the feed (Participants see their own participation, Admins see all)
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (isAdmin) {
@@ -247,7 +247,7 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "Your Activity"}</CardTitle>
+                  <CardTitle>{isAdmin ? "System Activity" : "Your Participation History"}</CardTitle>
                   <CardDescription>
                     Latest preaching records and session updates.
                   </CardDescription>
@@ -270,6 +270,8 @@ export default function Dashboard() {
                     const sessionEvents = participationBySession[session.id] || [];
                     const myEvent = sessionEvents.find(e => e.participantId === user.uid);
                     
+                    if (!isAdmin && !myEvent) return null;
+
                     return (
                       <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -304,7 +306,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> Recent Activity
+                              <History className="h-3 w-3" /> {isAdmin ? "Session Activity" : "Your Records"}
                             </p>
                             <div className="flex flex-col gap-2">
                               {myEvent && (
@@ -317,6 +319,7 @@ export default function Dashboard() {
                               <div className="pl-3 border-l-2 border-accent/40 py-1">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
                                   {sessionEvents
+                                    .filter(record => isAdmin || record.participantId === user.uid)
                                     .slice(0, 4)
                                     .map(record => (
                                       <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
@@ -337,7 +340,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground mb-4">No sessions found for you.</p>
+                  <p className="text-muted-foreground mb-4">No activity found.</p>
                   {isAdmin && (
                     <Button asChild>
                       <Link href="/sessions/new">Create Your First Session</Link>

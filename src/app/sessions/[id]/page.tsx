@@ -588,7 +588,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine (Member / Total)</TableHead>
+                        <TableHead>Group Fine (Member/Total)</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead>Individual Fine (₱)</TableHead>
                         <TableHead>Note</TableHead>
@@ -606,7 +606,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               {shortName}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground font-mono">
-                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
+                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)}/${gStats.totalFine.toFixed(2)})` : 'Individual'}
                             </TableCell>
                             <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
                             <TableCell className="text-destructive font-bold text-xs">
@@ -715,7 +715,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <Label className="font-bold">Enable Points</Label>
-                    <Switch checked={editPointsEnabled} onCheckedChange={editPointsEnabled} disabled={!isAdmin} />
+                    <Switch checked={editPointsEnabled} onCheckedChange={(v) => setEditPointsEnabled(v)} disabled={!isAdmin} />
                   </div>
                   {isAdmin && <Button className="w-full" onClick={handleSaveSettings}>Save Rewards</Button>}
                 </CardContent>
