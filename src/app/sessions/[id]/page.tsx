@@ -327,12 +327,25 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: isPaused ? "Timer Resumed" : "Timer Paused" });
   }
 
-  async function calculateFineForRecord(durationSeconds: number, isGroup: boolean) {
+  async function calculateFineForRecord(durationSeconds: number, isGroup: boolean, recordIdToExclude: string | null = null) {
     if (!session) return { totalFineAmount: 0, explanation: "", overageSeconds: 0 };
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-    const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
     
+    // Calculate total time for the group so far in this session
+    let existingSeconds = 0;
+    if (isGroup && (activeGroupId || editingRecord?.preachingGroupId)) {
+      const gId = activeGroupId || editingRecord?.preachingGroupId;
+      existingSeconds = records
+        .filter(r => r.preachingGroupId === gId && r.id !== recordIdToExclude)
+        .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
+    }
+
+    const totalSeconds = durationSeconds + existingSeconds;
+    const overageTotal = Math.max(0, totalSeconds - maxSeconds);
+    const overageExisting = Math.max(0, existingSeconds - maxSeconds);
+    const incrementalOverage = overageTotal - overageExisting;
+
     const rule = session.fineRules?.find((r: any) => 
       isGroup ? r.appliesTo === 'group' : r.appliesTo === 'individual'
     ) || session.fineRules?.[0] || { type: 'per-minute-overage', amount: 30 };
@@ -340,39 +353,38 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     let totalFineAmount = 0;
     let fineCalculationDetails = "";
 
-    if (overageSeconds > 0) {
+    if (incrementalOverage > 0) {
       if (rule.type === 'fixed' || session.sessionType === 'sunday preaching') {
-        totalFineAmount = rule.amount;
-        fineCalculationDetails = `Fixed fine for ${formatDuration(overageSeconds)} overage.`;
+        // If it's a fixed fine, only charge it if we haven't crossed the limit yet
+        totalFineAmount = overageExisting === 0 ? rule.amount : 0;
+        fineCalculationDetails = totalFineAmount > 0 ? `Fixed fine for crossing ${formatDuration(maxSeconds)} limit.` : "Fixed fine already applied to group.";
       } else {
         const ratePerSecond = rule.amount / 60;
-        totalFineAmount = overageSeconds * ratePerSecond;
-        fineCalculationDetails = `${formatDuration(overageSeconds)} overage at ₱${rule.amount}/min.`;
+        totalFineAmount = incrementalOverage * ratePerSecond;
+        fineCalculationDetails = `Accrued ${formatDuration(incrementalOverage)} overage at ₱${rule.amount}/min.`;
       }
     }
 
-    let explanation = "No fine incurred.";
+    let explanation = totalFineAmount > 0 ? fineCalculationDetails : "No incremental fine incurred.";
     if (totalFineAmount > 0) {
       try {
         const aiResponse = await generateFineExplanation({
           sessionType: session.sessionType,
-          participantName: "Participant",
+          participantName: isGroup ? "Group Member" : "Participant",
           preachingDurationMinutes: parseFloat((durationSeconds / 60).toFixed(2)),
           maxAllowedDurationMinutes: parseFloat((maxSeconds / 60).toFixed(2)),
           fineRateDescription: (rule.type === 'fixed' || session.sessionType === 'sunday preaching') ? `₱${rule.amount} fixed` : `₱${rule.amount} per min`,
           fineAmount: parseFloat(totalFineAmount.toFixed(2)),
-          overageMinutes: parseFloat((overageSeconds / 60).toFixed(2)),
-          rulesSummary: session.sessionType === 'sunday preaching' 
-            ? `Fixed fine of ₱${rule.amount} for any overage.` 
-            : `Maximum allowed time is ${formatDuration(maxSeconds)}.`
+          overageMinutes: parseFloat((incrementalOverage / 60).toFixed(2)),
+          rulesSummary: isGroup ? `Group session: Limit is ${formatDuration(maxSeconds)} total for team.` : `Maximum allowed time is ${formatDuration(maxSeconds)}.`
         });
         explanation = aiResponse.explanation;
       } catch (e) {
-        explanation = fineCalculationDetails;
+        // fallback to details
       }
     }
 
-    return { totalFineAmount, explanation, overageSeconds };
+    return { totalFineAmount, explanation, overageSeconds: incrementalOverage };
   }
 
   async function handleStopTracking() {
@@ -415,7 +427,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     setIsSavingRecord(true);
     try {
       const durationSeconds = (parseInt(newMin) || 0) * 60 + (parseInt(newSec) || 0);
-      const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, !!editingRecord.preachingGroupId);
+      const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, !!editingRecord.preachingGroupId, editingRecord.id);
 
       updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id), {
         actualDurationSeconds: durationSeconds,
@@ -425,7 +437,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         explanation
       });
 
-      toast({ title: "Record Updated", description: "Time and fine have been recalculated." });
+      toast({ title: "Record Updated", description: "Time and fine have been recalculated based on group totals." });
       setEditingRecord(null);
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Could not update record." });
@@ -751,7 +763,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <HistoryIcon className="h-5 w-5 text-accent" />
                     Incentives & Fines Table
                   </CardTitle>
-                  <CardDescription>Final records and automatic fine calculations.</CardDescription>
+                  <CardDescription>Final records and group-based fine calculations.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -1109,7 +1121,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <DialogTitle>Edit Recorded Time</DialogTitle>
             <DialogDescription>
               Adjust the preaching duration for <strong>{editingRecord?.participantName}</strong>. 
-              The fine will be recalculated automatically.
+              Fines are recalculated based on the cumulative group total.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
