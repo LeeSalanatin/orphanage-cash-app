@@ -18,7 +18,6 @@ import {
   Gavel,
   User as UserIcon,
   TrendingDown,
-  TrendingUp,
   Calendar,
   ChevronRight
 } from 'lucide-react';
@@ -95,6 +94,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
+    // Summing the totalFineAmount which is stored as the individual's share in our recorder
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
@@ -104,8 +104,13 @@ export default function Dashboard() {
     if (!rawEvents) return { longestIndividual: null, longestGroup: null };
     let indMax = { time: 0, name: '', session: '' };
     let grpMax = { time: 0, name: '', session: '' };
+    
     rawEvents.forEach(e => {
-      const simplifiedName = e.participantName.split(' - ').pop();
+      // Simplify name by taking the part after the hyphen if present
+      const simplifiedName = e.participantName.includes(' - ') 
+        ? e.participantName.split(' - ').pop() 
+        : e.participantName;
+
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
           grpMax = { 
@@ -225,7 +230,9 @@ export default function Dashboard() {
                       <div className="flex items-center gap-4">
                         <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
                         <div>
-                          <p className="font-semibold text-sm">{event.participantName.split(' - ').pop()}</p>
+                          <p className="font-semibold text-sm">
+                            {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
+                          </p>
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                             {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
                             {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}

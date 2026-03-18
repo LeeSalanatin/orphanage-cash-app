@@ -2,17 +2,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all authenticated users full access to all collections
-    // This simple rule is the most robust way to ensure collectionGroup queries work
+    // Allow all authenticated users full access to all collections and documents
+    // This is the most permissive and reliable way to handle collectionGroup queries
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
     
-    // Explicitly authorize collection group queries for preaching_events and votes
+    // Explicitly authorize collection group queries for preaching_events
     match /{path=**}/preaching_events/{event} {
       allow read, write: if request.auth != null;
     }
 
+    // Explicitly authorize collection group queries for votes
     match /{path=**}/votes/{vote} {
       allow read, write: if request.auth != null;
     }
