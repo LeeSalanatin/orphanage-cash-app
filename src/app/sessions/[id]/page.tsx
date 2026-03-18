@@ -42,7 +42,6 @@ import {
   History as HistoryIcon
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateFineExplanation } from '@/ai/flows/fine-explanation-flow';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use, useMemo } from 'react';
@@ -142,7 +141,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   function formatDuration(seconds: number) {
     const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
+    const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
@@ -330,27 +329,45 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   async function recalculateGroupFines(groupId: string, newRecord?: any) {
     if (!session || !firestore) return;
 
-    const groupRecords = records.filter(r => r.preachingGroupId === groupId);
-    if (newRecord) groupRecords.push(newRecord);
+    // Use current snapshot data for recalculation
+    const currentRecords = [...records];
+    if (newRecord && !currentRecords.find(r => r.id === newRecord.id)) {
+      currentRecords.push(newRecord);
+    }
 
-    const uniqueParticipants = new Set(groupRecords.map(r => r.participantId));
-    const numParticipants = uniqueParticipants.size;
+    const groupRecords = currentRecords.filter(r => r.preachingGroupId === groupId);
+    const uniqueParticipantIds = Array.from(new Set(groupRecords.map(r => r.participantId)));
+    const numParticipants = uniqueParticipantIds.length;
+    
     if (numParticipants === 0) return;
 
     const totalGroupSeconds = groupRecords.reduce((sum, r) => sum + r.actualDurationSeconds, 0);
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const overageSeconds = Math.max(0, totalGroupSeconds - maxSeconds);
     
-    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30 };
-    const totalGroupFine = (overageSeconds * (rule.amount / 60));
+    // Default rate if not found: 30 per minute (0.50 per second)
+    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+    
+    let totalGroupFine = 0;
+    if (overageSeconds > 0) {
+      if (rule.type === 'fixed') {
+        totalGroupFine = rule.amount;
+      } else {
+        totalGroupFine = overageSeconds * (rule.amount / 60);
+      }
+    }
+
     const splitFine = totalGroupFine / numParticipants;
+    const formattedOverage = formatDuration(overageSeconds);
 
     // Update all events for this group in this session
     groupRecords.forEach(r => {
       const docRef = doc(firestore, 'sessions', id, 'preaching_events', r.id);
       updateDocumentNonBlocking(docRef, {
         totalFineAmount: splitFine,
-        explanation: `Group split fine: ${formatDuration(overageSeconds)} total overage split between ${numParticipants} members.`
+        explanation: totalGroupFine > 0 
+          ? `Group overage: ${formattedOverage}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${numParticipants} members.`
+          : "Group stayed within time limit."
       });
     });
   }
@@ -360,19 +377,17 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     
-    // For individual sessions, calculate normally.
-    // For group sessions, we will recalculate EVERYTHING in recalculateGroupFines after saving.
     if (!isGroup) {
       const overageSeconds = Math.max(0, durationSeconds - maxSeconds);
-      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'individual') || session.fineRules?.[0] || { amount: 30 };
+      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'individual') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       const fineAmount = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
       let explanation = fineAmount > 0 ? `Individual overage of ${formatDuration(overageSeconds)}.` : "No fine incurred.";
       return { totalFineAmount: fineAmount, explanation, overageSeconds };
     }
 
-    // Default for groups (will be overwritten by split logic)
-    return { totalFineAmount: 0, explanation: "Calculating group split...", overageSeconds: 0 };
+    // Default for groups (will be recalculated by split logic)
+    return { totalFineAmount: 0, explanation: "Pending group split...", overageSeconds: 0 };
   }
 
   async function handleStopTracking() {
@@ -403,7 +418,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const docRef = await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
     if (activeGroupId) {
-      recalculateGroupFines(activeGroupId, { ...eventData, id: docRef!.id });
+      // Trigger group recalculation with a slight delay to ensure onSnapshot doesn't clash
+      setTimeout(() => recalculateGroupFines(activeGroupId!, { ...eventData, id: docRef!.id }), 500);
     }
 
     setActiveParticipantId(null);
@@ -427,7 +443,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       });
 
       if (editingRecord.preachingGroupId) {
-        // Recalculate group split after individual update
         setTimeout(() => recalculateGroupFines(editingRecord.preachingGroupId), 500);
       } else {
         const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, false);
