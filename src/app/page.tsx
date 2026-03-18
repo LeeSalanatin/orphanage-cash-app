@@ -82,7 +82,7 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query ONLY preaching events involving the current user to sum personal fines
+  // Query ALL preaching events across ALL sessions involving the current user to sum personal fines
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -91,7 +91,7 @@ export default function Dashboard() {
     );
   }, [firestore, user]);
 
-  // Feed: Admins see all, Users see events where they or their group participated
+  // Feed: Admins see all system activity, Users see their individual and group activity
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) {
@@ -147,9 +147,18 @@ export default function Dashboard() {
   }, [feedEvents]);
 
   const totalFinesSum = useMemo(() => {
-    if (!myEvents) return 0;
-    return myEvents.reduce((sum, event) => sum + (event.totalFineAmount || 0), 0);
-  }, [myEvents]);
+    if (!myEvents || !user) return 0;
+    // Sum only the specific records where the current user was the participant
+    // or their share of a group fine if the record is a group record.
+    // In our logic, 'totalFineAmount' in preaching_events is the individual share.
+    return myEvents.reduce((sum, event) => {
+      // If it's a direct individual record or a group record where the user is a member
+      if (event.participantId === user.uid || (event.eventParticipants && event.eventParticipants[user.uid] === true)) {
+        return sum + (event.totalFineAmount || 0);
+      }
+      return sum;
+    }, 0);
+  }, [myEvents, user]);
 
   const stats = {
     totalSessions: rawSessions?.length || 0,

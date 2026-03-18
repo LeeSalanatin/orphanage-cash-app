@@ -137,7 +137,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      const memberCount = Math.max(1, Object.keys(g.allGroupMembers).length - 1); // Subtract owner
+      const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
       return {
@@ -220,6 +220,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const docRef = doc(firestore, 'sessions', id, 'preaching_events', r.id);
       updateDocumentNonBlocking(docRef, {
         totalFineAmount: splitFine,
+        groupTotalFine: totalGroupFine,
+        groupMemberShare: splitFine,
         explanation: totalGroupFine > 0 
           ? `Group overage: ${formatDuration(overageSeconds)}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${memberCount} members.`
           : "Group stayed within time limit."
@@ -237,7 +239,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
-        if (mId !== 'owner') participantsMap[mId] = true;
+        participantsMap[mId] = true;
       });
     }
 
@@ -367,7 +369,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine Context</TableHead>
+                        <TableHead>Group Context</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead className="text-right">Share (₱)</TableHead>
                       </TableRow>
