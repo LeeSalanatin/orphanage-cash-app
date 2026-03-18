@@ -271,7 +271,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <TableRow>
                     <TableHead>Preacher</TableHead>
                     <TableHead>Actual Time</TableHead>
-                    <TableHead>Group Context (Share / Total Fine)</TableHead>
+                    <TableHead>Group Fine Context</TableHead>
                     <TableHead className="text-right">Your Share (₱)</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -370,8 +370,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
