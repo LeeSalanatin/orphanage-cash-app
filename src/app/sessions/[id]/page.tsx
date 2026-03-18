@@ -328,7 +328,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <div className={cn("text-7xl font-mono font-bold tabular-nums mb-8", isPaused && "opacity-50")}>
                       {formatDuration(timer)}
                     </div>
-                    <div className="flex gap-4 w-full max-w-sm">
+                    <div className="flex gap-4 w-full max-sm:px-4">
                       <Button size="lg" variant="secondary" className="flex-1 h-14" onClick={togglePause}>
                         {isPaused ? <Play className="h-6 w-6" /> : <Pause className="h-6 w-6" />}
                       </Button>

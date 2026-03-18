@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect } from 'react';
@@ -13,7 +14,7 @@ import { Loader2, Save, ArrowLeft, AlertCircle, PlusCircle, Calendar as Calendar
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 function NewSessionContent() {
   const router = useRouter();
