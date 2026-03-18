@@ -21,7 +21,7 @@ import {
   Gavel,
   Settings2,
   Sparkles,
-  Vote as VoteIcon,
+  Vote,
   History
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -292,8 +292,8 @@ export default function Dashboard() {
                             </Badge>
                             {session.status === 'completed' && session.votingConfig?.enabled && !session.votingClosed && (
                               <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
-                                <Link href={`/sessions/${id}/voting`}>
-                                  <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />
+                                <Link href={`/sessions/${session.id}/voting`}>
+                                  <Vote className="mr-2 h-3.5 w-3.5 text-accent" />
                                   Vote
                                 </Link>
                               </Button>

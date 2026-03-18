@@ -22,13 +22,20 @@ service cloud.firestore {
     // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
     
     match /{allPaths=**}/preaching_events/{eventId} {
-      allow read, list: if isSignedIn();
+      // Allow listing/reading if the user is an admin or is the participant/owner
+      allow read, list: if isSignedIn() && (
+        isAdmin() || 
+        request.auth.uid == resource.data.participantId || 
+        request.auth.uid == resource.data.sessionOwnerId ||
+        (resource.data.sessionMembers != null && resource.data.sessionMembers.get(request.auth.uid, null) != null)
+      );
       allow create: if isSignedIn();
       allow update, delete: if isAdmin() || (isSignedIn() && (request.auth.uid == resource.data.sessionOwnerId || request.auth.uid == resource.data.participantId));
     }
 
     match /{allPaths=**}/votes/{voteId} {
-      allow read, list: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin());
+      // Votes are private to the voter and admins
+      allow read, list: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin() || request.auth.uid == resource.data.sessionOwnerId);
       allow create: if isSignedIn();
       allow update: if isSignedIn() && request.auth.uid == resource.data.voterParticipantId;
       allow delete: if isAdmin();
