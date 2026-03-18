@@ -4,7 +4,7 @@ import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebas
 import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/badge'; // Note: Re-importing as Button below for UI consistency
 import { 
   Mic2, 
   Users, 
@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useMemo, useState, useEffect } from 'react';
+import { Button as ShadButton } from '@/components/ui/button';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
@@ -108,7 +109,7 @@ export default function Dashboard() {
 
   // Comprehensive fine calculation with session-aware group logic
   const stats = useMemo(() => {
-    if (!myEvents || !allSessions || !allGroups || !rawEvents) return { totalFines: 0, points: userData?.totalPoints || 0 };
+    if (!myEvents || !allSessions || !allGroups || !rawEvents || !userParticipantId) return { totalFines: 0, points: userData?.totalPoints || 0 };
     
     let totalFines = 0;
 
@@ -149,7 +150,7 @@ export default function Dashboard() {
     });
 
     return { totalFines, points: userData?.totalPoints || 0 };
-  }, [myEvents, allSessions, allGroups, rawEvents, userData]);
+  }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
 
   const globalRecords = useMemo(() => {
     if (!rawEvents) return { longestIndividual: null, longestGroup: null };
@@ -196,8 +197,8 @@ export default function Dashboard() {
         <h1 className="text-4xl font-bold mb-4 text-primary">PreachPoint</h1>
         <p className="text-muted-foreground mb-8 text-lg">Manage preaching sessions, fines, and voting rewards.</p>
         <div className="flex justify-center gap-4">
-          <Button asChild size="lg"><Link href="/login">Sign In</Link></Button>
-          <Button asChild variant="outline" size="lg"><Link href="/signup">Create Account</Link></Button>
+          <ShadButton asChild size="lg"><Link href="/login">Sign In</Link></ShadButton>
+          <ShadButton asChild variant="outline" size="lg"><Link href="/signup">Create Account</Link></ShadButton>
         </div>
       </div>
     );
@@ -245,7 +246,7 @@ export default function Dashboard() {
           title="Total Preaching Events" 
           value={myEvents?.length.toString() || "0"} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Global records"
+          description="Personal history"
         />
         <StatCard 
           title="Recent Preaching Time" 
@@ -316,9 +317,9 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
-                  <Button variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
+                  <ShadButton variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
                     <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
-                  </Button>
+                  </ShadButton>
                 </div>
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
@@ -377,21 +378,21 @@ export default function Dashboard() {
           <Card className="shadow-md">
             <CardHeader><CardTitle>Explore System</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
+              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/sessions">
                   <Mic2 className="mr-3 h-5 w-5 text-primary" /> Active Sessions
                 </Link>
-              </Button>
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
+              </ShadButton>
+              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/participants">
                   <Users className="mr-3 h-5 w-5 text-primary" /> Roster & Roles
                 </Link>
-              </Button>
-              <Button className="w-full justify-start h-12" variant="outline" asChild>
+              </ShadButton>
+              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/configurations">
                   <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
                 </Link>
-              </Button>
+              </ShadButton>
             </CardContent>
           </Card>
         </div>

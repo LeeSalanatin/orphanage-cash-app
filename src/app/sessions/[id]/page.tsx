@@ -228,6 +228,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
 
+  // Calculate default tab for group live roster
+  const activeGroups = allGroups?.filter(group => 
+    availableParticipants?.some(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]))
+  ) || [];
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex justify-between items-center">
@@ -324,8 +329,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </TabsContent>
 
         <TabsContent value="live">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 gap-8">
+            <div className="space-y-6">
               {activeParticipantId && (
                 <Card className="border-accent bg-accent/5 p-10 text-center animate-in zoom-in mb-6">
                   <p className="text-xl text-muted-foreground mb-4">{availableParticipants?.find(p => p.id === activeParticipantId)?.name}</p>
@@ -338,42 +343,53 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               )}
 
               {session?.sessionType === 'group' ? (
-                <div className="space-y-6">
-                  {allGroups?.map(group => {
+                <Tabs defaultValue={activeGroups[0]?.id} className="w-full">
+                  <TabsList className="flex flex-wrap h-auto mb-4 bg-muted/50 p-1 rounded-lg gap-1">
+                    {activeGroups.map(group => (
+                      <TabsTrigger 
+                        key={group.id} 
+                        value={group.id}
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-6 py-2"
+                      >
+                        {group.name}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {activeGroups.map(group => {
                     const groupMembers = availableParticipants?.filter(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]));
-                    if (!groupMembers || groupMembers.length === 0) return null;
-
                     return (
-                      <Card key={group.id} className="shadow-md">
-                        <CardHeader className="bg-primary/5 pb-4">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <UsersIcon className="h-5 w-5 text-primary" />
-                            Team: {group.name}
-                          </CardTitle>
-                          {group.description && <CardDescription>{group.description}</CardDescription>}
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {groupMembers.map(p => (
-                              <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                                <span className="font-medium text-sm">{p.name}</span>
-                                {isAdmin && !activeParticipantId && (
-                                  <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id, group.id)}>
-                                    <Play className="h-4 w-4 mr-2" /> Start
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <TabsContent key={group.id} value={group.id} className="mt-0 focus-visible:ring-0">
+                        <Card className="shadow-md border-primary/10">
+                          <CardHeader className="bg-primary/5 pb-4">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <UsersIcon className="h-5 w-5 text-primary" />
+                              {group.name}
+                            </CardTitle>
+                            {group.description && <CardDescription>{group.description}</CardDescription>}
+                          </CardHeader>
+                          <CardContent className="pt-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {groupMembers?.map(p => (
+                                <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                                  <span className="font-medium text-sm">{p.name}</span>
+                                  {isAdmin && !activeParticipantId && (
+                                    <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id, group.id)}>
+                                      <Play className="h-4 w-4 mr-2" /> Start
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
                     );
                   })}
-                </div>
+                </Tabs>
               ) : (
                 <Card>
                   <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {availableParticipants?.map(p => (
                       <div key={p.id} className="p-4 border rounded-lg flex justify-between items-center bg-card">
                         <span className="font-medium">{p.name}</span>
