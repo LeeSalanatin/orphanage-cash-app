@@ -82,17 +82,16 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query ALL preaching events involving the user (individual or group) to sync total fines
+  // Query ONLY preaching events involving the current user to sum personal fines
   const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isAdmin === null) return null;
-    if (isAdmin) return collectionGroup(firestore, 'preaching_events');
+    if (!firestore || !user) return null;
     return query(
       collectionGroup(firestore, 'preaching_events'),
       where(`eventParticipants.${user.uid}`, '==', true)
     );
-  }, [firestore, user, isAdmin]);
+  }, [firestore, user]);
 
-  // Participation feed: Participated events or group events
+  // Feed: Admins see all, Users see events where they or their group participated
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) {
@@ -147,20 +146,10 @@ export default function Dashboard() {
     return grouped;
   }, [feedEvents]);
 
-  const totalFinesSync = useMemo(() => {
-    if (!myEvents || !user) return 0;
-    let total = 0;
-    myEvents.forEach(event => {
-      // In preaching_events, totalFineAmount stores the share for the participant 
-      // in group sessions, or the full fine in individual sessions.
-      if (isAdmin) {
-         total += (event.totalFineAmount || 0);
-      } else if (event.eventParticipants?.[user.uid]) {
-         total += (event.totalFineAmount || 0);
-      }
-    });
-    return total;
-  }, [myEvents, user, isAdmin]);
+  const totalFinesSum = useMemo(() => {
+    if (!myEvents) return 0;
+    return myEvents.reduce((sum, event) => sum + (event.totalFineAmount || 0), 0);
+  }, [myEvents]);
 
   const stats = {
     totalSessions: rawSessions?.length || 0,
@@ -168,7 +157,7 @@ export default function Dashboard() {
     totalParticipants: participants?.length || 0,
     totalGroups: myGroups?.length || 0,
     myPoints: userData?.totalPoints || 0,
-    myFines: totalFinesSync
+    myFines: totalFinesSum
   };
 
   const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || feedLoading || isAdmin === null;

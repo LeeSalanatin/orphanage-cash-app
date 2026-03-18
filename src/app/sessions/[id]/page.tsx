@@ -137,7 +137,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      const memberCount = Math.max(1, Object.keys(g.allGroupMembers).length);
+      const memberCount = Math.max(1, Object.keys(g.allGroupMembers).length - 1); // Subtract owner
       const splitFine = totalFine / memberCount;
       
       return {
