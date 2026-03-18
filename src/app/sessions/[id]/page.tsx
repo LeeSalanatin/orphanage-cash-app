@@ -49,6 +49,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [repeatPreachContext, setRepeatPreachContext] = useState<{pId: string, gId: string | null} | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
 
   const sessionRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -210,9 +211,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Recording Saved" });
   }
 
-  function handleDeleteRecord(eventId: string) {
-    if (!firestore || !id) return;
-    deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', eventId));
+  function confirmDeleteRecord() {
+    if (!firestore || !id || !recordToDelete) return;
+    deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordToDelete));
+    setRecordToDelete(null);
     toast({ title: "Record Deleted" });
   }
 
@@ -300,7 +302,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <TableCell className="text-destructive font-bold">₱{displayFine.toFixed(2)}</TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(r.id)}>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setRecordToDelete(r.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -375,6 +377,25 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </TabsContent>
       </Tabs>
 
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!recordToDelete} onOpenChange={o => !o && setRecordToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the preaching record and recalibrate the session tally.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRecord} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Repeat Warning Dialog */}
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

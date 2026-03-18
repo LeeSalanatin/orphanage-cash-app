@@ -149,8 +149,7 @@ export default function Dashboard() {
       }
     });
 
-    const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
-    return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
+    return { totalFines, points: userData?.totalPoints || 0 };
   }, [myEvents, allSessions, allGroups, rawEvents, userData]);
 
   const globalRecords = useMemo(() => {
