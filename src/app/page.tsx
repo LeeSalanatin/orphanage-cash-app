@@ -9,19 +9,14 @@ import { Button } from '@/components/ui/button';
 import { 
   Mic2, 
   Users, 
-  TrendingUp, 
   Clock, 
-  ArrowRight, 
-  PlusCircle, 
   Loader2, 
-  Award, 
   Trophy, 
   Star, 
-  ShieldCheck, 
-  Gavel,
-  Settings2,
   History as HistoryIcon,
-  Timer
+  Timer,
+  Award,
+  Gavel
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -64,6 +59,8 @@ export default function Dashboard() {
 
   const { data: userParticipantData, isLoading: userLoading } = useCollection(userParticipantQuery);
   const userData = userParticipantData?.[0];
+  
+  // CRITICAL: Ensure we use the correct ID to find participation events
   const userParticipantId = userData?.id || user?.uid;
 
   // Participation History (Aggregated across all sessions)
@@ -105,8 +102,9 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
-    // Total Fines: Sum of user's individual share of fines
+    // Total Fines: Sum of user's individual share of fines recorded in events
     const totalFines = myEvents.reduce((sum, e) => {
+      // If it was a group preaching, this event record should already store the member's split
       return sum + (e.totalFineAmount || 0);
     }, 0);
 
@@ -119,17 +117,17 @@ export default function Dashboard() {
   const globalRecords = useMemo(() => {
     if (!allEvents) return { longestIndividual: null, longestGroup: null };
     
-    let indMax = { time: 0, name: '', type: '' };
-    let grpMax = { time: 0, name: '', type: '' };
+    let indMax = { time: 0, name: '' };
+    let grpMax = { time: 0, name: '' };
 
     allEvents.forEach(e => {
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
-          grpMax = { time: e.actualDurationSeconds, name: e.participantName, type: 'Group' };
+          grpMax = { time: e.actualDurationSeconds, name: e.participantName };
         }
       } else {
         if (e.actualDurationSeconds > indMax.time) {
-          indMax = { time: e.actualDurationSeconds, name: e.participantName, type: 'Individual' };
+          indMax = { time: e.actualDurationSeconds, name: e.participantName };
         }
       }
     });
@@ -191,14 +189,14 @@ export default function Dashboard() {
           title="My Preaching Time" 
           value={formatDuration(stats.totalSeconds)} 
           icon={<Timer className="h-5 w-5" />}
-          description="Cumulative across all sessions"
+          description="Cumulative duration"
           variant="accent"
         />
         <StatCard 
-          title="Team Strength" 
+          title="Active Teams" 
           value={allGroups?.length.toString() || "0"} 
           icon={<Users className="h-5 w-5" />}
-          description="Active preaching groups"
+          description="Global preaching groups"
         />
       </div>
 
@@ -206,15 +204,18 @@ export default function Dashboard() {
         <div className="lg:col-span-2 space-y-8">
           <Card className="shadow-md">
             <CardHeader>
-              <CardTitle>Time & Fine History</CardTitle>
-              <CardDescription>Detailed record of your participation in sessions.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <HistoryIcon className="h-5 w-5 text-primary" />
+                Time & Fine History
+              </CardTitle>
+              <CardDescription>Records of your participation in all sessions.</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
-                  {myEvents.slice(0, 10).map((event) => (
+                  {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => (
                     <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
                       <div className="flex items-center gap-4">
                         <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
@@ -222,13 +223,13 @@ export default function Dashboard() {
                           <p className="font-semibold text-sm">{event.participantName.split(' - ').pop()}</p>
                           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                             {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                            {event.preachingGroupId ? `Group: ${event.participantName.split(' - ')[0]}` : 'Individual Preach'}
+                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Preach'}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        {event.totalFineAmount > 0 && <p className="text-[10px] font-bold text-destructive">Fine Share: ₱{event.totalFineAmount.toFixed(2)}</p>}
+                        {event.totalFineAmount > 0 && <p className="text-[10px] font-bold text-destructive">My Share: ₱{event.totalFineAmount.toFixed(2)}</p>}
                       </div>
                     </div>
                   ))}
@@ -236,7 +237,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <HistoryIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground">No records found yet.</p>
+                  <p className="text-muted-foreground">No personal history found yet.</p>
                 </div>
               )}
             </CardContent>
@@ -263,7 +264,7 @@ export default function Dashboard() {
 
             <Card className="shadow-sm border-none bg-card">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Global Hall of Fame</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Hall of Fame (Points)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -288,7 +289,7 @@ export default function Dashboard() {
             <CardContent className="space-y-3">
               <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/sessions">
-                  <Mic2 className="mr-3 h-5 w-5 text-primary" /> View All Sessions
+                  <Mic2 className="mr-3 h-5 w-5 text-primary" /> Explore Sessions
                 </Link>
               </Button>
               <Button className="w-full justify-start h-12" variant="outline" asChild>

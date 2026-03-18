@@ -7,8 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   AlertDialog, 
@@ -24,11 +22,9 @@ import {
   Mic2, 
   Clock, 
   Play, 
-  Pause,
   StopCircle, 
   Vote, 
   Loader2, 
-  Settings2, 
   Users as UsersIcon, 
   Calendar, 
   Calculator,
@@ -182,12 +178,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     let fineToRecord = 0;
     if (!activeGroupId) {
-      // Individual session: Record fine immediately
       const overageSeconds = Math.max(0, timer - maxSeconds);
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
-      // Group session: Estimate current share of total group fine
       const existingGroupTime = records
         .filter(r => r.preachingGroupId === activeGroupId)
         .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
@@ -269,9 +263,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Participant</TableHead>
+                    <TableHead>Preacher</TableHead>
                     <TableHead>Time</TableHead>
-                    <TableHead>Group Fine (Share / Total)</TableHead>
+                    <TableHead>Group Context (My Share / Team Fine)</TableHead>
                     <TableHead className="text-right">Total Fine (₱)</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -288,7 +282,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           {r.preachingGroupId && gStats ? (
                             `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})`
                           ) : (
-                            'Individual Rate'
+                            'Individual Fine'
                           )}
                         </TableCell>
                         <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
@@ -318,9 +312,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {availableParticipants?.map(p => {
-                     // Check if this is a group session and they belong to a group
                      const participantGroups = allGroups?.filter(g => g.members && g.members[p.id]);
-                     
                      return (
                         <div key={p.id} className="p-4 border rounded-lg space-y-3 bg-card">
                           <div className="flex justify-between items-start">
