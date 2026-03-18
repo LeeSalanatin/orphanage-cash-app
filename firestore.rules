@@ -19,6 +19,7 @@ service cloud.firestore {
     }
 
     // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
+    // These must be at the root of the documents to allow collectionGroup queries
     
     match /{allPaths=**}/preaching_events/{eventId} {
       // Explicitly allow list and read for collection group queries at any path
