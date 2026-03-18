@@ -22,7 +22,7 @@ export function ParticipantSync() {
 
     async function syncParticipant() {
       try {
-        // Step 1: Check by UID (doc ID or userId field)
+        // Step 1: Check by UID (doc ID)
         const directDocRef = doc(firestore!, 'participants', user!.uid);
         const directSnap = await getDoc(directDocRef);
 
@@ -43,16 +43,16 @@ export function ParticipantSync() {
 
         // Step 3: Search for pre-registered profile by email
         if (user!.email) {
-          const qByEmail = query(
-            collection(firestore!, 'participants'), 
-            where('email', '==', user!.email),
-            where('userId', '==', null)
-          );
-          const snapByEmail = await getDocs(qByEmail);
+          const emailLower = user!.email.toLowerCase();
+          // We'll fetch all participants and check in memory for safety against case mismatch
+          const allParticipantsSnap = await getDocs(collection(firestore!, 'participants'));
+          const orphanDoc = allParticipantsSnap.docs.find(d => {
+            const data = d.data();
+            return data.email?.toLowerCase() === emailLower && !data.userId;
+          });
 
-          if (!snapByEmail.empty) {
+          if (orphanDoc) {
             // Orphan profile found, link it!
-            const orphanDoc = snapByEmail.docs[0];
             updateDocumentNonBlocking(doc(firestore!, 'participants', orphanDoc.id), {
               userId: user!.uid,
               name: orphanDoc.data().name || user!.displayName || user!.email
