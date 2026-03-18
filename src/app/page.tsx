@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
@@ -254,7 +253,7 @@ export default function Dashboard() {
           title="Recent Preaching Time" 
           value={recentPreaching?.actualDurationFormatted || "0:00"} 
           icon={<Timer className="h-5 w-5" />}
-          description={recentPreaching ? new Date(recentPreaching.startTime).toLocaleDateString() : "No recent activity"}
+          description={recentPreaching ? `Performed on ${new Date(recentPreaching.startTime).toLocaleDateString()}` : "No recent activity"}
           variant="accent"
         />
         <StatCard 
@@ -419,4 +418,3 @@ function StatCard({ title, value, icon, description, variant = 'primary' }: any)
     </Card>
   );
 }
-

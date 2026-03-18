@@ -1,18 +1,19 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all authenticated users full access to all collections and documents
+    // Standard rule: All authenticated users can read and write all documents.
+    // In a production app, you would refine these further.
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
     
-    // Explicitly authorize collection group queries for preaching_events
+    // Explicitly authorize collection group queries for preaching_events.
+    // This allows the Dashboard to list all events for a user across different sessions.
     match /{path=**}/preaching_events/{event} {
       allow read, write: if request.auth != null;
     }
 
-    // Explicitly authorize collection group queries for votes
+    // Explicitly authorize collection group queries for votes.
     match /{path=**}/votes/{vote} {
       allow read, write: if request.auth != null;
     }

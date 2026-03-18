@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
+import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import { doc, collection } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +28,8 @@ import {
   Calendar, 
   Calculator,
   History,
-  TrendingDown
+  TrendingDown,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -210,6 +210,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Recording Saved" });
   }
 
+  function handleDeleteRecord(eventId: string) {
+    if (!firestore || !id) return;
+    deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', eventId));
+    toast({ title: "Record Deleted" });
+  }
+
   if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
@@ -266,7 +272,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHead>Preacher</TableHead>
                     <TableHead>Actual Time</TableHead>
                     <TableHead>Group Fine Context</TableHead>
-                    <TableHead className="text-right">Your Share (₱)</TableHead>
+                    <TableHead>Your Share (₱)</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,13 +297,20 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             'Individual Fine'
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-destructive font-bold">₱{displayFine.toFixed(2)}</TableCell>
+                        <TableCell className="text-destructive font-bold">₱{displayFine.toFixed(2)}</TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteRecord(r.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
                   {records.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                      <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground italic">
                         No preaching events recorded yet.
                       </TableCell>
                     </TableRow>
