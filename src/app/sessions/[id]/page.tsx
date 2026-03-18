@@ -179,7 +179,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         if (rule.type === 'fixed') {
           totalFine = rule.amount;
         } else {
-          // Calculation: total seconds / 2 (₱30/min = ₱0.5/sec)
           totalFine = overageSeconds * (rule.amount / 60);
         }
       }
@@ -313,7 +312,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       return { totalFineAmount: fineAmount, explanation, overageSeconds };
     }
 
-    // Fines for groups are pending recalculation after submission
     return { totalFineAmount: 0, explanation: "Pending group split computation...", overageSeconds: 0 };
   }
 

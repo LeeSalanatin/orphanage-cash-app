@@ -27,8 +27,7 @@ service cloud.firestore {
     }
 
     match /{allPaths=**}/votes/{voteId} {
-      allow read: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin());
-      allow list: if isSignedIn();
+      allow read, list: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin());
       allow create: if isSignedIn();
       allow update: if isSignedIn() && request.auth.uid == resource.data.voterParticipantId;
       allow delete: if isAdmin();
