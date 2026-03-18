@@ -159,20 +159,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           id: r.preachingGroupId,
           name: gInfo?.name || 'Unknown Group',
           totalSeconds: 0,
-          uniqueParticipants: new Set(),
+          uniqueParticipantIds: new Set(),
           members: []
         };
       }
       
       groups[r.preachingGroupId].totalSeconds += r.actualDurationSeconds;
-      groups[r.preachingGroupId].uniqueParticipants.add(r.participantId);
-      groups[r.preachingGroupId].members.push({
-        id: r.id,
-        participantId: r.participantId,
-        name: r.participantName.split(' - ').pop(),
-        duration: r.actualDurationFormatted,
-        fine: r.totalFineAmount || 0
-      });
+      groups[r.preachingGroupId].uniqueParticipantIds.add(r.participantId);
+      groups[r.preachingGroupId].members.push(r);
     });
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
@@ -189,7 +183,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         }
       }
       
-      const participantCount = g.uniqueParticipants.size;
+      const participantCount = g.uniqueParticipantIds.size;
       const splitFine = participantCount > 0 ? totalFine / participantCount : 0;
       
       return {
@@ -199,7 +193,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         participantCount,
         splitFine,
         overageFormatted: formatDuration(overageSeconds),
-        totalDurationFormatted: formatDuration(g.totalSeconds)
+        totalDurationFormatted: formatDuration(g.totalSeconds),
+        memberList: g.members.map((m: any) => ({
+          id: m.id,
+          name: m.participantName.split(' - ').pop(),
+          duration: m.actualDurationFormatted,
+          fine: splitFine // Use the split fine here
+        }))
       };
     });
   }, [records, session, allGroups]);
@@ -249,15 +249,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: isPaused ? "Timer Resumed" : "Timer Paused" });
   }
 
-  async function recalculateGroupFines(groupId: string, newRecord?: any) {
-    if (!session || !firestore) return;
+  async function recalculateGroupFines(groupId: string) {
+    if (!session || !firestore || !records) return;
 
-    const currentRecords = [...records];
-    if (newRecord && !currentRecords.find(r => r.id === newRecord.id)) {
-      currentRecords.push(newRecord);
-    }
-
-    const groupRecords = currentRecords.filter(r => r.preachingGroupId === groupId);
+    const groupRecords = records.filter(r => r.preachingGroupId === groupId);
     const uniqueParticipantIds = Array.from(new Set(groupRecords.map(r => r.participantId)));
     const numParticipants = uniqueParticipantIds.length;
     
@@ -286,7 +281,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       updateDocumentNonBlocking(docRef, {
         totalFineAmount: splitFine,
         explanation: totalGroupFine > 0 
-          ? `Group overage: ${formattedOverage}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${numParticipants} unique members.`
+          ? `Group overage: ${formattedOverage}. Total fine ₱${totalGroupFine.toFixed(2)} split among ${numParticipants} unique participants.`
           : "Group stayed within time limit."
       });
     });
@@ -334,10 +329,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
-    const docRef = await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
+    await addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
     
     if (activeGroupId) {
-      setTimeout(() => recalculateGroupFines(activeGroupId!, { ...eventData, id: docRef!.id }), 500);
+      // Small delay to let snapshot update
+      setTimeout(() => recalculateGroupFines(activeGroupId!), 800);
     }
 
     setActiveParticipantId(null);
@@ -361,7 +357,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       });
 
       if (editingRecord.preachingGroupId) {
-        setTimeout(() => recalculateGroupFines(editingRecord.preachingGroupId), 500);
+        setTimeout(() => recalculateGroupFines(editingRecord.preachingGroupId), 800);
       } else {
         const { totalFineAmount, explanation, overageSeconds } = await calculateFineForRecord(durationSeconds, false);
         updateDocumentNonBlocking(docRef, {
@@ -386,7 +382,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordId));
     
     if (record?.preachingGroupId) {
-       setTimeout(() => recalculateGroupFines(record.preachingGroupId), 500);
+       setTimeout(() => recalculateGroupFines(record.preachingGroupId), 800);
     }
     
     toast({ title: "Record Deleted" });
@@ -422,17 +418,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Settings Updated" });
   }
 
-  async function handleDistributeRewards() {
-    if (!session || !firestore || !user || session.ownerId !== user.uid) return;
-
-    const dist = session.pointDistribution;
-    if (!dist || !dist.enabled) return;
-
-    // Leaderboard logic here (simplified)
-    updateDocumentNonBlocking(doc(firestore, 'sessions', id), { rewardsDistributed: true });
-    toast({ title: "Rewards Distributed" });
-  }
-
   function toggleSessionStatus() {
     if (!session || !firestore) return;
     const newStatus = session.status === 'active' ? 'completed' : 'active';
@@ -456,7 +441,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   if (!session) return null;
 
   const isAdmin = user?.uid === session.ownerId;
-  const preachingCount = records?.length || 0;
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -560,7 +544,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {r.totalFineAmount > 0 && <Badge variant="destructive">₱{r.totalFineAmount.toFixed(2)} Fine</Badge>}
+                              {r.totalFineAmount > 0 && <Badge variant="destructive">₱{r.totalFineAmount.toFixed(2)} Share</Badge>}
                               {isAdmin && (
                                 <Button variant="ghost" size="icon" onClick={() => {
                                   setEditingRecord(r);
@@ -643,7 +627,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <Badge variant="destructive" className="h-6">Total Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
                         </div>
                         <CardDescription>
-                          Collective time: {dist.totalDurationFormatted} | Overage: {dist.overageFormatted} | Split among {dist.participantCount} members
+                          Collective time: {dist.totalDurationFormatted} | Overage: {dist.overageFormatted} | Divided by {dist.participantCount} unique members
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pt-6">
@@ -651,12 +635,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                           <TableHeader>
                             <TableRow>
                               <TableHead>Participated Member</TableHead>
-                              <TableHead>Preach Duration</TableHead>
-                              <TableHead className="text-right">Distributed Fine (₱)</TableHead>
+                              <TableHead>Time</TableHead>
+                              <TableHead className="text-right">Individual Share (₱)</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {dist.members.map((m: any) => (
+                            {dist.memberList.map((m: any) => (
                               <TableRow key={m.id}>
                                 <TableCell className="font-medium">{m.name}</TableCell>
                                 <TableCell className="font-mono">{m.duration}</TableCell>
