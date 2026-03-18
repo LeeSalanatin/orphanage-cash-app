@@ -90,7 +90,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // Calculate shared fines for the tally view
+  // Calculate shared fines for the tally view based on SESSION-WIDE group time
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     

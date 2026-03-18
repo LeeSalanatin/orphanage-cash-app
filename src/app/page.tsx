@@ -96,29 +96,60 @@ export default function Dashboard() {
     if (!rawEvents || !userParticipantId) return [];
     return rawEvents.filter(e => {
       const isDirectParticipant = e.participantId === userParticipantId || e.participantId === user?.uid;
-      // Also check if they are part of a group event recorded by another member
       const isGroupMember = e.eventParticipants && (e.eventParticipants[userParticipantId] === true || (user?.uid && e.eventParticipants[user.uid] === true));
       return isDirectParticipant || isGroupMember;
     });
   }, [rawEvents, userParticipantId, user]);
 
-  // Comprehensive fine calculation
+  // Comprehensive fine calculation with session-aware group logic
   const stats = useMemo(() => {
-    if (!myEvents || !allSessions || !allGroups) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
+    if (!myEvents || !allSessions || !allGroups || !rawEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
     let totalFines = 0;
-    // We trust the totalFineAmount recorded in the event as it already represents the individual's share
-    // However, if we are part of multiple events in one session (group), we need to avoid double counting
-    // if the logic was set up to record total session fine in every event.
-    // Based on our recorder, each event stores the share at that moment.
-    
+
+    // To avoid double-counting or missing shares, we group events by (sessionId, groupId)
+    const sessionGroupKeys = new Set<string>();
+    const individualEventIds = new Set<string>();
+
     myEvents.forEach(e => {
-      totalFines += (e.totalFineAmount || 0);
+      if (e.preachingGroupId) {
+        sessionGroupKeys.add(`${e.sessionId}_${e.preachingGroupId}`);
+      } else {
+        individualEventIds.add(e.id);
+      }
+    });
+
+    // 1. Add individual fines
+    myEvents.forEach(e => {
+      if (!e.preachingGroupId) {
+        totalFines += (e.totalFineAmount || 0);
+      }
+    });
+
+    // 2. Add group fine shares (session-wide calculation)
+    sessionGroupKeys.forEach(key => {
+      const [sessionId, groupId] = key.split('_');
+      const session = allSessions.find(s => s.id === sessionId);
+      const group = allGroups.find(g => g.id === groupId);
+      
+      if (session && group) {
+        const groupEvents = rawEvents.filter(re => re.sessionId === sessionId && re.preachingGroupId === groupId);
+        const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
+        const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+        
+        const overage = Math.max(0, totalGroupSeconds - maxSeconds);
+        const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+        const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
+        
+        const members = group.members || {};
+        const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
+        totalFines += (totalSessionFine / memberCount);
+      }
     });
 
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
-  }, [myEvents, allSessions, allGroups, userData]);
+  }, [myEvents, allSessions, allGroups, rawEvents, userData]);
 
   const globalRecords = useMemo(() => {
     if (!rawEvents) return { longestIndividual: null, longestGroup: null };
@@ -245,6 +276,21 @@ export default function Dashboard() {
               {myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
                   {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => {
+                    const session = allSessions.find(s => s.id === event.sessionId);
+                    let displayFine = event.totalFineAmount || 0;
+                    
+                    if (event.preachingGroupId && session && rawEvents) {
+                      const groupEvents = rawEvents.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId);
+                      const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
+                      const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+                      const overage = Math.max(0, totalGroupSeconds - maxSeconds);
+                      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+                      const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
+                      const groupInfo = allGroups.find(g => g.id === event.preachingGroupId);
+                      const memberCount = Math.max(1, Object.keys(groupInfo?.members || {}).filter(k => k !== 'owner').length);
+                      displayFine = totalSessionFine / memberCount;
+                    }
+
                     return (
                       <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
                         <div className="flex items-center gap-4">
@@ -262,7 +308,7 @@ export default function Dashboard() {
                         <div className="text-right">
                           <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
                           <p className="text-[10px] font-bold text-destructive">
-                            Fine Share: ₱{(event.totalFineAmount || 0).toFixed(2)}
+                            Fine Share: ₱{displayFine.toFixed(2)}
                           </p>
                         </div>
                       </div>
