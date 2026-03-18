@@ -26,7 +26,7 @@ import { useMemo, useState, useEffect } from 'react';
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function Dashboard() {
-  const { user } = useUser();
+  const { user, isUserLoading: authLoading } = useUser();
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
@@ -61,49 +61,50 @@ export default function Dashboard() {
   const { data: userParticipantData, isLoading: userLoading } = useCollection(userParticipantQuery);
   const userData = userParticipantData?.[0];
   
-  // CRITICAL: Ensure we use the correct ID to find participation events
   const userParticipantId = userData?.id || user?.uid;
 
-  // Participation History (Aggregated across all sessions)
+  // Participation History
   const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !userParticipantId) return null;
+    if (!firestore || !user || !userParticipantId) return null;
     return query(
       collectionGroup(firestore, 'preaching_events'),
       where(`eventParticipants.${userParticipantId}`, '==', true)
     );
-  }, [firestore, userParticipantId]);
+  }, [firestore, user, userParticipantId]);
 
-  // Global Records for "Longest Time" tallies
+  // Global Records
   const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
   }, [firestore, user]);
 
-  const { data: participants, isLoading: participantsLoading } = useCollection(useMemoFirebase(() => firestore ? collection(firestore, 'participants') : null, [firestore]));
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(useMemoFirebase(() => firestore ? collection(firestore, 'groups') : null, [firestore]));
+  const participantsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'participants');
+  }, [firestore, user]);
+
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'groups');
+  }, [firestore, user]);
+
+  const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: myEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
   const { data: allEvents, isLoading: allEventsLoading } = useCollection(allEventsQuery);
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
-    
-    // Total Fines: Sum of user's individual share recorded in each event
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
-
-    // Total Time: Sum of preaching duration
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
-
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
   }, [myEvents, userData]);
 
   const globalRecords = useMemo(() => {
     if (!allEvents) return { longestIndividual: null, longestGroup: null };
-    
     let indMax = { time: 0, name: '' };
     let grpMax = { time: 0, name: '' };
-
     allEvents.forEach(e => {
-      // Simplified name: strip group prefix for individual records
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
@@ -115,7 +116,6 @@ export default function Dashboard() {
         }
       }
     });
-
     return { longestIndividual: indMax, longestGroup: grpMax };
   }, [allEvents]);
 
@@ -125,9 +125,9 @@ export default function Dashboard() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const loading = participantsLoading || groupsLoading || userLoading || myEventsLoading || allEventsLoading || isAdmin === null;
+  const loading = authLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || allEventsLoading || isAdmin === null;
 
-  if (!user) {
+  if (!user && !authLoading) {
     return (
       <div className="container mx-auto py-20 px-4 text-center">
         <h1 className="text-4xl font-bold mb-4 text-primary">PreachPoint</h1>
@@ -140,6 +140,14 @@ export default function Dashboard() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -148,7 +156,7 @@ export default function Dashboard() {
             <h1 className="text-3xl font-headline font-bold text-foreground">My Dashboard</h1>
             {isAdmin && <Badge className="bg-primary/10 text-primary border-primary/20">System Admin</Badge>}
           </div>
-          <p className="text-muted-foreground">Welcome back, {userData?.name || user.email}.</p>
+          <p className="text-muted-foreground">Welcome back, {userData?.name || user?.email}.</p>
         </div>
         <div className="flex gap-3">
            <Card className="bg-primary/5 border-primary/10 px-4 py-2">
@@ -190,7 +198,6 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          {/* Detailed Time & Fine History */}
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -200,9 +207,7 @@ export default function Dashboard() {
               <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : myEvents && myEvents.length > 0 ? (
+              {myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
                   {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => (
                     <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
@@ -236,7 +241,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Records & Tally Rankings */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="shadow-sm border-none bg-card">
               <CardHeader>
@@ -300,27 +304,6 @@ export default function Dashboard() {
                   <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
-          
-          <Card className="shadow-md border-accent/20 bg-accent/5">
-            <CardHeader>
-              <CardTitle className="text-sm">Preaching Insights</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Total Preachers Registered:</span>
-                  <span className="font-bold">{participants?.length || 0}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Total Groups Active:</span>
-                  <span className="font-bold">{allGroups?.length || 0}</span>
-                </div>
-                <div className="pt-4 border-t text-[10px] text-muted-foreground italic">
-                  Participation in group sessions splits fines among members, reducing individual impact!
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>

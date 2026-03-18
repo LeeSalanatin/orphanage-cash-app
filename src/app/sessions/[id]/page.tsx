@@ -90,15 +90,14 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // Pre-calculate group distribution for the tally table
   const groupDistributions = useMemo(() => {
-    if (!records || session?.sessionType !== 'group') return [];
+    if (!records || !allGroups) return [];
     
     const groups: Record<string, any> = {};
     records.forEach(r => {
       if (!r.preachingGroupId) return;
       if (!groups[r.preachingGroupId]) {
-        const gInfo = allGroups?.find(g => g.id === r.preachingGroupId);
+        const gInfo = allGroups.find(g => g.id === r.preachingGroupId);
         groups[r.preachingGroupId] = {
           id: r.preachingGroupId,
           name: gInfo?.name || 'Unknown',
@@ -109,14 +108,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       groups[r.preachingGroupId].totalSeconds += r.actualDurationSeconds;
     });
 
-    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+    const maxSeconds = ((session?.maxPreachingTimeMinutes || 0) * 60) + (session?.maxPreachingTimeSeconds || 0);
+    const rule = session?.fineRules?.find((r: any) => r.appliesTo === 'group') || session?.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
 
     return Object.values(groups).map(g => {
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
-      
-      // Calculate split fine (excluding owner marker)
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
@@ -169,7 +166,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Build a map of all participants for access rules
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -179,14 +175,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     
-    // Logic for fine share
     let fineToRecord = 0;
     if (!activeGroupId) {
       const overageSeconds = Math.max(0, timer - maxSeconds);
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
-      // For groups, we sum existing time in session plus this new timer
       const existingGroupTime = records
         .filter(r => r.preachingGroupId === activeGroupId)
         .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
@@ -224,9 +218,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Recording Saved" });
   }
 
-  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) return (
-    <div className="flex h-[80vh] items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-  );
+  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
 
@@ -282,7 +280,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <TableBody>
                   {records.map(r => {
                     const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
-                    // Simplified name: strip "CCBB - " prefix
                     const simplifiedName = r.participantName.split(' - ').pop();
                     
                     return (
@@ -330,7 +327,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {availableParticipants?.map(p => {
-                     const participantGroups = allGroups?.filter(g => g.members && g.members[p.id]);
+                     const participantGroups = allGroups?.filter(g => g.members && (g.members[p.id] || (p.userId && g.members[p.userId])));
                      return (
                         <div key={p.id} className="p-4 border rounded-lg space-y-3 bg-card">
                           <div className="flex justify-between items-start">
@@ -374,8 +371,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
