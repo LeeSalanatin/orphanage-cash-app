@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -12,11 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2 } from 'lucide-react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2, Mail } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function ParticipantsPage() {
   const { user } = useUser();
@@ -28,8 +27,11 @@ export default function ParticipantsPage() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [editingParticipant, setEditingParticipant] = useState<{id: string, name: string} | null>(null);
+  
+  // Profile Editing State
+  const [editingParticipant, setEditingParticipant] = useState<{id: string, name: string, email: string} | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
+  const [editEmailValue, setEditEmailValue] = useState('');
   
   // Group Management State
   const [managingGroup, setManagingGroup] = useState<any>(null);
@@ -43,8 +45,12 @@ export default function ParticipantsPage() {
         setIsAdmin(true);
         return;
       }
-      const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
-      setIsAdmin(adminDoc.exists());
+      try {
+        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
+      }
     };
     checkAdmin();
   }, [firestore, user]);
@@ -87,14 +93,15 @@ export default function ParticipantsPage() {
     toast({ title: "Participant Added", description: `${newName} has been added to the roster.` });
   }
 
-  function handleUpdateName() {
+  function handleUpdateProfile() {
     if (!editingParticipant || !editNameValue.trim() || !firestore) return;
 
     updateDocumentNonBlocking(doc(firestore, 'participants', editingParticipant.id), {
-      name: editNameValue.trim()
+      name: editNameValue.trim(),
+      email: editEmailValue.trim().toLowerCase()
     });
 
-    toast({ title: "Name Updated", description: "Participant name has been successfully changed." });
+    toast({ title: "Profile Updated", description: "Changes have been successfully saved." });
     setEditingParticipant(null);
   }
 
@@ -190,37 +197,39 @@ export default function ParticipantsPage() {
         </TabsList>
 
         <TabsContent value="individuals" className="space-y-8">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Add Participant</CardTitle>
-              <CardDescription>Register a new preacher. You can edit their name later.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div className="space-y-1">
-                <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name" 
-                  value={newName} 
-                  onChange={(e) => setNewName(e.target.value)} 
-                  placeholder="John Doe"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="email">Email (Linkage)</Label>
-                <Input 
-                  id="email" 
-                  type="email"
-                  value={newEmail} 
-                  onChange={(e) => setNewEmail(e.target.value)} 
-                  placeholder="john@example.com"
-                />
-              </div>
-              <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add to Roster
-              </Button>
-            </CardContent>
-          </Card>
+          {isAdmin && (
+            <Card className="shadow-md">
+              <CardHeader>
+                <CardTitle>Add Participant</CardTitle>
+                <CardDescription>Register a new preacher. You can edit their name and email later.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="space-y-1">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input 
+                    id="name" 
+                    value={newName} 
+                    onChange={(e) => setNewName(e.target.value)} 
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="email">Email (Linkage)</Label>
+                  <Input 
+                    id="email" 
+                    type="email"
+                    value={newEmail} 
+                    onChange={(e) => setNewEmail(e.target.value)} 
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add to Roster
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="shadow-md overflow-hidden">
             <CardContent className="p-0">
@@ -243,22 +252,27 @@ export default function ParticipantsPage() {
                     </TableRow>
                   ) : participants && participants.map((p) => {
                     const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email));
+                    const canEdit = isAdmin || (user && (user.uid === p.userId || user.email === p.email));
+                    
                     return (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className={user?.uid === p.userId ? "bg-primary/5" : ""}>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 opacity-50 hover:opacity-100"
-                              onClick={() => {
-                                setEditingParticipant({ id: p.id, name: p.name });
-                                setEditNameValue(p.name);
-                              }}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
+                            <span>{p.name} {user?.uid === p.userId && "(You)"}</span>
+                            {canEdit && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 opacity-50 hover:opacity-100"
+                                onClick={() => {
+                                  setEditingParticipant({ id: p.id, name: p.name, email: p.email || '' });
+                                  setEditNameValue(p.name);
+                                  setEditEmailValue(p.email || '');
+                                }}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -297,9 +311,11 @@ export default function ParticipantsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
-                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
-                          </Button>
+                          {isAdmin && (
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -318,38 +334,40 @@ export default function ParticipantsPage() {
         </TabsContent>
 
         <TabsContent value="groups" className="space-y-8">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Create New Group</CardTitle>
-              <CardDescription>Organize participants into teams for group sessions.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="groupName">Group Code (e.g., CCBB)</Label>
-                  <Input 
-                    id="groupName" 
-                    value={newGroupName} 
-                    onChange={(e) => setNewGroupName(e.target.value)} 
-                    placeholder="CCBB"
-                  />
+          {isAdmin && (
+            <Card className="shadow-md">
+              <CardHeader>
+                <CardTitle>Create New Group</CardTitle>
+                <CardDescription>Organize participants into teams for group sessions.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="groupName">Group Code (e.g., CCBB)</Label>
+                    <Input 
+                      id="groupName" 
+                      value={newGroupName} 
+                      onChange={(e) => setNewGroupName(e.target.value)} 
+                      placeholder="CCBB"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="groupDescription">Description (e.g., Center, CDO...)</Label>
+                    <Input 
+                      id="groupDescription" 
+                      value={newGroupDescription} 
+                      onChange={(e) => setNewGroupDescription(e.target.value)} 
+                      placeholder="Center, CDO, Bohol and Butuan"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="groupDescription">Description (e.g., Center, CDO...)</Label>
-                  <Input 
-                    id="groupDescription" 
-                    value={newGroupDescription} 
-                    onChange={(e) => setNewGroupDescription(e.target.value)} 
-                    placeholder="Center, CDO, Bohol and Butuan"
-                  />
-                </div>
-              </div>
-              <Button onClick={handleAddGroup} disabled={!newGroupName.trim()} className="w-full">
-                <Users className="mr-2 h-4 w-4" />
-                Create Group
-              </Button>
-            </CardContent>
-          </Card>
+                <Button onClick={handleAddGroup} disabled={!newGroupName.trim()} className="w-full">
+                  <Users className="mr-2 h-4 w-4" />
+                  Create Group
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groupsLoading ? (
@@ -368,9 +386,11 @@ export default function ParticipantsPage() {
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMemberManagement(g)}>
-                      <Settings2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                    </Button>
+                    {(user?.uid === g.ownerId || isAdmin) && (
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenMemberManagement(g)}>
+                        <Settings2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                      </Button>
+                    )}
                     {(user?.uid === g.ownerId || isAdmin) && (
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
                         <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
@@ -399,27 +419,41 @@ export default function ParticipantsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Rename Dialog */}
+      {/* Edit Profile Dialog */}
       <Dialog open={!!editingParticipant} onOpenChange={(open) => !open && setEditingParticipant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Participant Name</DialogTitle>
+            <DialogTitle>Edit Participant Profile</DialogTitle>
             <DialogDescription>
-              Change the display name for this participant across all sessions.
+              Update name and email details. Changing email will affect account linkage.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="editName">Name</Label>
-            <Input 
-              id="editName" 
-              value={editNameValue} 
-              onChange={(e) => setEditNameValue(e.target.value)} 
-              className="mt-2"
-            />
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName">Display Name</Label>
+              <Input 
+                id="editName" 
+                value={editNameValue} 
+                onChange={(e) => setEditNameValue(e.target.value)} 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEmail" className="flex items-center gap-2">
+                <Mail className="h-3 w-3" /> Email Address
+              </Label>
+              <Input 
+                id="editEmail" 
+                type="email"
+                value={editEmailValue} 
+                onChange={(e) => setEditEmailValue(e.target.value)} 
+                placeholder="Required for linkage"
+              />
+              <p className="text-[10px] text-muted-foreground italic">Important: Ensure this matches the email used to sign in.</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingParticipant(null)}>Cancel</Button>
-            <Button onClick={handleUpdateName}>Save Changes</Button>
+            <Button onClick={handleUpdateProfile}>Save Profile Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
