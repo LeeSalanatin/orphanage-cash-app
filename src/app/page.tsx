@@ -18,7 +18,8 @@ import {
   Gavel,
   User as UserIcon,
   TrendingDown,
-  ChevronRight
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -98,8 +99,14 @@ export default function Dashboard() {
       const isDirectParticipant = e.participantId === userParticipantId || e.participantId === user?.uid;
       const isGroupMember = e.eventParticipants && (e.eventParticipants[userParticipantId] === true || (user?.uid && e.eventParticipants[user.uid] === true));
       return isDirectParticipant || isGroupMember;
-    });
+    }).sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   }, [rawEvents, userParticipantId, user]);
+
+  // Most recent session info
+  const recentPreaching = useMemo(() => {
+    if (!myEvents || myEvents.length === 0) return null;
+    return myEvents[0];
+  }, [myEvents]);
 
   // Comprehensive fine calculation with session-aware group logic
   const stats = useMemo(() => {
@@ -109,13 +116,9 @@ export default function Dashboard() {
 
     // To avoid double-counting or missing shares, we group events by (sessionId, groupId)
     const sessionGroupKeys = new Set<string>();
-    const individualEventIds = new Set<string>();
-
     myEvents.forEach(e => {
       if (e.preachingGroupId) {
         sessionGroupKeys.add(`${e.sessionId}_${e.preachingGroupId}`);
-      } else {
-        individualEventIds.add(e.id);
       }
     });
 
@@ -242,23 +245,23 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
-          title="My Preaching Sessions" 
+          title="Total Preaching Events" 
           value={myEvents?.length.toString() || "0"} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Total participations"
+          description="Global records"
         />
         <StatCard 
-          title="My Preaching Time" 
-          value={formatDuration(stats.totalSeconds)} 
+          title="Recent Preaching Time" 
+          value={recentPreaching?.actualDurationFormatted || "0:00"} 
           icon={<Timer className="h-5 w-5" />}
-          description="Cumulative duration"
+          description={recentPreaching ? new Date(recentPreaching.startTime).toLocaleDateString() : "No recent activity"}
           variant="accent"
         />
         <StatCard 
           title="Active Teams" 
           value={allGroups?.length.toString() || "0"} 
           icon={<Users className="h-5 w-5" />}
-          description="Global groups"
+          description="Community total"
         />
       </div>
 
@@ -275,7 +278,7 @@ export default function Dashboard() {
             <CardContent>
               {myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
-                  {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => {
+                  {myEvents.slice(0, 10).map((event) => {
                     const session = allSessions.find(s => s.id === event.sessionId);
                     let displayFine = event.totalFineAmount || 0;
                     
@@ -302,6 +305,8 @@ export default function Dashboard() {
                             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                               {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
                               {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
+                              <span className="mx-1">•</span>
+                              <Calendar className="h-3 w-3" /> {new Date(event.startTime).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
@@ -414,3 +419,4 @@ function StatCard({ title, value, icon, description, variant = 'primary' }: any)
     </Card>
   );
 }
+
