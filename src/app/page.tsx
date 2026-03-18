@@ -81,11 +81,17 @@ export default function Dashboard() {
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'sessions');
+  }, [firestore, user]);
+
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: rawEvents, isLoading: eventsLoading } = useCollection(allEventsQuery);
+  const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
 
-  // Filter my events in memory to ensure we catch both UID and roster ID matches
+  // Filter my events in memory
   const myEvents = useMemo(() => {
     if (!rawEvents || !userParticipantId) return [];
     return rawEvents.filter(e => {
@@ -95,13 +101,53 @@ export default function Dashboard() {
     });
   }, [rawEvents, userParticipantId, user]);
 
+  // Comprehensive fine calculation including group shares
   const stats = useMemo(() => {
-    if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
-    // Summing the totalFineAmount which is stored as the individual's share in our recorder
-    const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
+    if (!myEvents || !allSessions || !allGroups) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
+    
+    // Group events by session and group to calculate group-level fines
+    const sessionGroupTotals: Record<string, number> = {};
+    myEvents.forEach(e => {
+      if (e.preachingGroupId) {
+        const key = `${e.sessionId}_${e.preachingGroupId}`;
+        // We need the total time for the ENTIRE group in that session, not just the user's events
+        const totalGroupTimeInSession = rawEvents?.filter(re => re.sessionId === e.sessionId && re.preachingGroupId === e.preachingGroupId)
+          .reduce((sum, re) => sum + re.actualDurationSeconds, 0) || 0;
+        sessionGroupTotals[key] = totalGroupTimeInSession;
+      }
+    });
+
+    let totalFines = 0;
+    const processedGroupSessions = new Set<string>();
+
+    myEvents.forEach(e => {
+      if (!e.preachingGroupId) {
+        // Individual Fine
+        totalFines += (e.totalFineAmount || 0);
+      } else {
+        const key = `${e.sessionId}_${e.preachingGroupId}`;
+        if (!processedGroupSessions.has(key)) {
+          const session = allSessions.find(s => s.id === e.sessionId);
+          const group = allGroups.find(g => g.id === e.preachingGroupId);
+          if (session && group) {
+            const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+            const totalTime = sessionGroupTotals[key];
+            const overageSeconds = Math.max(0, totalTime - maxSeconds);
+            const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+            const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+            
+            const members = group.members || {};
+            const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
+            totalFines += (totalFine / memberCount);
+          }
+          processedGroupSessions.add(key);
+        }
+      }
+    });
+
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
-  }, [myEvents, userData]);
+  }, [myEvents, allSessions, allGroups, rawEvents, userData]);
 
   const globalRecords = useMemo(() => {
     if (!rawEvents) return { longestIndividual: null, longestGroup: null };
@@ -109,7 +155,6 @@ export default function Dashboard() {
     let grpMax = { time: 0, name: '', session: '' };
     
     rawEvents.forEach(e => {
-      // Simplify name by taking the part after the hyphen if present
       const simplifiedName = e.participantName.includes(' - ') 
         ? e.participantName.split(' - ').pop() 
         : e.participantName;
@@ -141,7 +186,7 @@ export default function Dashboard() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const loading = authLoading || userLoading || isAdmin === null;
+  const isLoading = authLoading || userLoading || participantsLoading || groupsLoading || eventsLoading || sessionsLoading || isAdmin === null;
 
   if (!user && !authLoading) {
     return (
@@ -156,7 +201,7 @@ export default function Dashboard() {
     );
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <div className="text-center space-y-4">
@@ -226,32 +271,49 @@ export default function Dashboard() {
               <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
             </CardHeader>
             <CardContent>
-              {eventsLoading ? (
-                 <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-              ) : myEvents && myEvents.length > 0 ? (
+              {myEvents && myEvents.length > 0 ? (
                 <div className="space-y-4">
-                  {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => (
-                    <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
-                        <div>
-                          <p className="font-semibold text-sm">
-                            {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
+                  {myEvents.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()).slice(0, 10).map((event) => {
+                    // Correctly display the share for group events in history
+                    let displayFine = event.totalFineAmount || 0;
+                    if (event.preachingGroupId) {
+                       const session = allSessions?.find(s => s.id === event.sessionId);
+                       const group = allGroups?.find(g => g.id === event.preachingGroupId);
+                       if (session && group) {
+                          const totalGroupTime = rawEvents?.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId)
+                            .reduce((sum, re) => sum + re.actualDurationSeconds, 0) || 0;
+                          const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+                          const overageSeconds = Math.max(0, totalGroupTime - maxSeconds);
+                          const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+                          const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+                          const memberCount = Math.max(1, Object.keys(group.members || {}).filter(k => k !== 'owner').length);
+                          displayFine = totalFine / memberCount;
+                       }
+                    }
+
+                    return (
+                      <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
+                          <div>
+                            <p className="font-semibold text-sm">
+                              {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
+                              {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
+                          <p className="text-[10px] font-bold text-destructive">
+                            Fine Share: ₱{displayFine.toFixed(2)}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        <p className="text-[10px] font-bold text-destructive">
-                          Fine: ₱{(event.totalFineAmount || 0).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <Button variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
                     <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
                   </Button>

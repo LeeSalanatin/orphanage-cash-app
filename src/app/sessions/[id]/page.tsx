@@ -94,7 +94,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     
-    // Sum total duration of all events for each group in this session
     const groupTotals: Record<string, number> = {};
     records.forEach(r => {
       if (r.preachingGroupId) {
@@ -113,7 +112,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      // Calculate member count for splitting
       const members = gInfo?.members || {};
       const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
       
@@ -159,7 +157,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
-    // Construct membership map for easy dashboard filtering
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -171,12 +168,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     let fineToRecord = 0;
     if (!activeGroupId) {
-      // Individual Fine logic
       const overageSeconds = Math.max(0, timer - maxSeconds);
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
-      // Group Fine logic - we calculate the share to save it directly for easy aggregation
       const existingGroupTime = records
         .filter(r => r.preachingGroupId === activeGroupId)
         .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
@@ -201,7 +196,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       overageSeconds: Math.max(0, timer - maxSeconds),
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
-      totalFineAmount: fineToRecord, // This is the SHARE for the individual
+      totalFineAmount: fineToRecord, 
       explanation: fineToRecord > 0 ? `Overage recorded.` : "Timer recorded.",
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' },
@@ -281,7 +276,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       ? r.participantName.split(' - ').pop() 
                       : r.participantName;
                     
-                    // If we have live group stats, use them. Otherwise fallback to saved individual share
                     const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
                     const teamTotal = r.preachingGroupId && gStats ? gStats.totalFine : (r.totalFineAmount || 0);
 
