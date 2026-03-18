@@ -2,20 +2,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow any authenticated user to read/write everything
-    // This catch-all covers most standard document operations
+    // Standard document rules
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
     
-    // Explicitly allow collection group queries for preaching_events
-    // This is required for aggregating stats and history across sessions
-    match /{path=**}/preaching_events/{event} {
+    // Explicit authorization for collection group queries
+    // This is required for listing records across all sessions
+    match /preaching_events/{event} {
       allow read, write: if request.auth != null;
     }
 
-    // Explicitly allow collection group queries for votes
-    match /{path=**}/votes/{vote} {
+    match /votes/{vote} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /session_configurations/{config} {
       allow read, write: if request.auth != null;
     }
   }

@@ -90,6 +90,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  // Calculate shared fines for the tally view
   const groupDistributions = useMemo(() => {
     if (!records || !allGroups) return [];
     

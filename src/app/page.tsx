@@ -18,7 +18,8 @@ import {
   Gavel,
   User as UserIcon,
   TrendingDown,
-  ChevronRight
+  ChevronRight,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -62,9 +63,10 @@ export default function Dashboard() {
   const { data: userParticipantData, isLoading: userLoading } = useCollection(userParticipantQuery);
   const userData = userParticipantData?.[0];
   
+  // Important: We use the ID of the participant document for filtering records
   const userParticipantId = userData?.id || user?.uid;
 
-  // Participation History
+  // Participation History - Fetch events where the user was a participant
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !userParticipantId) return null;
     return query(
@@ -73,7 +75,7 @@ export default function Dashboard() {
     );
   }, [firestore, user, userParticipantId]);
 
-  // Global Records
+  // Global Records - Fetch recent events to calculate benchmarks
   const allEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
@@ -96,6 +98,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
+    // We sum up the shares of fines recorded for this user across all their sessions
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
@@ -106,6 +109,7 @@ export default function Dashboard() {
     let indMax = { time: 0, name: '' };
     let grpMax = { time: 0, name: '' };
     allEvents.forEach(e => {
+      // Split name to get just the preacher if it's "Group - Preacher"
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
@@ -113,7 +117,7 @@ export default function Dashboard() {
         }
       } else {
         if (e.actualDurationSeconds > indMax.time) {
-          indMax = { time: e.actualDurationSeconds, name: simplifiedName };
+          indMax = { time: e.actualDurationSeconds, name: simplifiedName || 'Unknown' };
         }
       }
     });
