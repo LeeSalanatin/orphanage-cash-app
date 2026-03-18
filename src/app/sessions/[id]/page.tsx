@@ -715,7 +715,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <CardContent className="space-y-6">
                   <div className="flex items-center justify-between">
                     <Label className="font-bold">Enable Points</Label>
-                    <Switch checked={editPointsEnabled} onCheckedChange={setEditPointsEnabled} disabled={!isAdmin} />
+                    <Switch checked={editPointsEnabled} onCheckedChange={editPointsEnabled} disabled={!isAdmin} />
                   </div>
                   {isAdmin && <Button className="w-full" onClick={handleSaveSettings}>Save Rewards</Button>}
                 </CardContent>
