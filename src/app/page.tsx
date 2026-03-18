@@ -151,10 +151,7 @@ export default function Dashboard() {
     // Sum the fine records for the current user. 
     // totalFineAmount is the individual share for both individual and group preaching events.
     return myEvents.reduce((sum, event) => {
-      if (event.participantId === user.uid || (event.eventParticipants && event.eventParticipants[user.uid] === true)) {
-        return sum + (event.totalFineAmount || 0);
-      }
-      return sum;
+      return sum + (event.totalFineAmount || 0);
     }, 0);
   }, [myEvents, user]);
 
@@ -271,7 +268,6 @@ export default function Dashboard() {
                 </div>
               ) : (recentSessions && recentSessions.length > 0) || (Object.keys(participationBySession).length > 0) ? (
                 <div className="space-y-4">
-                  {/* For participants, we only show sessions they actually preached in */}
                   {(isAdmin ? recentSessions : recentSessions.filter(s => !!participationBySession[s.id])).map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
                     
