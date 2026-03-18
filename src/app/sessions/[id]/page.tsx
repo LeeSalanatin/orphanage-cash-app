@@ -28,7 +28,8 @@ import {
   Users as UsersIcon, 
   Calendar, 
   Calculator,
-  History
+  History,
+  TrendingDown
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -258,20 +259,26 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
         <TabsContent value="results">
           <Card>
-            <CardHeader><CardTitle>Session Tally</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-destructive" /> Session Tally
+              </CardTitle>
+              <CardDescription>Individual and shared fine distribution for this session.</CardDescription>
+            </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Preacher</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Group Fine (Your Share / Team Total)</TableHead>
-                    <TableHead className="text-right">Total Fine (₱)</TableHead>
+                    <TableHead>Actual Time</TableHead>
+                    <TableHead>Group Context (Share / Total Fine)</TableHead>
+                    <TableHead className="text-right">Your Share (₱)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {records.map(r => {
                     const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
+                    // Simplified name: strip "CCBB - " prefix
                     const simplifiedName = r.participantName.split(' - ').pop();
                     
                     return (
@@ -289,6 +296,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       </TableRow>
                     );
                   })}
+                  {records.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                        No preaching events recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

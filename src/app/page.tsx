@@ -17,7 +17,9 @@ import {
   Timer,
   Award,
   Gavel,
-  LayoutDashboard
+  TrendingUp,
+  User as UserIcon,
+  TrendingDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -151,11 +153,15 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-3">
            <Card className="bg-primary/5 border-primary/10 px-4 py-2">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground">My Points</p>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                <Star className="h-3 w-3 text-yellow-500" /> My Points
+              </p>
               <p className="text-xl font-bold text-primary">{stats.points}</p>
            </Card>
            <Card className="bg-destructive/5 border-destructive/10 px-4 py-2">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground">Your Total Fines</p>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                <TrendingDown className="h-3 w-3" /> Your Total Fines
+              </p>
               <p className="text-xl font-bold text-destructive">₱{stats.totalFines.toFixed(2)}</p>
            </Card>
         </div>
@@ -237,12 +243,16 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Individual Preach</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <UserIcon className="h-3 w-3" /> Longest Individual Preach
+                  </p>
                   <p className="font-bold text-lg">{globalRecords.longestIndividual?.name || 'N/A'}</p>
                   <p className="text-xs text-primary font-mono">{globalRecords.longestIndividual?.time ? formatDuration(globalRecords.longestIndividual.time) : '0:00'}</p>
                 </div>
                 <div className="space-y-1 pt-4 border-t">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Group Performance</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Users className="h-3 w-3" /> Longest Group Performance
+                  </p>
                   <p className="font-bold text-lg">{globalRecords.longestGroup?.name || 'N/A'}</p>
                   <p className="text-xs text-accent font-mono">{globalRecords.longestGroup?.time ? formatDuration(globalRecords.longestGroup.time) : '0:00'}</p>
                 </div>
@@ -291,6 +301,27 @@ export default function Dashboard() {
                   </Link>
                 </Button>
               )}
+            </CardContent>
+          </Card>
+          
+          <Card className="shadow-md border-accent/20 bg-accent/5">
+            <CardHeader>
+              <CardTitle className="text-sm">Preaching Insights</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Total Preachers Registered:</span>
+                  <span className="font-bold">{participants?.length || 0}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Total Groups Active:</span>
+                  <span className="font-bold">{allGroups?.length || 0}</span>
+                </div>
+                <div className="pt-4 border-t text-[10px] text-muted-foreground italic">
+                  Keep preaching to earn more points and climb the rankings!
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
