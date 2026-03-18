@@ -68,6 +68,7 @@ export default function Dashboard() {
   // Global access: Fetch counts for the system
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Users can see all sessions as requested
     return query(collection(firestore, 'sessions'), limit(50));
   }, [firestore, user]);
 
@@ -90,20 +91,12 @@ export default function Dashboard() {
     );
   }, [firestore, userParticipantId]);
 
-  // Activity feed: Admins see everything, participants see their involvement
+  // Activity feed: Show latest records
   const feedEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isAdmin === null) return null;
-    if (isAdmin) {
-      return query(collectionGroup(firestore, 'preaching_events'), limit(20));
-    } else {
-      if (!userParticipantId) return null;
-      return query(
-        collectionGroup(firestore, 'preaching_events'),
-        where(`eventParticipants.${userParticipantId}`, '==', true),
-        limit(20)
-      );
-    }
-  }, [firestore, user, isAdmin, userParticipantId]);
+    if (!firestore || !user) return null;
+    // Global access: show latest 20 preaching events
+    return query(collectionGroup(firestore, 'preaching_events'), limit(20));
+  }, [firestore, user]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
@@ -247,9 +240,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? 'Global Activity' : 'Your Preaching History'}</CardTitle>
+                  <CardTitle>Global Activity</CardTitle>
                   <CardDescription>
-                    {isAdmin ? 'Latest records across all preaching sessions.' : 'Summary of your latest preaching participation.'}
+                    Latest records across all preaching sessions.
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -268,7 +261,6 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   {recentSessions.map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
-                    if (!isAdmin && sessionEvents.length === 0) return null;
                     
                     return (
                       <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
@@ -319,11 +311,9 @@ export default function Dashboard() {
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
                   <p className="text-muted-foreground mb-4">No preaching activity found yet.</p>
-                  {isAdmin && (
-                    <Button asChild>
-                      <Link href="/sessions/new">Create Your First Session</Link>
-                    </Button>
-                  )}
+                  <Button asChild>
+                    <Link href="/sessions/new">Create Your First Session</Link>
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -383,7 +373,7 @@ export default function Dashboard() {
           <Card className="shadow-md border-primary/10">
             <CardHeader>
               <CardTitle>Management</CardTitle>
-              <CardDescription>Administrative actions.</CardDescription>
+              <CardDescription>Actions for organizing sessions.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full justify-start h-12" variant="outline" asChild>

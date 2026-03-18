@@ -369,9 +369,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine (Share / Total)</TableHead>
+                        <TableHead>Group Context (Share / Total)</TableHead>
                         <TableHead>Time</TableHead>
-                        <TableHead className="text-right">Share (₱)</TableHead>
+                        <TableHead className="text-right">Your Fine (₱)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
