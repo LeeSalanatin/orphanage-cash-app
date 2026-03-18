@@ -265,7 +265,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <TableRow>
                     <TableHead>Preacher</TableHead>
                     <TableHead>Time</TableHead>
-                    <TableHead>Group Context (My Share / Team Fine)</TableHead>
+                    <TableHead>Group Fine (Your Share / Team Total)</TableHead>
                     <TableHead className="text-right">Total Fine (₱)</TableHead>
                   </TableRow>
                 </TableHeader>

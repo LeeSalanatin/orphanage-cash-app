@@ -16,7 +16,8 @@ import {
   History as HistoryIcon,
   Timer,
   Award,
-  Gavel
+  Gavel,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -78,24 +79,8 @@ export default function Dashboard() {
     return query(collectionGroup(firestore, 'preaching_events'), limit(1000));
   }, [firestore, user]);
 
-  const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, 'sessions'), limit(100));
-  }, [firestore, user]);
-
-  const participantsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
-  const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: participants, isLoading: participantsLoading } = useCollection(useMemoFirebase(() => firestore ? collection(firestore, 'participants') : null, [firestore]));
+  const { data: allGroups, isLoading: groupsLoading } = useCollection(useMemoFirebase(() => firestore ? collection(firestore, 'groups') : null, [firestore]));
   const { data: myEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
   const { data: allEvents, isLoading: allEventsLoading } = useCollection(allEventsQuery);
 
@@ -103,10 +88,7 @@ export default function Dashboard() {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
     
     // Total Fines: Sum of user's individual share of fines recorded in events
-    const totalFines = myEvents.reduce((sum, e) => {
-      // If it was a group preaching, this event record should already store the member's split
-      return sum + (e.totalFineAmount || 0);
-    }, 0);
+    const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
 
     // Time History: Sum of preaching duration
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
@@ -121,13 +103,14 @@ export default function Dashboard() {
     let grpMax = { time: 0, name: '' };
 
     allEvents.forEach(e => {
+      const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
-          grpMax = { time: e.actualDurationSeconds, name: e.participantName };
+          grpMax = { time: e.actualDurationSeconds, name: e.participantName.split(' - ')[0] };
         }
       } else {
         if (e.actualDurationSeconds > indMax.time) {
-          indMax = { time: e.actualDurationSeconds, name: e.participantName };
+          indMax = { time: e.actualDurationSeconds, name: simplifiedName };
         }
       }
     });
@@ -141,7 +124,7 @@ export default function Dashboard() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || allEventsLoading || isAdmin === null;
+  const loading = participantsLoading || groupsLoading || userLoading || myEventsLoading || allEventsLoading || isAdmin === null;
 
   if (!user) {
     return (
@@ -164,7 +147,7 @@ export default function Dashboard() {
             <h1 className="text-3xl font-headline font-bold text-foreground">My Dashboard</h1>
             {isAdmin && <Badge className="bg-primary/10 text-primary border-primary/20">System Admin</Badge>}
           </div>
-          <p className="text-muted-foreground">Welcome, {userData?.name || user.email}. Here is your preaching summary.</p>
+          <p className="text-muted-foreground">Welcome back, {userData?.name || user.email}.</p>
         </div>
         <div className="flex gap-3">
            <Card className="bg-primary/5 border-primary/10 px-4 py-2">
@@ -172,7 +155,7 @@ export default function Dashboard() {
               <p className="text-xl font-bold text-primary">{stats.points}</p>
            </Card>
            <Card className="bg-destructive/5 border-destructive/10 px-4 py-2">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground">My Total Fines</p>
+              <p className="text-[10px] uppercase font-bold text-muted-foreground">Your Total Fines</p>
               <p className="text-xl font-bold text-destructive">₱{stats.totalFines.toFixed(2)}</p>
            </Card>
         </div>
@@ -180,10 +163,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
-          title="Total Sessions" 
-          value={rawSessions?.length.toString() || "0"} 
+          title="My Preaching Sessions" 
+          value={myEvents?.length.toString() || "0"} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Global session count"
+          description="Total participations"
         />
         <StatCard 
           title="My Preaching Time" 
@@ -196,7 +179,7 @@ export default function Dashboard() {
           title="Active Teams" 
           value={allGroups?.length.toString() || "0"} 
           icon={<Users className="h-5 w-5" />}
-          description="Global preaching groups"
+          description="Global groups"
         />
       </div>
 
@@ -229,7 +212,11 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        {event.totalFineAmount > 0 && <p className="text-[10px] font-bold text-destructive">My Share: ₱{event.totalFineAmount.toFixed(2)}</p>}
+                        {event.totalFineAmount > 0 && (
+                          <p className="text-[10px] font-bold text-destructive">
+                            Share: ₱{event.totalFineAmount.toFixed(2)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -237,7 +224,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <HistoryIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground">No personal history found yet.</p>
+                  <p className="text-muted-foreground">No participation history found yet.</p>
                 </div>
               )}
             </CardContent>
@@ -250,21 +237,21 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Individual</p>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Individual Preach</p>
                   <p className="font-bold text-lg">{globalRecords.longestIndividual?.name || 'N/A'}</p>
-                  <p className="text-xs text-primary font-mono">{formatDuration(globalRecords.longestIndividual?.time || 0)}</p>
+                  <p className="text-xs text-primary font-mono">{globalRecords.longestIndividual?.time ? formatDuration(globalRecords.longestIndividual.time) : '0:00'}</p>
                 </div>
                 <div className="space-y-1 pt-4 border-t">
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">Longest Group Performance</p>
-                  <p className="font-bold text-lg">{globalRecords.longestGroup?.name?.split(' - ')[0] || 'N/A'}</p>
-                  <p className="text-xs text-accent font-mono">{formatDuration(globalRecords.longestGroup?.time || 0)}</p>
+                  <p className="font-bold text-lg">{globalRecords.longestGroup?.name || 'N/A'}</p>
+                  <p className="text-xs text-accent font-mono">{globalRecords.longestGroup?.time ? formatDuration(globalRecords.longestGroup.time) : '0:00'}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="shadow-sm border-none bg-card">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Hall of Fame (Points)</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Preacher Rankings (Points)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -285,18 +272,25 @@ export default function Dashboard() {
 
         <div className="space-y-6">
           <Card className="shadow-md">
-            <CardHeader><CardTitle>Management</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Explore System</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/sessions">
-                  <Mic2 className="mr-3 h-5 w-5 text-primary" /> Explore Sessions
+                  <Mic2 className="mr-3 h-5 w-5 text-primary" /> Active Sessions
                 </Link>
               </Button>
               <Button className="w-full justify-start h-12" variant="outline" asChild>
                 <Link href="/participants">
-                  <Users className="mr-3 h-5 w-5 text-primary" /> Participant Roster
+                  <Users className="mr-3 h-5 w-5 text-primary" /> Roster & Roles
                 </Link>
               </Button>
+              {isAdmin && (
+                <Button className="w-full justify-start h-12" variant="outline" asChild>
+                  <Link href="/configurations">
+                    <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
