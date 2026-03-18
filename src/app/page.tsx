@@ -82,14 +82,16 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query ALL events for this user to sync total fines (Individual + Group shares)
+  // Query ALL events for this user to sync total fines
+  // We filter by 'eventParticipants.UID != null' to ensure security rules match and privacy is kept
   const myEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || isAdmin === null) return null;
+    if (isAdmin) return collectionGroup(firestore, 'preaching_events');
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where('eventParticipants.' + user.uid, '!=', null)
+      where(`eventParticipants.${user.uid}`, '!=', null)
     );
-  }, [firestore, user]);
+  }, [firestore, user, isAdmin]);
 
   // Global history for the feed (Participants see their own participation + their group's, Admins see all)
   const feedEventsQuery = useMemoFirebase(() => {
@@ -99,7 +101,7 @@ export default function Dashboard() {
     }
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where('eventParticipants.' + user.uid, '!=', null),
+      where(`eventParticipants.${user.uid}`, '!=', null),
       limit(20)
     );
   }, [firestore, user, isAdmin]);
@@ -147,15 +149,21 @@ export default function Dashboard() {
   }, [feedEvents]);
 
   const totalFinesSync = useMemo(() => {
-    if (!myEvents) return 0;
-    // For participants, we sum their specific shares. 
-    // Admins might see a global total, but usually dashboard fine refers to personal balance.
+    if (!myEvents || !user) return 0;
+    // For participants, we sum their specific shares.
     let total = 0;
     myEvents.forEach(event => {
-      total += (event.totalFineAmount || 0);
+      // If it's a group session, use totalFineAmount (which is the split share for participants)
+      // If it's an admin looking at global dashboard, they might see a total, but we focus on user balance here
+      if (isAdmin) {
+         // Admins just see the sum of all recorded fines
+         total += (event.totalFineAmount || 0);
+      } else if (event.eventParticipants?.[user.uid]) {
+         total += (event.totalFineAmount || 0);
+      }
     });
     return total;
-  }, [myEvents]);
+  }, [myEvents, user, isAdmin]);
 
   const stats = {
     totalSessions: rawSessions?.length || 0,

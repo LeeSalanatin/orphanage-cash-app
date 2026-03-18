@@ -22,10 +22,14 @@ service cloud.firestore {
     // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
     
     match /{allPaths=**}/preaching_events/{eventId} {
-      // Admins see everything. Users see their own individual records or group records they belong to.
-      allow read, list: if isSignedIn();
+      // Admins see everything. 
+      // Users see records where they are the participant OR where their UID is in the eventParticipants map (for group sessions).
+      allow read, list: if isAdmin() || (isSignedIn() && (
+        resource.data.participantId == request.auth.uid || 
+        (resource.data.eventParticipants != null && resource.data.eventParticipants.get(request.auth.uid, null) != null)
+      ));
       allow create: if isSignedIn();
-      allow update, delete: if isAdmin() || (isSignedIn() && (request.auth.uid == resource.data.sessionOwnerId || request.auth.uid == resource.data.participantId));
+      allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.sessionOwnerId);
     }
 
     match /{allPaths=**}/votes/{voteId} {
