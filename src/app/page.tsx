@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
@@ -92,14 +93,18 @@ export default function Dashboard() {
     );
   }, [firestore, user]);
 
-  // Global history for the feed
+  // Global history for the feed (Participants see their own, Admins see all)
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    if (isAdmin) {
+      return query(collectionGroup(firestore, 'preaching_events'), limit(20));
+    }
     return query(
       collectionGroup(firestore, 'preaching_events'),
+      where('participantId', '==', user.uid),
       limit(20)
     );
-  }, [firestore, user]);
+  }, [firestore, user, isAdmin]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
@@ -127,13 +132,11 @@ export default function Dashboard() {
   }, [participants]);
 
   const topGroups = useMemo(() => {
-    // Show only user's groups if not admin
-    const list = isAdmin ? participants : myGroups;
-    if (!myGroups && !isAdmin) return [];
-    return [...(myGroups || [])]
+    if (!myGroups) return [];
+    return [...myGroups]
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
       .slice(0, 5);
-  }, [myGroups, isAdmin, participants]);
+  }, [myGroups]);
 
   const participationBySession = useMemo(() => {
     if (!feedEvents) return {};
@@ -244,7 +247,7 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "Recent Activity"}</CardTitle>
+                  <CardTitle>{isAdmin ? "System Activity" : "Your Activity"}</CardTitle>
                   <CardDescription>
                     Latest preaching records and session updates.
                   </CardDescription>
@@ -289,7 +292,7 @@ export default function Dashboard() {
                             </Badge>
                             {session.status === 'completed' && session.votingConfig?.enabled && !session.votingClosed && (
                               <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
-                                <Link href={`/sessions/${session.id}/voting`}>
+                                <Link href={`/sessions/${id}/voting`}>
                                   <VoteIcon className="mr-2 h-3.5 w-3.5 text-accent" />
                                   Vote
                                 </Link>
@@ -301,7 +304,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> Session Activity
+                              <History className="h-3 w-3" /> Recent Activity
                             </p>
                             <div className="flex flex-col gap-2">
                               {myEvent && (
@@ -317,7 +320,7 @@ export default function Dashboard() {
                                     .slice(0, 4)
                                     .map(record => (
                                       <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
-                                        <span className="truncate max-w-[120px]">{record.participantName.split(' - ').pop()}</span>
+                                        <span className="truncate max-w-[120px]">{record.participantName.includes(' - ') ? record.participantName.split(' - ').pop() : record.participantName}</span>
                                         <span className="font-mono opacity-80 font-semibold">{record.actualDurationFormatted}</span>
                                       </div>
                                     ))

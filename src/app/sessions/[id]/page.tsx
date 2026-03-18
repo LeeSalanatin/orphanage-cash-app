@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
@@ -196,7 +197,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         totalDurationFormatted: formatDuration(g.totalSeconds),
         memberList: g.members.map((m: any) => ({
           id: m.id,
-          name: m.participantName.split(' - ').pop(),
+          name: m.participantName.includes(' - ') ? m.participantName.split(' - ').pop() : m.participantName,
           duration: m.actualDurationFormatted,
           fine: splitFine
         }))
@@ -587,9 +588,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine (Share/Total)</TableHead>
+                        <TableHead>Group Fine (Member / Total)</TableHead>
                         <TableHead>Time</TableHead>
-                        <TableHead>Fine (₱)</TableHead>
+                        <TableHead>Individual Fine (₱)</TableHead>
                         <TableHead>Note</TableHead>
                         {isAdmin && <TableHead className="text-right">Edit</TableHead>}
                       </TableRow>
@@ -597,7 +598,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableBody>
                       {records.map((r) => {
                         const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
-                        const shortName = r.participantName.split(' - ').pop();
+                        const shortName = r.participantName.includes(' - ') ? r.participantName.split(' - ').pop() : r.participantName;
                         
                         return (
                           <TableRow key={r.id}>
@@ -605,7 +606,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                               {shortName}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground font-mono">
-                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)}/${gStats.totalFine.toFixed(2)})` : 'Individual'}
+                              {gStats ? `${gStats.groupCode} (${gStats.splitFine.toFixed(2)} / ${gStats.totalFine.toFixed(2)})` : 'Individual'}
                             </TableCell>
                             <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
                             <TableCell className="text-destructive font-bold text-xs">
@@ -645,10 +646,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                             <UsersIcon className="h-5 w-5 text-primary" />
                             {dist.name}
                           </CardTitle>
-                          <Badge variant="destructive" className="h-6">Total Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
+                          <Badge variant="destructive" className="h-6">Total Group Fine: ₱{dist.totalFine.toFixed(2)}</Badge>
                         </div>
                         <CardDescription>
-                          Collective time: {dist.totalDurationFormatted} | Overage: {dist.overageFormatted} | Divided by {dist.participantCount} unique members
+                          Collective time: {dist.totalDurationFormatted} | Overage: {dist.overageFormatted} | Divided by {dist.participantCount} members
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pt-6">
