@@ -70,7 +70,6 @@ export default function Dashboard() {
   // Participation History - Fetch all events to aggregate personal totals
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // We fetch all records via collectionGroup. Filtering happens in-memory for accuracy.
     return collectionGroup(firestore, 'preaching_events');
   }, [firestore, user]);
 
