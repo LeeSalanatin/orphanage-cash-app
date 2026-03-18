@@ -53,7 +53,7 @@ export default function Dashboard() {
     checkAdmin();
   }, [firestore, user]);
 
-  // Focused sessions: Only those the user is a member of (unless admin)
+  // Focused sessions: Admins see all, Users see their own
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (isAdmin) return query(collection(firestore, 'sessions'), limit(20));
@@ -64,7 +64,7 @@ export default function Dashboard() {
     );
   }, [firestore, user, isAdmin]);
 
-  // Focused groups: Only user's groups
+  // Focused groups: Admins see all, Users see their own
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (isAdmin) return collection(firestore, 'groups');
@@ -84,16 +84,17 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query ALL events for this user to sync total fines
+  // Query ALL events for this user to sync total fines (Individual + Group shares)
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Admins see everything for summary purposes, but "Your Fines" remains personal
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where('participantId', '==', user.uid)
+      where('eventParticipants.' + user.uid, '!=', null)
     );
   }, [firestore, user]);
 
-  // Global history for the feed (Participants see their own participation, Admins see all)
+  // Global history for the feed (Participants see their own participation + their group's, Admins see all)
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     if (isAdmin) {
@@ -101,7 +102,7 @@ export default function Dashboard() {
     }
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where('participantId', '==', user.uid),
+      where('eventParticipants.' + user.uid, '!=', null),
       limit(20)
     );
   }, [firestore, user, isAdmin]);
@@ -148,9 +149,23 @@ export default function Dashboard() {
     return grouped;
   }, [feedEvents]);
 
+  // Accurate total fine sync: Prevents double counting group fines in the same session
   const totalFinesSync = useMemo(() => {
     if (!myEvents) return 0;
-    return myEvents.reduce((sum, event) => sum + (event.totalFineAmount || 0), 0);
+    const groupFinesTracked = new Set<string>();
+    let total = 0;
+    myEvents.forEach(event => {
+      if (!event.preachingGroupId) {
+        total += (event.totalFineAmount || 0);
+      } else {
+        const key = `${event.sessionId}_${event.preachingGroupId}`;
+        if (!groupFinesTracked.has(key)) {
+          total += (event.totalFineAmount || 0);
+          groupFinesTracked.add(key);
+        }
+      }
+    });
+    return total;
   }, [myEvents]);
 
   const stats = {
@@ -247,9 +262,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>{isAdmin ? "System Activity" : "Your Participation History"}</CardTitle>
+                  <CardTitle>{isAdmin ? "System Activity" : "Participation History"}</CardTitle>
                   <CardDescription>
-                    Latest preaching records and session updates.
+                    {isAdmin ? "Latest records across the system." : "Your preaching history and group updates."}
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -268,9 +283,7 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   {recentSessions.map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
-                    const myEvent = sessionEvents.find(e => e.participantId === user.uid);
-                    
-                    if (!isAdmin && !myEvent) return null;
+                    if (sessionEvents.length === 0 && !isAdmin) return null;
 
                     return (
                       <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
@@ -292,44 +305,24 @@ export default function Dashboard() {
                             <Badge variant={session.status === 'active' ? 'default' : 'secondary'}>
                               {session.status}
                             </Badge>
-                            {session.status === 'completed' && session.votingConfig?.enabled && !session.votingClosed && (
-                              <Button size="sm" variant="outline" asChild className="h-8 shadow-sm border-accent/30 hover:bg-accent/10 hover:text-accent">
-                                <Link href={`/sessions/${session.id}/voting`}>
-                                  <Vote className="mr-2 h-3.5 w-3.5 text-accent" />
-                                  Vote
-                                </Link>
-                              </Button>
-                            )}
                           </div>
                         </div>
 
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> {isAdmin ? "Session Activity" : "Your Records"}
+                              <History className="h-3 w-3" /> Latest Participation
                             </p>
                             <div className="flex flex-col gap-2">
-                              {myEvent && (
-                                <div className="flex justify-between items-center bg-background p-2 rounded border border-primary/10 shadow-sm">
-                                  <span className="text-xs font-semibold text-primary">Your Time</span>
-                                  <span className="font-mono font-bold text-sm">{myEvent.actualDurationFormatted}</span>
+                              {sessionEvents.slice(0, 3).map(record => (
+                                <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
+                                  <span className="truncate max-w-[150px] font-medium">{record.participantName.split(' - ').pop()}</span>
+                                  <div className="flex gap-2 items-center">
+                                    <span className="font-mono opacity-80">{record.actualDurationFormatted}</span>
+                                    {record.totalFineAmount > 0 && <span className="text-destructive font-bold">₱{record.totalFineAmount.toFixed(2)}</span>}
+                                  </div>
                                 </div>
-                              )}
-                              
-                              <div className="pl-3 border-l-2 border-accent/40 py-1">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                                  {sessionEvents
-                                    .filter(record => isAdmin || record.participantId === user.uid)
-                                    .slice(0, 4)
-                                    .map(record => (
-                                      <div key={record.id} className="flex justify-between items-center text-[10px] bg-background/50 px-2 py-1 rounded">
-                                        <span className="truncate max-w-[120px]">{record.participantName.includes(' - ') ? record.participantName.split(' - ').pop() : record.participantName}</span>
-                                        <span className="font-mono opacity-80 font-semibold">{record.actualDurationFormatted}</span>
-                                      </div>
-                                    ))
-                                  }
-                                </div>
-                              </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -373,7 +366,6 @@ export default function Dashboard() {
                       <span className="text-sm font-bold text-accent">{p.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topIndividuals.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No rankings available.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -382,7 +374,7 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-primary" />
-                  {isAdmin ? "Global Group Rankings" : "Your Team Status"}
+                  Team Rankings
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -396,7 +388,6 @@ export default function Dashboard() {
                       <span className="text-sm font-bold text-primary">{g.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topGroups.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No team data yet.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -439,20 +430,6 @@ export default function Dashboard() {
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl border-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Sparkles className="h-5 w-5" />
-                Personal Goal
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm opacity-90 mb-4">
-                Consistency is key. Track your preaching time and aim for the top of the leaderboard through faithful participation!
-              </p>
             </CardContent>
           </Card>
         </div>

@@ -22,9 +22,12 @@ service cloud.firestore {
     // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
     
     match /{allPaths=**}/preaching_events/{eventId} {
-      // Allow reading and listing preaching events for all signed-in users.
-      // These are logs and are considered part of the shared activity feed.
-      allow read, list: if isSignedIn();
+      // Admins see everything. Users see their own individual records or group records they belong to.
+      allow read, list: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.participantId == request.auth.uid || 
+        (resource.data.eventParticipants != null && resource.data.eventParticipants.get(request.auth.uid, null) != null)
+      );
       allow create: if isSignedIn();
       allow update, delete: if isAdmin() || (isSignedIn() && (request.auth.uid == resource.data.sessionOwnerId || request.auth.uid == resource.data.participantId));
     }
@@ -32,8 +35,8 @@ service cloud.firestore {
     match /{allPaths=**}/votes/{voteId} {
       // Votes are private to the voter, the session owner, and admins
       allow read, list: if isSignedIn() && (
-        request.auth.uid == resource.data.voterParticipantId || 
         isAdmin() || 
+        resource.data.voterParticipantId == request.auth.uid || 
         request.auth.uid == resource.data.sessionOwnerId
       );
       allow create: if isSignedIn();
@@ -61,18 +64,23 @@ service cloud.firestore {
     }
 
     match /groups/{groupId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null)
+      );
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.ownerId || 
-        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null) || 
         isAdmin()
       );
       allow delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
     }
 
     match /sessions/{sessionId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null)
+      );
       allow create: if isAdmin();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
@@ -95,11 +103,6 @@ service cloud.firestore {
     match /session_configurations/{configId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isSignedIn() && (request.auth.uid == request.resource.data.ownerId || isAdmin());
-    }
-    
-    match /session_rewards/{rewardId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
     }
   }
 }
