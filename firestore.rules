@@ -2,22 +2,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Standard document rules
+    // Standard document rules - Allow all authenticated users
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
     
     // Explicit authorization for collection group queries
-    // This is required for listing records across all sessions
-    match /preaching_events/{event} {
+    // This is required for listing records across all sessions (e.g. Dashboard History)
+    // The match must be top-level within the documents scope
+    match /{path=**}/preaching_events/{event} {
       allow read, write: if request.auth != null;
     }
 
-    match /votes/{vote} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /session_configurations/{config} {
+    match /{path=**}/votes/{vote} {
       allow read, write: if request.auth != null;
     }
   }

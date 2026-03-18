@@ -115,6 +115,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return Object.values(groups).map(g => {
       const overageSeconds = Math.max(0, g.totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
+      // Group members are stored in the 'members' field of the group object
       const memberCount = Math.max(1, Object.keys(g.allGroupMembers).filter(k => k !== 'owner').length);
       const splitFine = totalFine / memberCount;
       
@@ -167,6 +168,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
+    // Create a map of participants in this event for security rules / dashboard
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -182,6 +184,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
+      // For group sessions, the fine is shared. We calculate the *current estimated* total fine for the group
       const existingGroupTime = records
         .filter(r => r.preachingGroupId === activeGroupId)
         .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
@@ -205,7 +208,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       overageSeconds: Math.max(0, timer - maxSeconds),
       startTime: new Date(Date.now() - timer * 1000).toISOString(),
       endTime: new Date().toISOString(),
-      totalFineAmount: fineToRecord,
+      totalFineAmount: fineToRecord, // This stores the individual SHARE of the fine
       explanation: fineToRecord > 0 ? `Overage recorded.` : "Timer recorded.",
       sessionOwnerId: session.ownerId,
       sessionMembers: session.members || { [user.uid]: 'owner' },
@@ -289,12 +292,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                         <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono">
                           {r.preachingGroupId && gStats ? (
-                            `${gStats.groupCode} (${r.totalFineAmount.toFixed(2)} / ${gStats.totalFine.toFixed(2)})`
+                            `${gStats.groupCode} (${(r.totalFineAmount || 0).toFixed(2)} / ${(gStats.totalFine || 0).toFixed(2)})`
                           ) : (
                             'Individual Fine'
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-destructive font-bold">₱{r.totalFineAmount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-destructive font-bold">₱{(r.totalFineAmount || 0).toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })}

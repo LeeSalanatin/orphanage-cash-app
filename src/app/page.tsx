@@ -18,8 +18,8 @@ import {
   Gavel,
   User as UserIcon,
   TrendingDown,
-  ChevronRight,
-  TrendingUp
+  TrendingUp,
+  Calendar
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -69,10 +69,8 @@ export default function Dashboard() {
   // Participation History - Fetch events where the user was a participant
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !userParticipantId) return null;
-    return query(
-      collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${userParticipantId}`, '==', true)
-    );
+    // We fetch all records to sum totals. Fines are aggregated based on individual shares.
+    return collectionGroup(firestore, 'preaching_events');
   }, [firestore, user, userParticipantId]);
 
   // Global Records - Fetch recent events to calculate benchmarks
@@ -93,12 +91,17 @@ export default function Dashboard() {
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: myEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
+  const { data: rawMyEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
   const { data: allEvents, isLoading: allEventsLoading } = useCollection(allEventsQuery);
+
+  // Filter my events in memory to ensure we catch both UID and ID matches
+  const myEvents = useMemo(() => {
+    if (!rawMyEvents || !userParticipantId) return [];
+    return rawMyEvents.filter(e => e.eventParticipants?.[userParticipantId] === true || e.participantId === userParticipantId);
+  }, [rawMyEvents, userParticipantId]);
 
   const stats = useMemo(() => {
     if (!myEvents) return { totalFines: 0, totalSeconds: 0, points: userData?.totalPoints || 0 };
-    // We sum up the shares of fines recorded for this user across all their sessions
     const totalFines = myEvents.reduce((sum, e) => sum + (e.totalFineAmount || 0), 0);
     const totalSeconds = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
     return { totalFines, totalSeconds, points: userData?.totalPoints || 0 };
@@ -106,18 +109,25 @@ export default function Dashboard() {
 
   const globalRecords = useMemo(() => {
     if (!allEvents) return { longestIndividual: null, longestGroup: null };
-    let indMax = { time: 0, name: '' };
-    let grpMax = { time: 0, name: '' };
+    let indMax = { time: 0, name: '', session: '' };
+    let grpMax = { time: 0, name: '', session: '' };
     allEvents.forEach(e => {
-      // Split name to get just the preacher if it's "Group - Preacher"
       const simplifiedName = e.participantName.split(' - ').pop();
       if (e.preachingGroupId) {
         if (e.actualDurationSeconds > grpMax.time) {
-          grpMax = { time: e.actualDurationSeconds, name: e.participantName.split(' - ')[0] };
+          grpMax = { 
+            time: e.actualDurationSeconds, 
+            name: e.participantName.split(' - ')[0],
+            session: e.sessionId 
+          };
         }
       } else {
         if (e.actualDurationSeconds > indMax.time) {
-          indMax = { time: e.actualDurationSeconds, name: simplifiedName || 'Unknown' };
+          indMax = { 
+            time: e.actualDurationSeconds, 
+            name: simplifiedName || 'Unknown',
+            session: e.sessionId
+          };
         }
       }
     });
@@ -228,14 +238,15 @@ export default function Dashboard() {
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        {event.totalFineAmount > 0 && (
-                          <p className="text-[10px] font-bold text-destructive">
-                            Share: ₱{event.totalFineAmount.toFixed(2)}
-                          </p>
-                        )}
+                        <p className="text-[10px] font-bold text-destructive">
+                          Share: ₱{(event.totalFineAmount || 0).toFixed(2)}
+                        </p>
                       </div>
                     </div>
                   ))}
+                  <Button variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
+                    <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                  </Button>
                 </div>
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
