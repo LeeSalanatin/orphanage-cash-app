@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
-import { collection, query, limit, doc, getDoc, collectionGroup } from 'firebase/firestore';
+import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -52,22 +52,30 @@ export default function Dashboard() {
     checkAdmin();
   }, [firestore, user]);
 
+  // Focused sessions: Only those the user is a member of (unless admin)
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    if (isAdmin) return query(collection(firestore, 'sessions'), limit(20));
     return query(
       collection(firestore, 'sessions'),
+      where(`members.${user.uid}`, '!=', null),
       limit(20)
     );
-  }, [firestore, user]);
+  }, [firestore, user, isAdmin]);
+
+  // Focused groups: Only user's groups
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    if (isAdmin) return collection(firestore, 'groups');
+    return query(
+      collection(firestore, 'groups'),
+      where(`members.${user.uid}`, '!=', null)
+    );
+  }, [firestore, user, isAdmin]);
 
   const participantsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
   }, [firestore, user]);
 
   const userParticipantRef = useMemoFirebase(() => {
@@ -75,19 +83,30 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  const eventsQuery = useMemoFirebase(() => {
+  // Query ALL events for this user to sync total fines
+  const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      limit(100)
+      where('participantId', '==', user.uid)
+    );
+  }, [firestore, user]);
+
+  // Global history for the feed
+  const feedEventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collectionGroup(firestore, 'preaching_events'),
+      limit(20)
     );
   }, [firestore, user]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
+  const { data: myGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: userData, isLoading: userLoading } = useDoc(userParticipantRef);
-  const { data: allEvents, isLoading: eventsLoading } = useCollection(eventsQuery);
+  const { data: myEvents, isLoading: myEventsLoading } = useCollection(myEventsQuery);
+  const { data: feedEvents, isLoading: feedLoading } = useCollection(feedEventsQuery);
 
   const recentSessions = useMemo(() => {
     if (!rawSessions) return [];
@@ -108,32 +127,40 @@ export default function Dashboard() {
   }, [participants]);
 
   const topGroups = useMemo(() => {
-    if (!allGroups) return [];
-    return [...allGroups]
+    // Show only user's groups if not admin
+    const list = isAdmin ? participants : myGroups;
+    if (!myGroups && !isAdmin) return [];
+    // Note: For actual group rankings, usually we show all, but user requested "only see their group"
+    return [...(myGroups || [])]
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
       .slice(0, 5);
-  }, [allGroups]);
+  }, [myGroups, isAdmin, participants]);
 
   const participationBySession = useMemo(() => {
-    if (!allEvents) return {};
+    if (!feedEvents) return {};
     const grouped: Record<string, any[]> = {};
-    allEvents.forEach(event => {
+    feedEvents.forEach(event => {
       if (!grouped[event.sessionId]) grouped[event.sessionId] = [];
       grouped[event.sessionId].push(event);
     });
     return grouped;
-  }, [allEvents]);
+  }, [feedEvents]);
+
+  const totalFinesSync = useMemo(() => {
+    if (!myEvents) return 0;
+    return myEvents.reduce((sum, event) => sum + (event.totalFineAmount || 0), 0);
+  }, [myEvents]);
 
   const stats = {
     totalSessions: rawSessions?.length || 0,
     activeSessions: rawSessions?.filter((s: any) => s.status === 'active').length || 0,
     totalParticipants: participants?.length || 0,
-    totalGroups: allGroups?.filter(g => g.members?.[user?.uid])?.length || 0,
+    totalGroups: myGroups?.length || 0,
     myPoints: userData?.totalPoints || 0,
-    myFines: userData?.totalFines || 0
+    myFines: totalFinesSync
   };
 
-  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || eventsLoading;
+  const loading = sessionsLoading || participantsLoading || groupsLoading || userLoading || myEventsLoading || feedLoading;
 
   if (!user) {
     return (
@@ -186,10 +213,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title={isAdmin ? "Total Sessions" : "Sessions"} 
+          title={isAdmin ? "Total Sessions" : "My Sessions"} 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description={isAdmin ? "Sessions across the system" : "Available preaching sessions"}
+          description={isAdmin ? "Sessions across the system" : "Sessions you are part of"}
         />
         <StatCard 
           title="Active Now" 
@@ -208,7 +235,7 @@ export default function Dashboard() {
           title="Your Groups" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Teams you are currently in"
+          description="Teams you belong to"
         />
       </div>
 
@@ -275,7 +302,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <History className="h-3 w-3" /> Latest Activity
+                              <History className="h-3 w-3" /> Session Activity
                             </p>
                             <div className="flex flex-col gap-2">
                               {myEvent && (
@@ -308,7 +335,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground mb-4">No session records found.</p>
+                  <p className="text-muted-foreground mb-4">No sessions found for you.</p>
                   {isAdmin && (
                     <Button asChild>
                       <Link href="/sessions/new">Create Your First Session</Link>
@@ -324,7 +351,7 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Star className="h-5 w-5 text-yellow-500" />
-                  Individual Rankings
+                  Hall of Fame
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -341,7 +368,7 @@ export default function Dashboard() {
                       <span className="text-sm font-bold text-accent">{p.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topIndividuals.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No point data yet.</p>}
+                  {topIndividuals.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No rankings available.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -350,7 +377,7 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-primary" />
-                  Group Rankings
+                  {isAdmin ? "Global Group Rankings" : "Your Team Status"}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -364,7 +391,7 @@ export default function Dashboard() {
                       <span className="text-sm font-bold text-primary">{g.totalPoints || 0} pts</span>
                     </div>
                   ))}
-                  {topGroups.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No group data yet.</p>}
+                  {topGroups.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No team data yet.</p>}
                 </div>
               </CardContent>
             </Card>
@@ -374,8 +401,8 @@ export default function Dashboard() {
         <div className="space-y-6">
           <Card className="shadow-md border-primary/10">
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Commonly used management tools.</CardDescription>
+              <CardTitle>Management</CardTitle>
+              <CardDescription>Tools for administrators.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {isAdmin ? (
@@ -401,7 +428,10 @@ export default function Dashboard() {
                 </>
               ) : (
                 <div className="py-4 text-center">
-                  <p className="text-sm text-muted-foreground italic">No administrative actions available.</p>
+                  <p className="text-sm text-muted-foreground italic">Administrative actions are restricted.</p>
+                  <Button variant="ghost" className="mt-4 w-full" asChild>
+                    <Link href="/participants">View Your Profile</Link>
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -411,12 +441,12 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <Sparkles className="h-5 w-5" />
-                Personal Growth
+                Personal Goal
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm opacity-90 mb-4">
-                Keep track of your preaching points and fines. Aim for the top of the leaderboard through faithful participation!
+                Consistency is key. Track your preaching time and aim for the top of the leaderboard through faithful participation!
               </p>
             </CardContent>
           </Card>

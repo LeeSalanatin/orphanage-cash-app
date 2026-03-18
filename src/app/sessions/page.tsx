@@ -9,7 +9,7 @@ import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2 } from 'lucide-react
 import Link from 'next/link';
 import { useMemo, useState, useEffect } from 'react';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com'];
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function SessionsPage() {
   const { user } = useUser();
@@ -37,11 +37,12 @@ export default function SessionsPage() {
   // Query sessions where the user is a member
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    if (isAdmin) return collection(firestore, 'sessions');
     return query(
       collection(firestore, 'sessions'),
       where(`members.${user.uid}`, '!=', null)
     );
-  }, [firestore, user]);
+  }, [firestore, user, isAdmin]);
 
   const { data: rawSessions, isLoading } = useCollection(sessionsQuery);
 
@@ -49,7 +50,6 @@ export default function SessionsPage() {
   const sessions = useMemo(() => {
     if (!rawSessions) return [];
     return [...rawSessions].sort((a, b) => {
-      // Prioritize sessionDate for sorting, fallback to createdAt
       const dateA = a.sessionDate ? new Date(a.sessionDate).getTime() : (a.createdAt?.seconds || 0) * 1000;
       const dateB = b.sessionDate ? new Date(b.sessionDate).getTime() : (b.createdAt?.seconds || 0) * 1000;
       return dateB - dateA;
@@ -76,10 +76,8 @@ export default function SessionsPage() {
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
         <Button variant="outline" size="sm" className="rounded-full bg-primary/5 border-primary/20 text-primary">
           <Filter className="mr-2 h-3 w-3" />
-          All Sessions
+          All Available
         </Button>
-        <Button variant="ghost" size="sm" className="rounded-full">Active</Button>
-        <Button variant="ghost" size="sm" className="rounded-full">Completed</Button>
       </div>
 
       {isLoading ? (
@@ -100,9 +98,9 @@ export default function SessionsPage() {
             <div className="mx-auto bg-primary/10 p-4 rounded-full w-20 h-20 flex items-center justify-center">
               <Mic2 className="h-10 w-10 text-primary" />
             </div>
-            <h3 className="text-2xl font-semibold">No sessions yet</h3>
+            <h3 className="text-2xl font-semibold">No sessions found</h3>
             <p className="text-muted-foreground max-w-xs mx-auto">
-              Start by creating a new preaching session and define your timing and fine rules.
+              {isAdmin ? "Start by creating a new preaching session." : "You haven't been added to any preaching sessions yet."}
             </p>
             {isAdmin && (
               <Button asChild size="lg" className="mt-4">
@@ -154,7 +152,7 @@ function SessionCard({ session }: { session: any }) {
         </CardContent>
         <div className="p-4 pt-0 mt-auto">
           <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 justify-between">
-            Manage <Clock className="h-4 w-4" />
+            View Details <Clock className="h-4 w-4" />
           </Button>
         </div>
       </Card>

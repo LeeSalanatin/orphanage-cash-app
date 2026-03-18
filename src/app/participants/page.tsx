@@ -65,10 +65,15 @@ export default function ParticipantsPage() {
     return collection(firestore, 'roles_admin');
   }, [firestore, user]);
 
+  // Restrict group visibility to own groups for non-admins
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
+    if (isAdmin) return collection(firestore, 'groups');
+    return query(
+      collection(firestore, 'groups'),
+      where(`members.${user.uid}`, '!=', null)
+    );
+  }, [firestore, user, isAdmin]);
 
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
   const { data: admins, isLoading: adminsLoading } = useCollection(adminsRef);
@@ -428,7 +433,7 @@ export default function ParticipantsPage() {
             ))}
             {!groupsLoading && (!groups || groups.length === 0) && (
               <div className="col-span-full text-center py-10 text-muted-foreground">
-                No groups found.
+                No groups found for you.
               </div>
             )}
           </div>

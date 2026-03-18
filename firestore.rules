@@ -21,13 +21,15 @@ service cloud.firestore {
     // --- Root-level Wildcard Rules (Critical for Collection Group Queries) ---
     
     match /{allPaths=**}/preaching_events/{eventId} {
-      allow read, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.sessionOwnerId);
     }
 
     match /{allPaths=**}/votes/{voteId} {
-      allow read, list: if isSignedIn();
+      // Users can only read their own votes; Admins can read all.
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin());
+      allow list: if isSignedIn() && (request.query.limit <= 100); // Standard list rule
       allow create: if isSignedIn();
       allow update: if isSignedIn() && request.auth.uid == resource.data.voterParticipantId;
       allow delete: if isAdmin();
@@ -75,7 +77,7 @@ service cloud.firestore {
         allow read, write: if isSignedIn();
       }
       match /votes/{voteId} {
-        allow read, write: if isSignedIn();
+        allow read, write: if isSignedIn() && (request.auth.uid == resource.data.voterParticipantId || isAdmin());
       }
     }
 
