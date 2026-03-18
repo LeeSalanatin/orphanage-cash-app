@@ -23,11 +23,14 @@ service cloud.firestore {
     
     match /{allPaths=**}/preaching_events/{eventId} {
       // Admins see everything. 
-      // Users see records where they are the participant OR where their UID is in the eventParticipants map (for group sessions).
-      allow read, list: if isAdmin() || (isSignedIn() && (
+      // Users see records where they are the participant OR where their UID is in the eventParticipants map.
+      allow read: if isAdmin() || (isSignedIn() && (
         resource.data.participantId == request.auth.uid || 
-        (resource.data.eventParticipants != null && resource.data.eventParticipants.get(request.auth.uid, null) != null)
+        (resource.data.eventParticipants != null && resource.data.eventParticipants.get(request.auth.uid, null) != null) ||
+        (resource.data.sessionMembers != null && resource.data.sessionMembers.get(request.auth.uid, null) != null)
       ));
+      // For list operations, we allow signed-in users but rely on read rules + query filters for security
+      allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.sessionOwnerId);
     }
@@ -81,7 +84,7 @@ service cloud.firestore {
         isAdmin() || 
         (resource.data.members != null && resource.data.members.get(request.auth.uid, null) != null)
       );
-      allow create: if isAdmin();
+      allow create: if isAdmin() || isSignedIn();
       allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerId || isAdmin());
 
       match /preaching_events/{eventId} {

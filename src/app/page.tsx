@@ -51,7 +51,7 @@ export default function Dashboard() {
     checkAdmin();
   }, [firestore, user]);
 
-  // Focused sessions: Admins see all, Users see their own
+  // Sessions: Admins see all, Users see sessions they are members of
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) return query(collection(firestore, 'sessions'), limit(20));
@@ -62,7 +62,7 @@ export default function Dashboard() {
     );
   }, [firestore, user, isAdmin]);
 
-  // Focused groups: Admins see all, Users see their own
+  // Groups: Admins see all, Users see their own
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) return collection(firestore, 'groups');
@@ -82,18 +82,17 @@ export default function Dashboard() {
     return doc(firestore, 'participants', user.uid);
   }, [firestore, user]);
 
-  // Query ALL events for this user to sync total fines
-  // We filter by 'eventParticipants.UID != null' to ensure security rules match and privacy is kept
+  // Query ALL preaching events involving the user (individual or group) to sync total fines
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) return collectionGroup(firestore, 'preaching_events');
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${user.uid}`, '!=', null)
+      where(`eventParticipants.${user.uid}`, '==', true)
     );
   }, [firestore, user, isAdmin]);
 
-  // Global history for the feed (Participants see their own participation + their group's, Admins see all)
+  // Participation feed: Participated events or group events
   const feedEventsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isAdmin === null) return null;
     if (isAdmin) {
@@ -101,7 +100,7 @@ export default function Dashboard() {
     }
     return query(
       collectionGroup(firestore, 'preaching_events'),
-      where(`eventParticipants.${user.uid}`, '!=', null),
+      where(`eventParticipants.${user.uid}`, '==', true),
       limit(20)
     );
   }, [firestore, user, isAdmin]);
@@ -150,13 +149,11 @@ export default function Dashboard() {
 
   const totalFinesSync = useMemo(() => {
     if (!myEvents || !user) return 0;
-    // For participants, we sum their specific shares.
     let total = 0;
     myEvents.forEach(event => {
-      // If it's a group session, use totalFineAmount (which is the split share for participants)
-      // If it's an admin looking at global dashboard, they might see a total, but we focus on user balance here
+      // In preaching_events, totalFineAmount stores the share for the participant 
+      // in group sessions, or the full fine in individual sessions.
       if (isAdmin) {
-         // Admins just see the sum of all recorded fines
          total += (event.totalFineAmount || 0);
       } else if (event.eventParticipants?.[user.uid]) {
          total += (event.totalFineAmount || 0);
@@ -246,10 +243,10 @@ export default function Dashboard() {
           description="Total registered in the system"
         />
         <StatCard 
-          title="Your Groups" 
+          title="Your Teams" 
           value={stats.totalGroups.toString()} 
           icon={<Users className="h-5 w-5" />}
-          description="Teams you belong to"
+          description="Groups you belong to"
         />
       </div>
 
@@ -261,7 +258,7 @@ export default function Dashboard() {
                 <div>
                   <CardTitle>{isAdmin ? "System Activity" : "My History"}</CardTitle>
                   <CardDescription>
-                    {isAdmin ? "Latest records across the system." : "Your preaching history and team updates."}
+                    {isAdmin ? "Latest records across the system." : "Your individual and team preaching records."}
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -308,7 +305,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <HistoryIcon className="h-3 w-3" /> Latest Activity
+                              <HistoryIcon className="h-3 w-3" /> Participation Details
                             </p>
                             <div className="flex flex-col gap-2">
                               {sessionEvents.slice(0, 3).map(record => (
@@ -330,7 +327,7 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground mb-4">No activity found.</p>
+                  <p className="text-muted-foreground mb-4">No activity found yet.</p>
                   {isAdmin && (
                     <Button asChild>
                       <Link href="/sessions/new">Create Your First Session</Link>
