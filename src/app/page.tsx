@@ -17,7 +17,8 @@ import {
   Timer,
   Gavel,
   User as UserIcon,
-  TrendingDown
+  TrendingDown,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
