@@ -235,6 +235,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
+    // Create a participation map for security rules and dashboard aggregation
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
       Object.keys(targetGroup.members).forEach(mId => {
@@ -368,7 +369,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     <TableHeader>
                       <TableRow>
                         <TableHead>Participant</TableHead>
-                        <TableHead>Group Fine</TableHead>
+                        <TableHead>Group Fine (Share / Total)</TableHead>
                         <TableHead>Time</TableHead>
                         <TableHead className="text-right">Share (₱)</TableHead>
                       </TableRow>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemoFirebase, useCollection, useUser, useFirestore, useDoc } from '@/firebase';
+import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
 import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,7 @@ export default function Dashboard() {
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  // Check admin status for UI badges
+  // Check admin status for UI badges and conditional filtering
   useEffect(() => {
     if (!firestore || !user) return;
     const checkAdmin = async () => {
@@ -65,15 +65,10 @@ export default function Dashboard() {
   const userData = userParticipantData?.[0];
   const userParticipantId = userData?.id;
 
-  // Global access: Fetch all sessions, groups, and participants without filtering
+  // Global access: Fetch counts for the system
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'sessions'), limit(20));
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
+    return query(collection(firestore, 'sessions'), limit(50));
   }, [firestore, user]);
 
   const participantsQuery = useMemoFirebase(() => {
@@ -81,7 +76,12 @@ export default function Dashboard() {
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  // Personal fines: Still need to filter by the user's participation for the "Your Fines" card
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'groups');
+  }, [firestore, user]);
+
+  // Personal fines: Calculate total fines across all session preaching events
   const myEventsQuery = useMemoFirebase(() => {
     if (!firestore || !userParticipantId) return null;
     return query(
@@ -90,11 +90,20 @@ export default function Dashboard() {
     );
   }, [firestore, userParticipantId]);
 
-  // Global activity feed: Everyone sees everything
+  // Activity feed: Admins see everything, participants see their involvement
   const feedEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collectionGroup(firestore, 'preaching_events'), limit(20));
-  }, [firestore, user]);
+    if (!firestore || !user || isAdmin === null) return null;
+    if (isAdmin) {
+      return query(collectionGroup(firestore, 'preaching_events'), limit(20));
+    } else {
+      if (!userParticipantId) return null;
+      return query(
+        collectionGroup(firestore, 'preaching_events'),
+        where(`eventParticipants.${userParticipantId}`, '==', true),
+        limit(20)
+      );
+    }
+  }, [firestore, user, isAdmin, userParticipantId]);
 
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
@@ -209,13 +218,13 @@ export default function Dashboard() {
           title="Total Sessions" 
           value={stats.totalSessions.toString()} 
           icon={<Mic2 className="h-5 w-5" />}
-          description="Global session count"
+          description="System-wide sessions"
         />
         <StatCard 
           title="Active Now" 
           value={stats.activeSessions.toString()} 
           icon={<TrendingUp className="h-5 w-5" />}
-          description="Sessions currently in progress"
+          description="Sessions in progress"
           variant="accent"
         />
         <StatCard 
@@ -238,9 +247,9 @@ export default function Dashboard() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>System Activity</CardTitle>
+                  <CardTitle>{isAdmin ? 'Global Activity' : 'Your Preaching History'}</CardTitle>
                   <CardDescription>
-                    Latest preaching records across the system.
+                    {isAdmin ? 'Latest records across all preaching sessions.' : 'Summary of your latest preaching participation.'}
                   </CardDescription>
                 </div>
                 <Button variant="ghost" asChild>
@@ -259,6 +268,7 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   {recentSessions.map((session) => {
                     const sessionEvents = participationBySession[session.id] || [];
+                    if (!isAdmin && sessionEvents.length === 0) return null;
                     
                     return (
                       <div key={session.id} className="flex flex-col p-4 rounded-lg border hover:bg-accent/5 transition-all group gap-4">
@@ -286,7 +296,7 @@ export default function Dashboard() {
                         {sessionEvents.length > 0 && (
                           <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-1">
                             <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                              <HistoryIcon className="h-3 w-3" /> Participation Details
+                              <HistoryIcon className="h-3 w-3" /> Record Details
                             </p>
                             <div className="flex flex-col gap-2">
                               {sessionEvents.slice(0, 3).map(record => (
@@ -308,10 +318,12 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-14 border-2 border-dashed rounded-lg">
                   <Mic2 className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground mb-4">No activity found yet.</p>
-                  <Button asChild>
-                    <Link href="/sessions/new">Create Your First Session</Link>
-                  </Button>
+                  <p className="text-muted-foreground mb-4">No preaching activity found yet.</p>
+                  {isAdmin && (
+                    <Button asChild>
+                      <Link href="/sessions/new">Create Your First Session</Link>
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -371,7 +383,7 @@ export default function Dashboard() {
           <Card className="shadow-md border-primary/10">
             <CardHeader>
               <CardTitle>Management</CardTitle>
-              <CardDescription>Tools for administrators.</CardDescription>
+              <CardDescription>Administrative actions.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full justify-start h-12" variant="outline" asChild>
