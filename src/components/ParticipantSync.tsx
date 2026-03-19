@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, getDocs, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
 /**
  * A global component that ensures the current authenticated user has a Participant record.
@@ -28,9 +28,14 @@ export function ParticipantSync() {
         const directSnap = await getDoc(directDocRef);
 
         if (directSnap.exists()) {
-          // Profile exists and is linked. Ensure userId field is set if it was missing.
-          if (!directSnap.data().userId) {
-            updateDocumentNonBlocking(directDocRef, { userId: user!.uid });
+          const data = directSnap.data();
+          // Profile exists and is linked. Ensure userId field is set and email is normalized.
+          if (!data.userId || data.email !== user!.email?.toLowerCase().trim()) {
+            updateDocumentNonBlocking(directDocRef, { 
+              userId: user!.uid,
+              email: user!.email?.toLowerCase().trim() || data.email,
+              lastSyncedAt: new Date().toISOString()
+            });
           }
           setSynced(true);
           return;
@@ -47,18 +52,20 @@ export function ParticipantSync() {
 
         // Step 3: Search for pre-registered (orphan) profile by email
         if (user!.email) {
-          const emailLower = user!.email.toLowerCase();
+          const emailLower = user!.email.toLowerCase().trim();
           
           // Efficient query for email match
           const qByEmail = query(collection(firestore!, 'participants'), where('email', '==', emailLower));
           const emailSnap = await getDocs(qByEmail);
           
+          // Find first record without a userId (to avoid stealing someone else's linked account)
           const orphanDoc = emailSnap.docs.find(d => !d.data().userId);
 
           if (orphanDoc) {
             // Orphan profile found, link the authenticated UID to it!
             updateDocumentNonBlocking(doc(firestore!, 'participants', orphanDoc.id), {
               userId: user!.uid,
+              email: emailLower, // Ensure normalized email
               lastSyncedAt: new Date().toISOString()
             });
             setSynced(true);
@@ -70,7 +77,7 @@ export function ParticipantSync() {
         setDocumentNonBlocking(doc(firestore!, 'participants', user!.uid), {
           id: user!.uid,
           userId: user!.uid,
-          email: user!.email?.toLowerCase() || '',
+          email: user!.email?.toLowerCase().trim() || '',
           name: user!.displayName || user!.email || 'New Preacher',
           totalPoints: 0,
           totalFines: 0,

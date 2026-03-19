@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, query, where, getDoc } from 'firebase/firestore';
+import { collection, doc, query, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2, Search, Filter } from 'lucide-react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Search, Filter, Settings2 } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -81,13 +81,15 @@ export default function ParticipantsPage() {
 
   const filteredParticipants = useMemo(() => {
     if (!participants) return [];
-    if (!searchTerm.trim()) return participants;
+    if (!searchTerm.trim()) return [...participants].sort((a, b) => a.name.localeCompare(b.name));
     
     const lowerSearch = searchTerm.toLowerCase();
-    return participants.filter(p => 
-      p.name.toLowerCase().includes(lowerSearch) || 
-      (p.email && p.email.toLowerCase().includes(lowerSearch))
-    );
+    return participants
+      .filter(p => 
+        p.name.toLowerCase().includes(lowerSearch) || 
+        (p.email && p.email.toLowerCase().includes(lowerSearch))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [participants, searchTerm]);
 
   function handleAddParticipant() {
@@ -301,7 +303,7 @@ export default function ParticipantsPage() {
                           const isCurrentUser = user?.uid === p.userId;
                           
                           return (
-                            <TableRow key={p.id} className={cn("transition-colors", isCurrentUser && "bg-primary/5")}>
+                            <TableRow key={p.id} className={cn("transition-colors group", isCurrentUser && "bg-primary/5")}>
                               <TableCell>
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2">
@@ -363,7 +365,7 @@ export default function ParticipantsPage() {
                               </TableCell>
                               <TableCell className="text-right">
                                 {isAdmin && (
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-20 hover:opacity-100 transition-opacity" onClick={() => handleDeleteParticipant(p.id)}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity" onClick={() => handleDeleteParticipant(p.id)}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 )}
@@ -569,4 +571,3 @@ export default function ParticipantsPage() {
     </div>
   );
 }
-
