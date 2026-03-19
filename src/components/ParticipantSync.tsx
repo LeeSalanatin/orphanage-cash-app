@@ -25,6 +25,11 @@ export function ParticipantSync() {
         const currentUserUid = user!.uid;
         const currentUserEmail = user!.email?.toLowerCase().trim();
 
+        if (!currentUserEmail) {
+          setSynced(true);
+          return;
+        }
+
         // Step 1: Check by UID (direct document ID lookup)
         const directDocRef = doc(firestore!, 'participants', currentUserUid);
         const directSnap = await getDoc(directDocRef);
@@ -35,7 +40,7 @@ export function ParticipantSync() {
           if (!data.userId || data.email !== currentUserEmail) {
             updateDocumentNonBlocking(directDocRef, { 
               userId: currentUserUid,
-              email: currentUserEmail || data.email,
+              email: currentUserEmail,
               lastSyncedAt: new Date().toISOString()
             });
           }
@@ -43,7 +48,7 @@ export function ParticipantSync() {
           return;
         }
 
-        // Step 2: Check if any document has this userId field (handles legacy IDs)
+        // Step 2: Check if any document has this userId field (handles legacy IDs or different doc names)
         const qByUserId = query(collection(firestore!, 'participants'), where('userId', '==', currentUserUid));
         const snapByUserId = await getDocs(qByUserId);
         
@@ -53,32 +58,30 @@ export function ParticipantSync() {
         }
 
         // Step 3: Search for pre-registered (orphan) profile by email
-        if (currentUserEmail) {
-          // Query for exact email match (case-insensitive search is handled by normalizing to lowercase during storage)
-          const qByEmail = query(collection(firestore!, 'participants'), where('email', '==', currentUserEmail));
-          const emailSnap = await getDocs(qByEmail);
-          
-          // Find first record without a userId (to avoid stealing someone else's linked account)
-          const orphanDoc = emailSnap.docs.find(d => !d.data().userId);
+        // We look for any doc where the email matches (case-insensitive handled by toLowerCase on both sides)
+        const qByEmail = query(collection(firestore!, 'participants'), where('email', '==', currentUserEmail));
+        const emailSnap = await getDocs(qByEmail);
+        
+        // Find first record without a userId (to avoid stealing someone else's linked account)
+        const orphanDoc = emailSnap.docs.find(d => !d.data().userId);
 
-          if (orphanDoc) {
-            // Orphan profile found, link the authenticated UID to it!
-            updateDocumentNonBlocking(doc(firestore!, 'participants', orphanDoc.id), {
-              userId: currentUserUid,
-              email: currentUserEmail,
-              lastSyncedAt: new Date().toISOString()
-            });
-            setSynced(true);
-            return;
-          }
+        if (orphanDoc) {
+          // Orphan profile found, link the authenticated UID to it!
+          updateDocumentNonBlocking(doc(firestore!, 'participants', orphanDoc.id), {
+            userId: currentUserUid,
+            email: currentUserEmail,
+            lastSyncedAt: new Date().toISOString()
+          });
+          setSynced(true);
+          return;
         }
 
         // Step 4: No profile found at all, create a new one using UID as document ID
         setDocumentNonBlocking(doc(firestore!, 'participants', currentUserUid), {
           id: currentUserUid,
           userId: currentUserUid,
-          email: currentUserEmail || '',
-          name: user!.displayName || user!.email || 'New Preacher',
+          email: currentUserEmail,
+          name: user!.displayName || user!.email?.split('@')[0] || 'New Preacher',
           totalPoints: 0,
           totalFines: 0,
           dateJoined: new Date().toISOString(),
