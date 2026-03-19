@@ -184,7 +184,7 @@ function ResultsContent() {
                 <Star className="h-6 w-6 text-yellow-500" />
               </div>
               <div>
-                <CardTitle className="text-xl">TALLY VOTE</CardTitle>
+                <CardTitle className="text-xl">Individual</CardTitle>
                 <CardDescription>Ranked by total member nominations received.</CardDescription>
               </div>
             </div>
