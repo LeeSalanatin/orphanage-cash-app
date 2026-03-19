@@ -42,7 +42,7 @@ export function Navbar() {
 
   const allLinks = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
-    { href: '/sessions', label: 'Sessions', icon: Mic2, adminOnly: true },
+    { href: '/sessions', label: 'Sessions', icon: Mic2, adminOnly: false },
     { href: '/configurations', label: 'Rules', icon: Settings2, adminOnly: true },
     { href: '/participants', label: 'Participants', icon: Users, adminOnly: true },
   ];
