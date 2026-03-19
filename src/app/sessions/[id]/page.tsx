@@ -42,7 +42,8 @@ import {
   Trash2,
   ChevronRight,
   Edit2,
-  Trophy
+  Trophy,
+  Star
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -89,10 +90,16 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
+  const votesQuery = useMemoFirebase(() => {
+    if (!firestore || !user || !id) return null;
+    return collection(firestore, 'sessions', id, 'votes');
+  }, [firestore, id, user]);
+
   const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
   const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(allGroupsQuery);
   const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
+  const { data: votes, isLoading: votesLoading } = useCollection(votesQuery);
 
   const records = useMemo(() => {
     if (!rawRecords) return [];
@@ -109,7 +116,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // CORRECTED: Divide total group fine ONLY by members who actually preached in this session
+  // Calculate shared fines for groups based on participating members
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     
@@ -135,7 +142,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      // FIX: Use the size of the set of unique participant IDs for this group in this session
       const participatingCount = Math.max(1, groupPreacherCounts[groupId].size);
       
       map[groupId] = {
@@ -148,6 +154,83 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     return map;
   }, [records, session, allGroups]);
+
+  // Calculate real-time incentives based on voting results and rules
+  const incentiveMap = useMemo(() => {
+    if (!session || !votes || !records || !allGroups) return {};
+    
+    const points: Record<string, number> = {};
+    const config = session.pointDistribution || { enabled: false };
+    if (!config.enabled) return {};
+
+    // 1. Individual rankings from votes
+    const individualCounts: Record<string, number> = {};
+    votes.forEach(v => {
+      (v.voteData?.individual || []).forEach((pId: string) => {
+        individualCounts[pId] = (individualCounts[pId] || 0) + 1;
+      });
+    });
+
+    const individualRankings = Object.entries(individualCounts)
+      .map(([pId, count]) => ({ pId, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const groupedIndividuals: any[] = [];
+    individualRankings.forEach(item => {
+      const lastGroup = groupedIndividuals[groupedIndividuals.length - 1];
+      if (lastGroup && lastGroup.count === item.count) {
+        lastGroup.members.push(item.pId);
+      } else {
+        groupedIndividuals.push({ count: item.count, rank: groupedIndividuals.length + 1, members: [item.pId] });
+      }
+    });
+
+    groupedIndividuals.forEach(group => {
+      let reward = 0;
+      if (group.rank === 1) reward = config.rewardTop1 || 100;
+      else if (group.rank === 2) reward = config.rewardTop2 || 50;
+      else if (group.rank === 3) reward = config.rewardTop3 || 25;
+
+      if (reward > 0) {
+        group.members.forEach((pId: string) => {
+          points[pId] = (points[pId] || 0) + reward;
+        });
+      }
+    });
+
+    // 2. Group rankings from votes
+    if (session.sessionType === 'group') {
+      const groupCounts: Record<string, number> = {};
+      votes.forEach(v => {
+        if (v.voteData?.group) {
+          groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+        }
+      });
+
+      const topGroupEntries = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]);
+      const maxVotes = topGroupEntries[0]?.[1] || 0;
+      
+      if (maxVotes > 0) {
+        const winningGroups = topGroupEntries.filter(e => e[1] === maxVotes).map(e => e[0]);
+        winningGroups.forEach(groupId => {
+          // Find members of this group who actually preached
+          const groupEvents = records.filter(e => e.preachingGroupId === groupId);
+          const participatingMemberIds = Array.from(new Set(groupEvents.map(e => e.participantId)));
+          
+          if (participatingMemberIds.length > 0) {
+            const groupReward = config.rewardGroupTop1 || 100;
+            const splitPoints = Math.floor(groupReward / participatingMemberIds.length);
+            
+            participatingMemberIds.forEach(mId => {
+              points[mId] = (points[mId] || 0) + splitPoints;
+            });
+          }
+        });
+      }
+    }
+
+    return points;
+  }, [session, votes, records, allGroups]);
 
   useEffect(() => {
     let interval: any;
@@ -258,7 +341,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     toast({ title: "Record Deleted" });
   }
 
-  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading) {
+  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading || votesLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -332,8 +415,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   <TableRow className="h-10">
                     <TableHead className="text-[10px] uppercase font-bold">Preacher</TableHead>
                     <TableHead className="text-[10px] uppercase font-bold">Actual Time</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold">Calculation Rule</TableHead>
-                    <TableHead className="text-[10px] uppercase font-bold">Your Share (₱)</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Incentive (Pts)</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Fine Share (₱)</TableHead>
                     {isAdmin && <TableHead className="text-[10px] uppercase font-bold text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -345,16 +428,20 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       : r.participantName;
                     
                     const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
+                    const displayPoints = incentiveMap[r.participantId] || 0;
 
                     return (
                       <TableRow key={r.id} className="h-12">
                         <TableCell className="font-bold text-xs">{simplifiedName}</TableCell>
                         <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
-                        <TableCell className="text-[10px] text-muted-foreground font-mono">
-                          {r.preachingGroupId && gStats ? (
-                            `${gStats.groupCode} (Shared by ${gStats.participatingCount})`
+                        <TableCell>
+                          {displayPoints > 0 ? (
+                            <div className="flex items-center gap-1.5 font-black text-primary text-xs">
+                              <Trophy className="h-3 w-3 text-yellow-500" />
+                              +{displayPoints}
+                            </div>
                           ) : (
-                            'Individual Fine'
+                            <span className="text-[10px] text-muted-foreground">--</span>
                           )}
                         </TableCell>
                         <TableCell className="text-destructive font-bold text-xs">₱{displayFine.toFixed(2)}</TableCell>
