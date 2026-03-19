@@ -84,15 +84,24 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   }, [participants, events, user]);
 
   const filteredGroups = useMemo(() => {
-    if (!allGroups || !events || !user) return [];
+    if (!allGroups || !events || !user || !participants) return [];
+    
+    // Find all participant IDs associated with this user to ensure we filter accurately
+    const userParticipantIds = participants
+      .filter(p => p.userId === user.uid || p.id === user.uid)
+      .map(p => p.id);
+    userParticipantIds.push(user.uid); 
+
     const activeGroupIds = new Set(events.filter(e => e.preachingGroupId).map(e => e.preachingGroupId));
+    
     return allGroups
       .filter(g => activeGroupIds.has(g.id))
       .filter(g => {
         const members = g.members || {};
-        return !Object.keys(members).includes(user.uid);
+        // Filter out if any of the user's participant IDs are in the group members
+        return !userParticipantIds.some(id => !!members[id]);
       });
-  }, [allGroups, events, user]);
+  }, [allGroups, events, user, participants]);
 
   function handleSubmitVote() {
     if (!session?.votingConfig?.enabled || session?.votingClosed || !firestore || !user) return;
@@ -151,7 +160,7 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
               <CardDescription className="flex items-start gap-2 text-sm">
                 <Info className="h-4 w-4 text-primary mt-0.5" />
                 <span>
-                  Nominate the best speakers from this session. You can <strong>select up to 3 preachers</strong> who stood out to you.
+                  Nominate the best speakers from this session. You can select up to 3 preachers who stood out to you.
                 </span>
               </CardDescription>
             </CardHeader>
