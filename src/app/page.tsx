@@ -557,13 +557,13 @@ export default function Dashboard() {
                     {/* Winners Section */}
                     <div className="space-y-2">
                       {sessionVotingResults.topGroups.members.map((winner: any) => (
-                        <div key={winner.id} className="flex flex-col gap-1 bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
+                        <div key={winner.id} className="flex flex-col gap-0.5 bg-primary/5 p-2 rounded-lg border border-primary/20 shadow-sm">
                           <div className="flex items-center justify-between">
-                            <span className="font-black text-primary uppercase tracking-tight text-lg">{winner.name}</span>
-                            <Badge className="bg-primary text-primary-foreground text-sm font-bold">{winner.count} votes</Badge>
+                            <span className="font-black text-primary uppercase tracking-tight text-base">{winner.name}</span>
+                            <Badge className="bg-primary text-primary-foreground text-[10px] h-4 font-bold px-1.5">{winner.count} votes</Badge>
                           </div>
                           {winner.description && (
-                            <p className="text-[10px] text-muted-foreground italic">
+                            <p className="text-[9px] text-muted-foreground italic leading-tight">
                               {winner.description}
                             </p>
                           )}
