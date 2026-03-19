@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -45,6 +44,25 @@
       },
       "required": ["id", "name", "ownerId"]
     },
+    "SessionConfiguration": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SessionConfiguration",
+      "type": "object",
+      "description": "Reusable templates for session rules and fine rates.",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "sessionType": { "type": "string" },
+        "maxPreachingTimeMinutes": { "type": "number" },
+        "maxPreachingTimeSeconds": { "type": "number" },
+        "fineRules": { "type": "array" },
+        "votingConfig": { "type": "object" },
+        "pointDistribution": { "type": "object" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["id", "name", "sessionType", "ownerId"]
+    },
     "Session": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Session",
@@ -89,6 +107,18 @@
         "sessionOwnerId": { "type": "string" }
       },
       "required": ["id", "sessionId", "actualDurationSeconds", "sessionMembers"]
+    },
+    "Vote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Vote",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "voterParticipantId": { "type": "string" },
+        "voteData": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -107,6 +137,10 @@
       "schema": "Group",
       "description": "Manages groups of participants."
     },
+    "session_configurations/{configId}": {
+      "schema": "SessionConfiguration",
+      "description": "Templates for session rules."
+    },
     "sessions/{sessionId}": {
       "schema": "Session",
       "description": "Represents an instance of a preaching session."
@@ -114,6 +148,10 @@
     "sessions/{sessionId}/preaching_events/{preachingEventId}": {
       "schema": "PreachingEvent",
       "description": "Records individual preaching events within a session."
+    },
+    "sessions/{sessionId}/votes/{voteId}": {
+      "schema": "Vote",
+      "description": "Individual ballots cast by participants."
     }
   }
 }

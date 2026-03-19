@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection } from 'firebase/firestore';
 import { useFirestore, useUser, updateDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,61 +122,61 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-2xl">
-      <div className="mb-6">
-        <Button variant="ghost" asChild className="mb-4">
+      <div className="mb-4">
+        <Button variant="ghost" asChild className="mb-2 p-0 h-auto hover:bg-transparent text-muted-foreground hover:text-primary">
           <Link href={`/sessions/${id}`}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Session
           </Link>
         </Button>
-        <h1 className="text-2xl font-headline font-bold text-primary">Edit Session</h1>
-        <p className="text-muted-foreground text-sm">Update the name, date, or rules for this session.</p>
+        <h1 className="text-xl font-headline font-bold text-primary">Edit Session</h1>
+        <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-bold">Session Configuration</p>
       </div>
 
-      <Card className="shadow-lg border-none">
-        <CardHeader>
-          <CardTitle className="text-lg">General Info</CardTitle>
+      <Card className="shadow-md border-none">
+        <CardHeader className="py-4">
+          <CardTitle className="text-sm">General Info</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="title">Session Title</Label>
+        <CardContent className="space-y-4 px-4 pb-4">
+          <div className="space-y-1">
+            <Label htmlFor="title" className="text-xs">Session Title</Label>
             <Input 
               id="title" 
+              className="h-8 text-xs"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="date">Session Date</Label>
+          <div className="space-y-1">
+            <Label htmlFor="date" className="text-xs">Session Date</Label>
             <div className="relative">
-              <CalendarIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <CalendarIcon className="absolute left-2.5 top-2.5 h-3 w-3 text-muted-foreground" />
               <Input 
                 id="date" 
                 type="date"
-                className="pl-10"
+                className="pl-8 h-8 text-xs"
                 value={sessionDate}
                 onChange={(e) => setSessionDate(e.target.value)}
               />
             </div>
           </div>
 
-          <div className="space-y-2 pt-4 border-t">
-            <Label>Update Rule Configuration (Optional)</Label>
-            <p className="text-[10px] text-muted-foreground mb-2">Only select a new rule set if you want to override current session limits and fine rates.</p>
+          <div className="space-y-1 pt-4 border-t">
+            <Label className="text-xs">Update Rule Set (Optional)</Label>
             {configsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading rule sets...
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading...
               </div>
             ) : (
               <Select value={selectedConfigId} onValueChange={setSelectedConfigId}>
-                <SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue placeholder="Keep current rules" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Keep current rules</SelectItem>
+                  <SelectItem value="none" className="text-xs">Keep current rules</SelectItem>
                   {configs?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
+                    <SelectItem key={c.id} value={c.id} className="text-xs">
                       {c.name} ({c.sessionType})
                     </SelectItem>
                   ))}
@@ -187,7 +187,7 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
 
           {selectedConfigId && selectedConfigId !== 'none' && (
             <div className="p-3 bg-primary/5 rounded-lg border border-primary/10 space-y-1">
-              <h4 className="text-xs font-semibold flex items-center gap-2">
+              <h4 className="text-[10px] font-bold flex items-center gap-2 uppercase">
                 <AlertCircle className="h-3 w-3 text-primary" /> New Rule Preview
               </h4>
               {configs?.filter(c => c.id === selectedConfigId).map(c => (
@@ -200,13 +200,13 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
             </div>
           )}
         </CardContent>
-        <CardFooter className="bg-muted/5 border-t pt-6">
+        <CardFooter className="bg-muted/5 border-t py-4">
           <Button 
-            className="w-full h-12 font-bold" 
+            className="w-full h-10 font-bold text-xs" 
             onClick={handleUpdateSession} 
             disabled={loading || !title.trim()}
           >
-            {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Changes
           </Button>
         </CardFooter>
