@@ -11,8 +11,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Search, Filter, Settings2 } from 'lucide-react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Search, Filter, Settings2, LogOut } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -39,6 +49,11 @@ export default function ParticipantsPage() {
   // Group Management State
   const [managingGroup, setManagingGroup] = useState<any>(null);
   const [selectedMemberIds, setSelectedMemberIds] = useState<Record<string, boolean>>({});
+
+  // Confirmation States
+  const [participantToDelete, setParticipantToDelete] = useState<string | null>(null);
+  const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
+  const [groupToLeave, setGroupToLeave] = useState<string | null>(null);
 
   // Check if current user is admin
   useEffect(() => {
@@ -185,11 +200,37 @@ export default function ParticipantsPage() {
   function handleDeleteParticipant(id: string) {
     if (!firestore) return;
     deleteDocumentNonBlocking(doc(firestore, 'participants', id));
+    setParticipantToDelete(null);
+    toast({ title: "Participant Deleted" });
   }
 
   function handleDeleteGroup(id: string) {
     if (!firestore) return;
     deleteDocumentNonBlocking(doc(firestore, 'groups', id));
+    setGroupToDelete(null);
+    toast({ title: "Group Deleted" });
+  }
+
+  function handleLeaveGroup(groupId: string) {
+    if (!firestore || !user || !groups) return;
+    const group = groups.find(g => g.id === groupId);
+    if (!group || !group.members) return;
+
+    const newMembers = { ...group.members };
+    delete newMembers[user.uid];
+    
+    // Also try to remove linked participant ID if found
+    const myParticipant = participants?.find(p => p.userId === user.uid);
+    if (myParticipant) {
+      delete newMembers[myParticipant.id];
+    }
+
+    updateDocumentNonBlocking(doc(firestore, 'groups', groupId), {
+      members: newMembers
+    });
+
+    setGroupToLeave(null);
+    toast({ title: "Left Group", description: `You have successfully left ${group.name}.` });
   }
 
   return (
@@ -365,7 +406,12 @@ export default function ParticipantsPage() {
                               </TableCell>
                               <TableCell className="text-right">
                                 {isAdmin && (
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity" onClick={() => handleDeleteParticipant(p.id)}>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-20 hover:!opacity-100 transition-opacity" 
+                                    onClick={() => setParticipantToDelete(p.id)}
+                                  >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 )}
@@ -430,56 +476,66 @@ export default function ParticipantsPage() {
                 <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary opacity-20" />
               </div>
             ) : groups && groups.length > 0 ? (
-              groups.map((g) => (
-                <Card key={g.id} className="shadow-sm hover:shadow-lg transition-all h-full flex flex-col group border-none bg-card">
-                  <CardHeader className="flex flex-row items-start justify-between pb-2">
-                    <div className="space-y-1">
-                      <CardTitle className="text-2xl font-black text-primary tracking-tighter uppercase">{g.name}</CardTitle>
-                      {g.description && (
-                        <CardDescription className="text-[10px] leading-tight flex items-center gap-1 font-medium">
-                          {g.description}
-                        </CardDescription>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      {(user?.uid === g.ownerId || isAdmin) && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleOpenMemberManagement(g)}>
-                          <Settings2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      )}
-                      {isAdmin && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteGroup(g.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow pt-4">
-                    <div className="flex justify-between items-center text-xs p-2 bg-accent/5 rounded-lg border border-accent/10">
-                      <span className="text-muted-foreground font-bold uppercase tracking-wider text-[9px]">Collective Points</span>
-                      <span className="font-black text-accent text-lg">{g.totalPoints || 0}</span>
-                    </div>
-                    
-                    <div className="space-y-2 mt-6">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.2em] flex items-center gap-2">
-                        <Users className="h-3 w-3" /> Current Roster
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {Object.keys(g.members || {}).map(mId => {
-                           if (mId === 'owner') return null;
-                           const p = participants?.find(part => part.id === mId || part.userId === mId);
-                           if (!p) return null;
-                           return (
-                             <Badge key={mId} variant="outline" className="text-[10px] py-0 h-5 bg-background font-bold border-muted">
-                               {p.name}
-                             </Badge>
-                           );
-                        })}
+              groups.map((g) => {
+                const isMember = user && g.members && (g.members[user.uid] || participants?.find(p => p.userId === user.uid && g.members[p.id]));
+                const isOwner = g.ownerId === user?.uid;
+
+                return (
+                  <Card key={g.id} className="shadow-sm hover:shadow-lg transition-all h-full flex flex-col group border-none bg-card">
+                    <CardHeader className="flex flex-row items-start justify-between pb-2">
+                      <div className="space-y-1">
+                        <CardTitle className="text-2xl font-black text-primary tracking-tighter uppercase">{g.name}</CardTitle>
+                        {g.description && (
+                          <CardDescription className="text-[10px] leading-tight flex items-center gap-1 font-medium">
+                            {g.description}
+                          </CardDescription>
+                        )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                      <div className="flex gap-1">
+                        {(user?.uid === g.ownerId || isAdmin) && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleOpenMemberManagement(g)}>
+                            <Settings2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => setGroupToDelete(g.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                        {isMember && !isOwner && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive" title="Leave Group" onClick={() => setGroupToLeave(g.id)}>
+                            <LogOut className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex-grow pt-4">
+                      <div className="flex justify-between items-center text-xs p-2 bg-accent/5 rounded-lg border border-accent/10">
+                        <span className="text-muted-foreground font-bold uppercase tracking-wider text-[9px]">Collective Points</span>
+                        <span className="font-black text-accent text-lg">{g.totalPoints || 0}</span>
+                      </div>
+                      
+                      <div className="space-y-2 mt-6">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.2em] flex items-center gap-2">
+                          <Users className="h-3 w-3" /> Current Roster
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.keys(g.members || {}).map(mId => {
+                             if (mId === 'owner') return null;
+                             const p = participants?.find(part => part.id === mId || part.userId === mId);
+                             if (!p) return null;
+                             return (
+                               <Badge key={mId} variant="outline" className="text-[10px] py-0 h-5 bg-background font-bold border-muted">
+                                 {p.name}
+                               </Badge>
+                             );
+                          })}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             ) : (
               <div className="col-span-full py-20 text-center border-2 border-dashed rounded-xl">
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
@@ -489,6 +545,67 @@ export default function ParticipantsPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Confirmation Dialogs */}
+      <AlertDialog open={!!participantToDelete} onOpenChange={(o) => !o && setParticipantToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Participant?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this preacher from the roster. Historical data in previous sessions will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => participantToDelete && handleDeleteParticipant(participantToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!groupToDelete} onOpenChange={(o) => !o && setGroupToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the missionary team. All session records associated with this team code will remain as historical logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => groupToDelete && handleDeleteGroup(groupToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!groupToLeave} onOpenChange={(o) => !o && setGroupToLeave(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave Group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to withdraw from this missionary team? You will no longer be listed as a member in future sessions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => groupToLeave && handleLeaveGroup(groupToLeave)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Leave Group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Profile Dialog */}
       <Dialog open={!!editingParticipant} onOpenChange={(open) => !open && setEditingParticipant(null)}>
