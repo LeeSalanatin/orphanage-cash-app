@@ -21,7 +21,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
       toast({ variant: "destructive", title: "Passwords match", description: "Your passwords do not match." });
@@ -29,15 +29,19 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    try {
-      initiateEmailSignUp(auth, email, password);
-      toast({ title: "Account created", description: "Welcome to PreachPoint!" });
-      router.push('/');
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Signup Failed", description: error.message });
-    } finally {
-      setLoading(false);
-    }
+    initiateEmailSignUp(auth, email, password)
+      .then(() => {
+        toast({ title: "Account created", description: "Welcome to PreachPoint!" });
+        router.push('/');
+      })
+      .catch((error: any) => {
+        toast({ 
+          variant: "destructive", 
+          title: "Signup Failed", 
+          description: error.message || "Could not create account." 
+        });
+        setLoading(false);
+      });
   };
 
   return (

@@ -20,22 +20,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
 
     setLoading(true);
-    try {
-      initiateEmailSignIn(auth, email, password);
-      // Non-blocking login assumes redirect handled by state change, 
-      // but for better UX we can wait a moment or rely on the Navbar's effect.
-      toast({ title: "Logging in...", description: "Please wait while we authenticate you." });
-      router.push('/');
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Login Failed", description: error.message });
-    } finally {
-      setLoading(false);
-    }
+    initiateEmailSignIn(auth, email, password)
+      .then(() => {
+        toast({ title: "Welcome back", description: "You have successfully signed in." });
+        router.push('/');
+      })
+      .catch((error: any) => {
+        toast({ 
+          variant: "destructive", 
+          title: "Login Failed", 
+          description: error.message || "Invalid credentials." 
+        });
+        setLoading(false);
+      });
   };
 
   return (
