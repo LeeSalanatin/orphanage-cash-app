@@ -197,7 +197,7 @@ export default function Dashboard() {
     return { longestIndividual: indMax, longestGroup: grpMax };
   }, [rawEvents]);
 
-  // Session-specific voting results
+  // Session-specific voting results with Tie Support
   const sessionVotingResults = useMemo(() => {
     if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], group: null };
 
@@ -211,13 +211,25 @@ export default function Dashboard() {
       });
     });
 
-    const individuals = Object.entries(individualCounts)
-      .map(([id, count]) => {
-        const p = participants.find(p => p.id === id);
-        return { name: p?.name || 'Unknown', count, id };
-      })
+    // Group by vote count to handle ties
+    const countGroups: Record<number, any[]> = {};
+    Object.entries(individualCounts).forEach(([id, count]) => {
+      const p = participants.find(p => p.id === id);
+      if (!countGroups[count]) countGroups[count] = [];
+      countGroups[count].push({ name: p?.name || 'Unknown', id });
+    });
+
+    const individuals = Object.entries(countGroups)
+      .map(([count, members]) => ({
+        count: parseInt(count),
+        members
+      }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
+      .slice(0, 3) // Top 3 score levels
+      .map((group, index) => ({
+        rank: index + 1,
+        ...group
+      }));
 
     // Tally group votes
     const groupCounts: Record<string, number> = {};
@@ -433,14 +445,27 @@ export default function Dashboard() {
                     <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
                   </p>
                   {sessionVotingResults.individuals.length > 0 ? (
-                    <div className="space-y-3">
-                      {sessionVotingResults.individuals.map((p, i) => (
-                        <div key={p.id} className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2">
-                            <span className="font-bold text-muted-foreground text-xs w-4">#{i+1}</span>
-                            <span className={cn("font-medium", p.id === userParticipantId ? "text-primary font-bold" : "")}>{p.name}</span>
-                          </span>
-                          <Badge variant="outline" className="text-[10px] font-mono">{p.count} votes</Badge>
+                    <div className="space-y-4">
+                      {sessionVotingResults.individuals.map((rankGroup) => (
+                        <div key={rankGroup.rank} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-muted-foreground">Top {rankGroup.rank}</span>
+                            <Badge variant="outline" className="text-[10px] h-4 font-mono px-1">{rankGroup.count} votes</Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pl-2">
+                            {rankGroup.members.map((m: any) => (
+                              <Badge 
+                                key={m.id} 
+                                variant="secondary" 
+                                className={cn(
+                                  "text-[10px] py-0 px-2 h-5",
+                                  m.id === userParticipantId ? "bg-primary text-primary-foreground font-bold" : ""
+                                )}
+                              >
+                                {m.name}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
