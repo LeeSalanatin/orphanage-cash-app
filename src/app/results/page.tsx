@@ -77,9 +77,8 @@ function ResultsContent() {
     const individualRankings = Object.entries(individualCounts)
       .map(([id, count]) => {
         const p = participants.find(p => p.id === id);
-        // Find group for this participant to include in the name
-        const group = allGroups.find(g => g.members?.[id] || (p?.userId && g.members?.[p.userId]));
-        const displayName = group ? `${group.name}: ${p?.name || 'Unknown'}` : (p?.name || 'Unknown');
+        // We only remain the name, removing group prefix
+        const displayName = p?.name || 'Unknown';
         return { id, name: displayName, count };
       })
       .sort((a, b) => b.count - a.count);
