@@ -174,6 +174,7 @@ export default function Dashboard() {
     const sessionEvents = rawEvents.filter(e => e.sessionId === sessionFilterId);
     
     const indRecords = sessionEvents.map(e => ({
+      id: e.participantId,
       time: e.actualDurationSeconds,
       name: e.participantName.includes(' - ') 
         ? e.participantName.split(' - ').pop() 
@@ -195,13 +196,14 @@ export default function Dashboard() {
       }
     });
 
-    let grpMax = { time: 0, name: '', description: '' };
+    let grpMax = { time: 0, name: '', id: '', description: '' };
     Object.entries(groupTotals).forEach(([groupId, gt]) => {
       if (gt.time > grpMax.time) {
         const groupInfo = allGroups?.find(g => g.id === groupId);
         grpMax = { 
           time: gt.time, 
           name: gt.name,
+          id: groupId,
           description: groupInfo?.description || ''
         };
       }
@@ -461,12 +463,21 @@ export default function Dashboard() {
                 </p>
                 {sessionRecords.topIndividuals.length > 0 ? (
                   <div className="space-y-2">
-                    <div className="flex flex-col">
-                      <p className="font-bold text-lg">{sessionRecords.topIndividuals[0].name}</p>
+                    <div className={cn(
+                      "flex flex-col p-1.5 rounded-lg transition-all",
+                      sessionRecords.topIndividuals[0].id === userParticipantId ? "bg-primary/10 border-l-4 border-primary" : ""
+                    )}>
+                      <p className={cn(
+                        "font-bold text-lg",
+                        sessionRecords.topIndividuals[0].id === userParticipantId ? "text-primary" : ""
+                      )}>{sessionRecords.topIndividuals[0].name}</p>
                       <p className="text-xs text-primary font-mono">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
                     </div>
                     {sessionRecords.topIndividuals.slice(1).map((record, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-[10px] text-muted-foreground border-t pt-1 border-border/50">
+                      <div key={idx} className={cn(
+                        "flex justify-between items-center text-[10px] p-1.5 rounded border-t border-border/50",
+                        record.id === userParticipantId ? "bg-primary/5 text-primary font-bold border-l-4 border-primary/40" : "text-muted-foreground"
+                      )}>
                         <span>{idx + 2}. {record.name}</span>
                         <span className="font-mono">{formatDuration(record.time)}</span>
                       </div>
@@ -481,15 +492,21 @@ export default function Dashboard() {
                   <Users className="h-3 w-3" /> Group Record
                 </p>
                 {sessionRecords.longestGroup ? (
-                  <>
-                    <p className="font-bold text-lg">{sessionRecords.longestGroup.name}</p>
+                  <div className={cn(
+                    "p-1.5 rounded-lg",
+                    allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "bg-accent/10 border-l-4 border-accent" : ""
+                  )}>
+                    <p className={cn(
+                      "font-bold text-lg",
+                      allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "text-accent" : ""
+                    )}>{sessionRecords.longestGroup.name}</p>
                     {sessionRecords.longestGroup.description && (
-                      <p className="text-[10px] text-muted-foreground italic mb-1">
+                      <p className="text-[10px] text-muted-foreground italic mb-1 leading-tight">
                         {sessionRecords.longestGroup.description}
                       </p>
                     )}
                     <p className="text-xs text-accent font-mono">{formatDuration(sessionRecords.longestGroup.time)}</p>
-                  </>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">No group record.</p>
                 )}
@@ -554,16 +571,34 @@ export default function Dashboard() {
                 </p>
                 {sessionVotingResults.topGroups ? (
                   <div className="space-y-4">
-                    {/* Winners Section */}
                     <div className="space-y-2">
                       {sessionVotingResults.topGroups.members.map((winner: any) => (
-                        <div key={winner.id} className="flex flex-col gap-0.5 bg-primary/5 p-2 rounded-lg border border-primary/20 shadow-sm">
+                        <div 
+                          key={winner.id} 
+                          className={cn(
+                            "flex flex-col gap-0.5 p-2 rounded-lg border shadow-sm",
+                            allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
+                              ? "bg-primary text-primary-foreground border-primary" 
+                              : "bg-primary/5 border-primary/20"
+                          )}
+                        >
                           <div className="flex items-center justify-between">
-                            <span className="font-black text-primary uppercase tracking-tight text-base">{winner.name}</span>
-                            <Badge className="bg-primary text-primary-foreground text-[10px] h-4 font-bold px-1.5">{winner.count} votes</Badge>
+                            <span className={cn(
+                              "font-black uppercase tracking-tight text-base",
+                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground" : "text-primary"
+                            )}>{winner.name}</span>
+                            <Badge className={cn(
+                              "text-[10px] h-4 font-bold px-1.5",
+                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
+                                ? "bg-white text-primary" 
+                                : "bg-primary text-primary-foreground"
+                            )}>{winner.count} votes</Badge>
                           </div>
                           {winner.description && (
-                            <p className="text-[9px] text-muted-foreground italic leading-tight">
+                            <p className={cn(
+                              "text-[9px] italic leading-tight",
+                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground/80" : "text-muted-foreground"
+                            )}>
                               {winner.description}
                             </p>
                           )}
@@ -571,7 +606,6 @@ export default function Dashboard() {
                       ))}
                     </div>
 
-                    {/* Others Section */}
                     {sessionVotingResults.otherGroups.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-[9px] uppercase font-black text-muted-foreground tracking-widest px-1">Other Tally</p>
@@ -579,7 +613,10 @@ export default function Dashboard() {
                           {sessionVotingResults.otherGroups.map((rankGroup: any) => 
                             rankGroup.members.map((other: any) => (
                               <div key={other.id} className="flex justify-between items-center text-[10px] text-muted-foreground">
-                                <span className="font-bold">{other.name}</span>
+                                <span className={cn(
+                                  "font-bold",
+                                  allGroups?.find(g => g.id === other.id)?.members?.[userParticipantId] ? "text-primary" : ""
+                                )}>{other.name}</span>
                                 <span className="font-mono">{other.count} votes</span>
                               </div>
                             ))
