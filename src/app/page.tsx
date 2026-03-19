@@ -454,16 +454,17 @@ export default function Dashboard() {
                           </div>
                           <div className="flex flex-wrap gap-1.5 pl-2">
                             {rankGroup.members.map((m: any) => (
-                              <Badge 
+                              <span 
                                 key={m.id} 
-                                variant="secondary" 
                                 className={cn(
-                                  "text-[10px] py-0 px-2 h-5",
-                                  m.id === userParticipantId ? "bg-primary text-primary-foreground font-bold" : ""
+                                  "text-[10px] px-2 py-0.5 rounded-sm transition-colors",
+                                  m.id === userParticipantId 
+                                    ? "bg-primary text-primary-foreground font-bold shadow-sm" 
+                                    : "text-muted-foreground bg-transparent"
                                 )}
                               >
                                 {m.name}
-                              </Badge>
+                              </span>
                             ))}
                           </div>
                         </div>
