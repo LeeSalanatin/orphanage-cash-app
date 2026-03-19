@@ -291,12 +291,12 @@ export default function Dashboard() {
 
   if (!user && !authLoading) {
     return (
-      <div className="container mx-auto py-20 px-4 text-center">
-        <h1 className="text-4xl font-bold mb-4 text-primary">PreachPoint</h1>
-        <p className="text-muted-foreground mb-8 text-lg">Manage preaching sessions, fines, and voting rewards.</p>
-        <div className="flex justify-center gap-4">
-          <ShadButton asChild size="lg"><Link href="/login">Sign In</Link></ShadButton>
-          <ShadButton asChild variant="outline" size="lg"><Link href="/signup">Create Account</Link></ShadButton>
+      <div className="container mx-auto py-12 px-4 text-center">
+        <h1 className="text-3xl font-bold mb-3 text-primary">PreachPoint</h1>
+        <p className="text-muted-foreground mb-6 text-base">Manage preaching sessions, fines, and voting rewards.</p>
+        <div className="flex justify-center gap-3">
+          <ShadButton asChild size="sm"><Link href="/login">Sign In</Link></ShadButton>
+          <ShadButton asChild variant="outline" size="sm"><Link href="/signup">Create Account</Link></ShadButton>
         </div>
       </div>
     );
@@ -305,75 +305,75 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground animate-pulse">Syncing your preaching data...</p>
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-xs text-muted-foreground animate-pulse">Syncing your preaching data...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-8">
+    <div className="container mx-auto py-6 px-4 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-headline font-bold text-foreground">My Dashboard</h1>
-            {isAdmin && <Badge className="bg-primary/10 text-primary border-primary/20">System Admin</Badge>}
+            <h1 className="text-2xl font-headline font-bold text-foreground">My Dashboard</h1>
+            {isAdmin && <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] h-5">System Admin</Badge>}
           </div>
-          <p className="text-muted-foreground">Welcome back, {userData?.name || user?.email}.</p>
+          <p className="text-xs text-muted-foreground">Welcome back, {userData?.name || user?.email}.</p>
         </div>
-        <div className="flex gap-3">
-           <Card className="bg-primary/5 border-primary/10 px-4 py-2">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                <Star className="h-3 w-3 text-yellow-500" /> My Points
+        <div className="flex gap-2">
+           <Card className="bg-primary/5 border-primary/10 px-3 py-1.5">
+              <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                <Star className="h-2.5 w-2.5 text-yellow-500" /> My Points
               </p>
-              <p className="text-xl font-bold text-primary">{stats.points}</p>
+              <p className="text-lg font-bold text-primary leading-tight">{stats.points}</p>
            </Card>
-           <Card className="bg-destructive/5 border-destructive/10 px-4 py-2">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                <TrendingDown className="h-3 w-3" /> Your Total Fines
+           <Card className="bg-destructive/5 border-destructive/10 px-3 py-1.5">
+              <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                <TrendingDown className="h-2.5 w-2.5" /> Your Total Fines
               </p>
-              <p className="text-xl font-bold text-destructive">₱{stats.totalFines.toFixed(2)}</p>
+              <p className="text-lg font-bold text-destructive leading-tight">₱{stats.totalFines.toFixed(2)}</p>
            </Card>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard 
-          title="Total Preaching Events" 
+          title="Total Events" 
           value={myEvents?.length.toString() || "0"} 
-          icon={<Mic2 className="h-5 w-5" />}
+          icon={<Mic2 className="h-4 w-4" />}
           description="Personal history"
         />
         <StatCard 
-          title="Recent Preaching Time" 
+          title="Recent Time" 
           value={recentPreaching?.actualDurationFormatted || "0:00"} 
-          icon={<Timer className="h-5 w-5" />}
+          icon={<Timer className="h-4 w-4" />}
           description={recentPreaching ? `Performed on ${new Date(recentPreaching.startTime).toLocaleDateString()}` : "No recent activity"}
           variant="accent"
         />
         <StatCard 
           title="Active Teams" 
           value={allGroups?.length.toString() || "0"} 
-          icon={<Users className="h-5 w-5" />}
+          icon={<Users className="h-4 w-4" />}
           description="Community total"
         />
       </div>
 
-      <div className="lg:col-span-2 space-y-8">
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HistoryIcon className="h-5 w-5 text-primary" />
+      <div className="space-y-6">
+        <Card className="shadow-sm">
+          <CardHeader className="py-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <HistoryIcon className="h-4 w-4 text-primary" />
               Time & Fine History
             </CardTitle>
-            <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
+            <CardDescription className="text-xs">Log of your participation.</CardDescription>
           </CardHeader>
           <CardContent>
             {myEvents && myEvents.length > 0 ? (
-              <div className="space-y-4">
-                {myEvents.slice(0, 10).map((event) => {
+              <div className="space-y-2">
+                {myEvents.slice(0, 5).map((event) => {
                   const session = allSessions.find(s => s.id === event.sessionId);
                   let displayFine = event.totalFineAmount || 0;
                   
@@ -390,93 +390,92 @@ export default function Dashboard() {
                   }
 
                   return (
-                    <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
+                    <div key={event.id} className="flex justify-between items-center p-3 rounded-md border hover:bg-muted/20 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 p-1.5 rounded-full"><Clock className="h-3 w-3 text-primary" /></div>
                         <div>
-                          <p className="font-semibold text-sm">
+                          <p className="font-semibold text-xs leading-tight">
                             {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
                           </p>
-                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
+                          <p className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            {event.preachingGroupId ? <Users className="h-2.5 w-2.5" /> : <Mic2 className="h-2.5 w-2.5" />}
+                            {event.preachingGroupId ? `${event.participantName.split(' - ')[0]}` : 'Individual'}
                             <span className="mx-1">•</span>
-                            <Calendar className="h-3 w-3" /> {new Date(event.startTime).toLocaleDateString()}
+                            <Calendar className="h-2.5 w-2.5" /> {new Date(event.startTime).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                        <p className="text-[10px] font-bold text-destructive">
-                          Fine Share: ₱{displayFine.toFixed(2)}
+                        <p className="font-mono font-bold text-xs">{event.actualDurationFormatted}</p>
+                        <p className="text-[9px] font-bold text-destructive">
+                          ₱{displayFine.toFixed(2)}
                         </p>
                       </div>
                     </div>
                   );
                 })}
-                <ShadButton variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
-                  <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                <ShadButton variant="ghost" className="w-full text-[10px] h-8 text-muted-foreground mt-2" asChild>
+                  <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-2.5 w-2.5" /></Link>
                 </ShadButton>
               </div>
             ) : (
-              <div className="text-center py-14 border-2 border-dashed rounded-lg">
-                <HistoryIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                <p className="text-muted-foreground">No participation history found yet.</p>
+              <div className="text-center py-10 border-2 border-dashed rounded-md">
+                <HistoryIcon className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-20" />
+                <p className="text-[10px] text-muted-foreground">No participation history found.</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-bold">Session Results</h2>
+            <Filter className="h-4 w-4 text-primary" />
+            <h2 className="text-lg font-bold">Session Results</h2>
           </div>
           <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
-            <SelectTrigger className="w-full sm:w-[250px]">
+            <SelectTrigger className="w-full sm:w-[220px] h-8 text-xs">
               <SelectValue placeholder="Filter by Session" />
             </SelectTrigger>
             <SelectContent>
               {allSessions && [...allSessions]
                 .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
                 .map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                  <SelectItem key={s.id} value={s.id} className="text-xs">{s.title}</SelectItem>
                 ))
               }
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8">
           <Card className="shadow-sm border-none bg-card">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Timer className="h-5 w-5 text-accent" /> 
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Timer className="h-4 w-4 text-accent" /> 
                 Longest Time
               </CardTitle>
-              <CardDescription>Record holders for the selected session.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-4 pb-4 space-y-4">
               <div className="space-y-1">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <UserIcon className="h-3 w-3" /> Individual Records
+                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <UserIcon className="h-2.5 w-2.5" /> Individual Records
                 </p>
                 {sessionRecords.topIndividuals.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div className={cn(
-                      "flex flex-col p-1.5 rounded-lg transition-all",
-                      sessionRecords.topIndividuals[0].id === userParticipantId ? "bg-primary/10 border-l-4 border-primary" : ""
+                      "flex flex-col p-1.5 rounded-md transition-all",
+                      sessionRecords.topIndividuals[0].id === userParticipantId ? "bg-primary/10 border-l-2 border-primary" : "bg-muted/10"
                     )}>
                       <p className={cn(
-                        "font-bold text-lg",
+                        "font-bold text-sm",
                         sessionRecords.topIndividuals[0].id === userParticipantId ? "text-primary" : ""
                       )}>{sessionRecords.topIndividuals[0].name}</p>
-                      <p className="text-xs text-primary font-mono">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
+                      <p className="text-[10px] text-primary font-mono leading-none">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
                     </div>
                     {sessionRecords.topIndividuals.slice(1).map((record, idx) => (
                       <div key={idx} className={cn(
-                        "flex justify-between items-center text-[10px] p-1.5 rounded border-t border-border/50",
-                        record.id === userParticipantId ? "bg-primary/5 text-primary font-bold border-l-4 border-primary/40" : "text-muted-foreground"
+                        "flex justify-between items-center text-[10px] p-1.5 rounded border-t border-border/30",
+                        record.id === userParticipantId ? "bg-primary/5 text-primary font-bold border-l-2 border-primary/40" : "text-muted-foreground"
                       )}>
                         <span>{idx + 2}. {record.name}</span>
                         <span className="font-mono">{formatDuration(record.time)}</span>
@@ -484,73 +483,72 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">No individual record.</p>
+                  <p className="text-[10px] text-muted-foreground italic">No individual record.</p>
                 )}
               </div>
-              <div className="space-y-1 pt-4 border-t">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Users className="h-3 w-3" /> Group Record
+              <div className="space-y-1 pt-3 border-t">
+                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Users className="h-2.5 w-2.5" /> Group Record
                 </p>
                 {sessionRecords.longestGroup ? (
                   <div className={cn(
-                    "p-1.5 rounded-lg",
-                    allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "bg-accent/10 border-l-4 border-accent" : ""
+                    "p-1.5 rounded-md",
+                    allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "bg-accent/10 border-l-2 border-accent" : "bg-muted/10"
                   )}>
                     <p className={cn(
-                      "font-bold text-lg",
+                      "font-bold text-sm",
                       allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "text-accent" : ""
                     )}>{sessionRecords.longestGroup.name}</p>
                     {sessionRecords.longestGroup.description && (
-                      <p className="text-[10px] text-muted-foreground italic mb-1 leading-tight">
+                      <p className="text-[9px] text-muted-foreground italic leading-tight mb-1">
                         {sessionRecords.longestGroup.description}
                       </p>
                     )}
-                    <p className="text-xs text-accent font-mono">{formatDuration(sessionRecords.longestGroup.time)}</p>
+                    <p className="text-[10px] text-accent font-mono leading-none">{formatDuration(sessionRecords.longestGroup.time)}</p>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">No group record.</p>
+                  <p className="text-[10px] text-muted-foreground italic">No group record.</p>
                 )}
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-sm border-none bg-card flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="space-y-1">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <VoteIcon className="h-5 w-5 text-primary" /> 
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <div className="space-y-0.5">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <VoteIcon className="h-4 w-4 text-primary" /> 
                   Voting Results
                 </CardTitle>
-                <CardDescription>Peer nominations for the selected session.</CardDescription>
               </div>
-              <ShadButton variant="ghost" size="sm" asChild className="text-primary hover:bg-primary/5">
+              <ShadButton variant="ghost" size="icon" asChild className="h-6 w-6 text-primary hover:bg-primary/5">
                 <Link href={`/results?sessionId=${sessionFilterId}`}>
-                  View Full <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </Link>
               </ShadButton>
             </CardHeader>
-            <CardContent className="space-y-6 flex-grow">
-              <div className="space-y-4">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
+            <CardContent className="px-4 pb-4 space-y-4 flex-grow">
+              <div className="space-y-2">
+                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Star className="h-2.5 w-2.5 text-yellow-500" /> Top Individuals
                 </p>
                 {sessionVotingResults.individuals.length > 0 ? (
-                  <div className="space-y-5">
+                  <div className="space-y-2">
                     {sessionVotingResults.individuals.map((rankGroup) => (
-                      <div key={rankGroup.rank} className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
+                      <div key={rankGroup.rank} className="space-y-1">
+                        <div className="flex items-center justify-between text-[9px]">
                           <span className="font-bold text-muted-foreground">Rank {rankGroup.rank}</span>
-                          <Badge variant="outline" className="text-[10px] h-4 font-mono px-1">{rankGroup.count} votes</Badge>
+                          <span className="font-mono px-1 border rounded">{rankGroup.count} votes</span>
                         </div>
-                        <div className="flex flex-wrap gap-2 pl-2">
+                        <div className="flex flex-wrap gap-1.5 pl-1">
                           {rankGroup.members.map((m: any) => (
                             <span 
                               key={m.id} 
                               className={cn(
-                                "text-base py-1 px-3 rounded-md transition-all",
+                                "text-xs py-0.5 px-2 rounded-md transition-all",
                                 m.id === userParticipantId 
-                                  ? "bg-primary text-primary-foreground font-bold shadow-md scale-105" 
-                                  : "text-foreground font-bold"
+                                  ? "bg-primary text-primary-foreground font-bold shadow-sm" 
+                                  : "text-foreground font-bold bg-muted/20"
                               )}
                             >
                               {m.name}
@@ -561,42 +559,42 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground italic text-center py-2">No individual votes yet.</p>
+                  <p className="text-[10px] text-muted-foreground italic text-center py-1">No votes yet.</p>
                 )}
               </div>
 
-              <div className="space-y-4 pt-4 border-t">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Trophy className="h-3 w-3 text-primary" /> Top Group
+              <div className="space-y-2 pt-3 border-t">
+                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Trophy className="h-2.5 w-2.5 text-primary" /> Top Group
                 </p>
                 {sessionVotingResults.topGroups ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
                       {sessionVotingResults.topGroups.members.map((winner: any) => (
                         <div 
                           key={winner.id} 
                           className={cn(
-                            "flex flex-col gap-0.5 p-2 rounded-lg border shadow-sm",
+                            "flex flex-col gap-0.5 p-1.5 rounded-md border",
                             allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
                               ? "bg-primary text-primary-foreground border-primary" 
-                              : "bg-primary/5 border-primary/20"
+                              : "bg-primary/5 border-primary/10"
                           )}
                         >
                           <div className="flex items-center justify-between">
                             <span className={cn(
-                              "font-black uppercase tracking-tight text-base",
+                              "font-bold uppercase tracking-tight text-xs",
                               allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground" : "text-primary"
                             )}>{winner.name}</span>
                             <Badge className={cn(
-                              "text-[10px] h-4 font-bold px-1.5",
+                              "text-[8px] h-3.5 font-bold px-1",
                               allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
                                 ? "bg-white text-primary" 
                                 : "bg-primary text-primary-foreground"
-                            )}>{winner.count} votes</Badge>
+                            )}>{winner.count}v</Badge>
                           </div>
                           {winner.description && (
                             <p className={cn(
-                              "text-[9px] italic leading-tight",
+                              "text-[8px] italic leading-tight",
                               allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground/80" : "text-muted-foreground"
                             )}>
                               {winner.description}
@@ -607,17 +605,17 @@ export default function Dashboard() {
                     </div>
 
                     {sessionVotingResults.otherGroups.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-[9px] uppercase font-black text-muted-foreground tracking-widest px-1">Other Tally</p>
-                        <div className="space-y-1.5 pl-1">
+                      <div className="space-y-1">
+                        <p className="text-[8px] uppercase font-black text-muted-foreground tracking-widest">Other Tally</p>
+                        <div className="space-y-0.5 pl-0.5">
                           {sessionVotingResults.otherGroups.map((rankGroup: any) => 
                             rankGroup.members.map((other: any) => (
-                              <div key={other.id} className="flex justify-between items-center text-[10px] text-muted-foreground">
+                              <div key={other.id} className="flex justify-between items-center text-[9px] text-muted-foreground">
                                 <span className={cn(
                                   "font-bold",
                                   allGroups?.find(g => g.id === other.id)?.members?.[userParticipantId] ? "text-primary" : ""
                                 )}>{other.name}</span>
-                                <span className="font-mono">{other.count} votes</span>
+                                <span className="font-mono">{other.count}v</span>
                               </div>
                             ))
                           )}
@@ -626,7 +624,7 @@ export default function Dashboard() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
+                  <p className="text-[10px] text-muted-foreground italic text-center py-1">No votes yet.</p>
                 )}
               </div>
             </CardContent>
@@ -640,15 +638,15 @@ export default function Dashboard() {
 function StatCard({ title, value, icon, description, variant = 'primary' }: any) {
   return (
     <Card className="shadow-sm border-none bg-card hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
-        <div className={cn("p-2 rounded-lg", variant === 'primary' ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent")}>
+      <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-4">
+        <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{title}</CardTitle>
+        <div className={cn("p-1.5 rounded-md", variant === 'primary' ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent")}>
           {icon}
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold font-mono">{value}</div>
-        <p className="text-[10px] text-muted-foreground mt-1">{description}</p>
+      <CardContent className="px-4 pb-3">
+        <div className="text-xl font-bold font-mono leading-none">{value}</div>
+        <p className="text-[9px] text-muted-foreground mt-1 leading-tight">{description}</p>
       </CardContent>
     </Card>
   );

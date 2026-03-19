@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
@@ -81,14 +80,14 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+    <div className="container mx-auto py-6 px-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-primary">Preaching Sessions</h1>
-          <p className="text-muted-foreground">Browse active sessions or review previous preaching records.</p>
+          <h1 className="text-2xl font-headline font-bold text-primary">Preaching Sessions</h1>
+          <p className="text-xs text-muted-foreground">Browse active sessions or review records.</p>
         </div>
         {isAdmin && (
-          <Button asChild className="shadow-lg shadow-primary/20">
+          <Button asChild size="sm" className="shadow-md">
             <Link href="/sessions/new">
               <PlusCircle className="mr-2 h-4 w-4" />
               Create Session
@@ -98,13 +97,13 @@ export default function SessionsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-48 bg-muted animate-pulse rounded-lg border" />
+            <div key={i} className="h-40 bg-muted animate-pulse rounded-lg border" />
           ))}
         </div>
       ) : sessions && sessions.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sessions.map((session) => (
             <SessionCard 
               key={session.id} 
@@ -115,17 +114,17 @@ export default function SessionsPage() {
           ))}
         </div>
       ) : (
-        <Card className="text-center py-20 border-dashed border-2">
-          <CardContent className="space-y-4">
-            <div className="mx-auto bg-primary/10 p-4 rounded-full w-20 h-20 flex items-center justify-center">
-              <Mic2 className="h-10 w-10 text-primary" />
+        <Card className="text-center py-16 border-dashed border-2">
+          <CardContent className="space-y-3">
+            <div className="mx-auto bg-primary/10 p-3 rounded-full w-16 h-16 flex items-center justify-center">
+              <Mic2 className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-2xl font-semibold">No sessions found</h3>
-            <p className="text-muted-foreground max-w-xs mx-auto">
-              There are no recorded sessions yet. {isAdmin ? "Start by creating one!" : ""}
+            <h3 className="text-xl font-semibold">No sessions found</h3>
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+              There are no recorded sessions yet.
             </p>
             {isAdmin && (
-              <Button asChild size="lg" className="mt-4">
+              <Button asChild size="sm" className="mt-2">
                 <Link href="/sessions/new">Get Started</Link>
               </Button>
             )}
@@ -136,15 +135,15 @@ export default function SessionsPage() {
       <AlertDialog open={!!sessionToDelete} onOpenChange={(open) => !open && setSessionToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Session?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the session and all associated preaching records and votes. This action cannot be undone.
+            <AlertDialogTitle className="text-lg">Delete Session?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              This will permanently delete the session and all records.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete Permanently
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs">
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -155,8 +154,8 @@ export default function SessionsPage() {
 
 function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: boolean; onDelete: (id: string) => void }) {
   const displayDate = session.sessionDate 
-    ? new Date(session.sessionDate).toLocaleDateString(undefined, { dateStyle: 'long' }) 
-    : 'No Date Set';
+    ? new Date(session.sessionDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) 
+    : 'No Date';
   
   const statusColors: Record<string, string> = {
     active: 'bg-green-500 hover:bg-green-600',
@@ -165,15 +164,15 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
   };
 
   return (
-    <Card className="hover:shadow-xl transition-all border-none shadow-sm h-full flex flex-col group hover:-translate-y-1 duration-300 bg-card relative overflow-hidden">
+    <Card className="hover:shadow-md transition-all border-none shadow-sm h-full flex flex-col group hover:-translate-y-0.5 duration-200 bg-card relative overflow-hidden">
       <Link href={`/sessions/${session.id}`} className="absolute inset-0 z-0" />
-      <CardHeader className="pb-2 relative z-10 pointer-events-none">
-        <div className="flex justify-between items-start mb-2 pointer-events-auto">
-          <div className="flex gap-2">
-            <Badge className={cn("capitalize text-white", statusColors[session.status] || 'bg-secondary')}>
+      <CardHeader className="pb-1 pt-4 px-4 relative z-10 pointer-events-none">
+        <div className="flex justify-between items-start mb-1 pointer-events-auto">
+          <div className="flex gap-1.5">
+            <Badge className={cn("capitalize text-[9px] h-4 text-white", statusColors[session.status] || 'bg-secondary')}>
               {session.status}
             </Badge>
-            <Badge variant="outline" className="capitalize text-[10px] font-bold">
+            <Badge variant="outline" className="capitalize text-[9px] h-4 font-bold">
               {session.sessionType}
             </Badge>
           </div>
@@ -181,24 +180,24 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onDelete(session.id);
               }}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
-        <CardTitle className="line-clamp-1 group-hover:text-primary transition-colors">{session.title || 'Untitled Session'}</CardTitle>
-        <CardDescription className="flex items-center gap-1">
-          <Calendar className="h-3 w-3" /> {displayDate}
+        <CardTitle className="text-base line-clamp-1 group-hover:text-primary transition-colors leading-tight">{session.title || 'Untitled Session'}</CardTitle>
+        <CardDescription className="flex items-center gap-1 text-[10px] mt-0.5">
+          <Calendar className="h-2.5 w-2.5" /> {displayDate}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow pt-2 relative z-10 pointer-events-none">
-        <div className="space-y-2 text-sm">
+      <CardContent className="flex-grow pt-2 px-4 relative z-10 pointer-events-none">
+        <div className="space-y-1 text-[10px]">
           <div className="flex justify-between items-center text-muted-foreground">
             <span>Time Limit:</span>
             <span className="font-semibold text-foreground">
@@ -213,10 +212,10 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
           </div>
         </div>
       </CardContent>
-      <div className="p-4 pt-0 mt-auto relative z-10 pointer-events-none">
-        <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 justify-between">
+      <div className="p-3 pt-0 mt-auto relative z-10 pointer-events-none">
+        <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 h-7 text-[10px] justify-between">
           {session.status === 'completed' ? 'View Results' : 'View Session'}
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-3 w-3" />
         </Button>
       </div>
     </Card>
