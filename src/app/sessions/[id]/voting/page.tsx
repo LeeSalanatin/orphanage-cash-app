@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -10,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Lock, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, CheckCircle2, Info } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -144,7 +143,13 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       ) : (
         <div className="space-y-8">
           <Card>
-            <CardHeader><CardTitle>Top Preachers</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Top Preachers</CardTitle>
+              <CardDescription className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-primary" />
+                Select up to 3 preachers of your choice.
+              </CardDescription>
+            </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredParticipants.map(p => {
                 const isSelected = votes.individual.includes(p.id);
@@ -152,31 +157,49 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <div key={p.id} onClick={() => {
                     if (isSelected) setVotes({ ...votes, individual: votes.individual.filter((id: string) => id !== p.id) });
                     else if (votes.individual.length < 3) setVotes({ ...votes, individual: [...votes.individual, p.id] });
-                  }} className={cn("p-4 rounded-lg border-2 cursor-pointer flex justify-between items-center transition-all", isSelected ? "border-primary bg-primary/5" : "border-border")}>
+                    else {
+                      toast({ variant: "destructive", title: "Limit Reached", description: "You can only select up to 3 preachers." });
+                    }
+                  }} className={cn("p-4 rounded-lg border-2 cursor-pointer flex justify-between items-center transition-all", isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")}>
                     <span className="font-medium">{p.name}</span>
                     {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
                   </div>
                 );
               })}
+              {filteredParticipants.length === 0 && (
+                <div className="col-span-full py-10 text-center text-muted-foreground italic">
+                  No other preachers available to vote for in this session.
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle>Best Group</CardTitle></CardHeader>
-            <CardContent>
-              <RadioGroup value={votes.group} onValueChange={v => setVotes({ ...votes, group: v })}>
-                {filteredGroups.map(g => (
-                  <div key={g.id} className={cn("flex items-center space-x-2 p-4 rounded-lg border mb-2 cursor-pointer", votes.group === g.id && "border-primary bg-primary/5")} onClick={() => setVotes({ ...votes, group: g.id })}>
-                    <RadioGroupItem value={g.id} id={g.id} />
-                    <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer">{g.name}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-          </Card>
+          {session.sessionType === 'group' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Best Group</CardTitle>
+                <CardDescription>Select the group you think performed best.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={votes.group} onValueChange={v => setVotes({ ...votes, group: v })}>
+                  {filteredGroups.map(g => (
+                    <div key={g.id} className={cn("flex items-center space-x-2 p-4 rounded-lg border mb-2 cursor-pointer", votes.group === g.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")} onClick={() => setVotes({ ...votes, group: g.id })}>
+                      <RadioGroupItem value={g.id} id={g.id} />
+                      <Label htmlFor={g.id} className="font-medium flex-grow cursor-pointer">{g.name}</Label>
+                    </div>
+                  ))}
+                  {filteredGroups.length === 0 && (
+                    <div className="py-10 text-center text-muted-foreground italic">
+                      No other groups available to vote for.
+                    </div>
+                  )}
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          )}
 
-          <Button size="lg" className="w-full h-16 text-xl font-bold" onClick={handleSubmitVote} disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 className="animate-spin" /> : 'Confirm Ballot'}
+          <Button size="lg" className="w-full h-16 text-xl font-bold shadow-lg" onClick={handleSubmitVote} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="animate-spin" /> : (hasVoted ? 'Update Ballot' : 'Confirm Ballot')}
           </Button>
         </div>
       )}
