@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
@@ -111,7 +110,7 @@ export default function ParticipantsPage() {
     if (!newName.trim() || !firestore || !user) return;
     
     addDocumentNonBlocking(collection(firestore, 'participants'), {
-      name: newName,
+      name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
       userId: null,
       totalPoints: 0,
