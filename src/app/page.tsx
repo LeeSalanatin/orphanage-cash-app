@@ -22,7 +22,8 @@ import {
   Vote as VoteIcon,
   Medal,
   Filter,
-  BarChart3
+  BarChart3,
+  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -194,10 +195,15 @@ export default function Dashboard() {
       }
     });
 
-    let grpMax = { time: 0, name: '' };
-    Object.values(groupTotals).forEach(gt => {
+    let grpMax = { time: 0, name: '', description: '' };
+    Object.entries(groupTotals).forEach(([groupId, gt]) => {
       if (gt.time > grpMax.time) {
-        grpMax = { time: gt.time, name: gt.name };
+        const groupInfo = allGroups?.find(g => g.id === groupId);
+        grpMax = { 
+          time: gt.time, 
+          name: gt.name,
+          description: groupInfo?.description || ''
+        };
       }
     });
 
@@ -205,7 +211,7 @@ export default function Dashboard() {
       topIndividuals, 
       longestGroup: grpMax.time > 0 ? grpMax : null 
     };
-  }, [rawEvents, sessionFilterId]);
+  }, [rawEvents, allGroups, sessionFilterId]);
 
   const sessionVotingResults = useMemo(() => {
     if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], group: null };
@@ -248,7 +254,7 @@ export default function Dashboard() {
     const groupResult = Object.entries(groupCounts)
       .map(([id, count]) => {
         const g = allGroups.find(g => g.id === id);
-        return { name: g?.name || 'Unknown', count };
+        return { name: g?.name || 'Unknown', description: g?.description || '', count };
       })
       .sort((a, b) => b.count - a.count)[0] || null;
 
@@ -459,6 +465,11 @@ export default function Dashboard() {
                 {sessionRecords.longestGroup ? (
                   <>
                     <p className="font-bold text-lg">{sessionRecords.longestGroup.name}</p>
+                    {sessionRecords.longestGroup.description && (
+                      <p className="text-[10px] text-muted-foreground italic mb-1">
+                        {sessionRecords.longestGroup.description}
+                      </p>
+                    )}
                     <p className="text-xs text-accent font-mono">{formatDuration(sessionRecords.longestGroup.time)}</p>
                   </>
                 ) : (
@@ -524,9 +535,16 @@ export default function Dashboard() {
                   <Trophy className="h-3 w-3 text-primary" /> Top Group
                 </p>
                 {sessionVotingResults.group ? (
-                  <div className="flex items-center justify-between text-lg bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
-                    <span className="font-black text-primary uppercase tracking-tight">{sessionVotingResults.group.name}</span>
-                    <Badge className="bg-primary text-primary-foreground text-sm font-bold">{sessionVotingResults.group.count} votes</Badge>
+                  <div className="flex flex-col gap-1 bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-primary uppercase tracking-tight text-lg">{sessionVotingResults.group.name}</span>
+                      <Badge className="bg-primary text-primary-foreground text-sm font-bold">{sessionVotingResults.group.count} votes</Badge>
+                    </div>
+                    {sessionVotingResults.group.description && (
+                      <p className="text-[10px] text-muted-foreground italic">
+                        {sessionVotingResults.group.description}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
