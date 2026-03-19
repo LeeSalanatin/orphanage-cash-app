@@ -173,32 +173,39 @@ export default function Dashboard() {
     // Filter events by selected session
     const sessionEvents = rawEvents.filter(e => e.sessionId === sessionFilterId);
     
-    let indMax = { time: 0, name: '', session: '' };
-    let grpMax = { time: 0, name: '', session: '' };
+    let indMax = { time: 0, name: '' };
+    const groupTotals: Record<string, { time: number, name: string }> = {};
     
     sessionEvents.forEach(e => {
+      // Individual record: Look at every single preaching event regardless of group
       const simplifiedName = e.participantName.includes(' - ') 
         ? e.participantName.split(' - ').pop() 
         : e.participantName;
 
+      if (e.actualDurationSeconds > indMax.time) {
+        indMax = { time: e.actualDurationSeconds, name: simplifiedName || 'Unknown' };
+      }
+
+      // Group totals: Sum up by preachingGroupId to find group longest aggregate time
       if (e.preachingGroupId) {
-        if (e.actualDurationSeconds > grpMax.time) {
-          grpMax = { 
-            time: e.actualDurationSeconds, 
-            name: e.participantName.split(' - ')[0],
-            session: e.sessionId 
+        if (!groupTotals[e.preachingGroupId]) {
+          groupTotals[e.preachingGroupId] = { 
+            time: 0, 
+            name: e.participantName.split(' - ')[0] 
           };
         }
-      } else {
-        if (e.actualDurationSeconds > indMax.time) {
-          indMax = { 
-            time: e.actualDurationSeconds, 
-            name: simplifiedName || 'Unknown',
-            session: e.sessionId
-          };
-        }
+        groupTotals[e.preachingGroupId].time += e.actualDurationSeconds;
       }
     });
+
+    // Find the max group total
+    let grpMax = { time: 0, name: '' };
+    Object.values(groupTotals).forEach(gt => {
+      if (gt.time > grpMax.time) {
+        grpMax = { time: gt.time, name: gt.name };
+      }
+    });
+
     return { 
       longestIndividual: indMax.time > 0 ? indMax : null, 
       longestGroup: grpMax.time > 0 ? grpMax : null 
