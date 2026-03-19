@@ -58,7 +58,7 @@ export default function ParticipantsPage() {
   useEffect(() => {
     if (!firestore || !user) return;
     const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
         setIsAdmin(true);
         return;
       }
@@ -315,7 +315,7 @@ export default function ParticipantsPage() {
                         </TableRow>
                       ) : filteredParticipants.length > 0 ? (
                         filteredParticipants.map((p) => {
-                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email));
+                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email.toLowerCase()));
                           const isCurrentUser = user?.uid === p.userId;
                           
                           return (

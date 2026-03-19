@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -34,7 +33,7 @@ export function Navbar() {
       return;
     }
     const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
         setIsAdmin(true);
         return;
       }

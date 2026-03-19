@@ -42,7 +42,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!firestore || !user) return;
     const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
         setIsAdmin(true);
         return;
       }
@@ -175,7 +175,6 @@ export default function Dashboard() {
     return { totalFines, points: userData?.totalPoints || 0 };
   }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
 
-  // ... (rest of dashboard logic remains same)
   const sessionRecords = useMemo(() => {
     if (!rawEvents || !sessionFilterId) return { topIndividuals: [], longestGroup: null };
     
