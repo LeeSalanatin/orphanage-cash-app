@@ -214,7 +214,7 @@ export default function Dashboard() {
   }, [rawEvents, allGroups, sessionFilterId]);
 
   const sessionVotingResults = useMemo(() => {
-    if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], group: null };
+    if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], topGroups: null, otherGroups: [] };
 
     const sessionVotes = allVotes.filter(v => v.sessionId === sessionFilterId);
     
@@ -225,14 +225,14 @@ export default function Dashboard() {
       });
     });
 
-    const countGroups: Record<number, any[]> = {};
+    const individualRankGroups: Record<number, any[]> = {};
     Object.entries(individualCounts).forEach(([id, count]) => {
       const p = participants.find(p => p.id === id);
-      if (!countGroups[count]) countGroups[count] = [];
-      countGroups[count].push({ name: p?.name || 'Unknown', id });
+      if (!individualRankGroups[count]) individualRankGroups[count] = [];
+      individualRankGroups[count].push({ name: p?.name || 'Unknown', id });
     });
 
-    const individuals = Object.entries(countGroups)
+    const individuals = Object.entries(individualRankGroups)
       .map(([count, members]) => ({
         count: parseInt(count),
         members
@@ -244,21 +244,39 @@ export default function Dashboard() {
         ...group
       }));
 
-    const groupCounts: Record<string, number> = {};
+    const groupVoteCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
       if (v.voteData?.group) {
-        groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+        groupVoteCounts[v.voteData.group] = (groupVoteCounts[v.voteData.group] || 0) + 1;
       }
     });
 
-    const groupResult = Object.entries(groupCounts)
+    const groupRankings = Object.entries(groupVoteCounts)
       .map(([id, count]) => {
         const g = allGroups.find(g => g.id === id);
-        return { name: g?.name || 'Unknown', description: g?.description || '', count };
+        return { name: g?.name || 'Unknown', description: g?.description || '', count, id };
       })
-      .sort((a, b) => b.count - a.count)[0] || null;
+      .sort((a, b) => b.count - a.count);
 
-    return { individuals, group: groupResult };
+    const groupedGroups: any[] = [];
+    groupRankings.forEach(item => {
+      const lastGroup = groupedGroups[groupedGroups.length - 1];
+      if (lastGroup && lastGroup.count === item.count) {
+        lastGroup.members.push(item);
+      } else {
+        groupedGroups.push({
+          count: item.count,
+          rank: groupedGroups.length + 1,
+          members: [item]
+        });
+      }
+    });
+
+    return { 
+      individuals, 
+      topGroups: groupedGroups[0] || null,
+      otherGroups: groupedGroups.slice(1)
+    };
   }, [allVotes, participants, allGroups, sessionFilterId]);
 
   function formatDuration(seconds: number) {
@@ -534,16 +552,40 @@ export default function Dashboard() {
                 <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                   <Trophy className="h-3 w-3 text-primary" /> Top Group
                 </p>
-                {sessionVotingResults.group ? (
-                  <div className="flex flex-col gap-1 bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-primary uppercase tracking-tight text-lg">{sessionVotingResults.group.name}</span>
-                      <Badge className="bg-primary text-primary-foreground text-sm font-bold">{sessionVotingResults.group.count} votes</Badge>
+                {sessionVotingResults.topGroups ? (
+                  <div className="space-y-4">
+                    {/* Winners Section */}
+                    <div className="space-y-2">
+                      {sessionVotingResults.topGroups.members.map((winner: any) => (
+                        <div key={winner.id} className="flex flex-col gap-1 bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-primary uppercase tracking-tight text-lg">{winner.name}</span>
+                            <Badge className="bg-primary text-primary-foreground text-sm font-bold">{winner.count} votes</Badge>
+                          </div>
+                          {winner.description && (
+                            <p className="text-[10px] text-muted-foreground italic">
+                              {winner.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    {sessionVotingResults.group.description && (
-                      <p className="text-[10px] text-muted-foreground italic">
-                        {sessionVotingResults.group.description}
-                      </p>
+
+                    {/* Others Section */}
+                    {sessionVotingResults.otherGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[9px] uppercase font-black text-muted-foreground tracking-widest px-1">Other Tally</p>
+                        <div className="space-y-1.5 pl-1">
+                          {sessionVotingResults.otherGroups.map((rankGroup: any) => 
+                            rankGroup.members.map((other: any) => (
+                              <div key={other.id} className="flex justify-between items-center text-[10px] text-muted-foreground">
+                                <span className="font-bold">{other.name}</span>
+                                <span className="font-mono">{other.count} votes</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 ) : (
