@@ -21,7 +21,8 @@ import {
   Calendar,
   Vote as VoteIcon,
   Medal,
-  Filter
+  Filter,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -169,10 +170,8 @@ export default function Dashboard() {
   const sessionRecords = useMemo(() => {
     if (!rawEvents || !sessionFilterId) return { topIndividuals: [], longestGroup: null };
     
-    // Filter events by selected session
     const sessionEvents = rawEvents.filter(e => e.sessionId === sessionFilterId);
     
-    // Individual records: Look at every single preaching event regardless of group
     const indRecords = sessionEvents.map(e => ({
       time: e.actualDurationSeconds,
       name: e.participantName.includes(' - ') 
@@ -184,7 +183,6 @@ export default function Dashboard() {
 
     const groupTotals: Record<string, { time: number, name: string }> = {};
     sessionEvents.forEach(e => {
-      // Group totals: Sum up by preachingGroupId to find group longest aggregate time
       if (e.preachingGroupId) {
         if (!groupTotals[e.preachingGroupId]) {
           groupTotals[e.preachingGroupId] = { 
@@ -196,7 +194,6 @@ export default function Dashboard() {
       }
     });
 
-    // Find the max group total
     let grpMax = { time: 0, name: '' };
     Object.values(groupTotals).forEach(gt => {
       if (gt.time > grpMax.time) {
@@ -210,13 +207,11 @@ export default function Dashboard() {
     };
   }, [rawEvents, sessionFilterId]);
 
-  // Session-specific voting results with Tie Support
   const sessionVotingResults = useMemo(() => {
     if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], group: null };
 
     const sessionVotes = allVotes.filter(v => v.sessionId === sessionFilterId);
     
-    // Tally individual votes
     const individualCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
       (v.voteData?.individual || []).forEach((id: string) => {
@@ -224,7 +219,6 @@ export default function Dashboard() {
       });
     });
 
-    // Group by vote count to handle ties
     const countGroups: Record<number, any[]> = {};
     Object.entries(individualCounts).forEach(([id, count]) => {
       const p = participants.find(p => p.id === id);
@@ -238,13 +232,12 @@ export default function Dashboard() {
         members
       }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 3) // Top 3 score levels
+      .slice(0, 3) 
       .map((group, index) => ({
         rank: index + 1,
         ...group
       }));
 
-    // Tally group votes
     const groupCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
       if (v.voteData?.group) {
@@ -476,12 +469,19 @@ export default function Dashboard() {
           </Card>
 
           <Card className="shadow-sm border-none bg-card flex flex-col">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <VoteIcon className="h-5 w-5 text-primary" /> 
-                Voting Results
-              </CardTitle>
-              <CardDescription>Peer nominations for the selected session.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <VoteIcon className="h-5 w-5 text-primary" /> 
+                  Voting Results
+                </CardTitle>
+                <CardDescription>Peer nominations for the selected session.</CardDescription>
+              </div>
+              <ShadButton variant="ghost" size="sm" asChild className="text-primary hover:bg-primary/5">
+                <Link href={`/results?sessionId=${sessionFilterId}`}>
+                  View Full <ChevronRight className="h-4 w-4" />
+                </Link>
+              </ShadButton>
             </CardHeader>
             <CardContent className="space-y-6 flex-grow">
               <div className="space-y-4">
@@ -489,22 +489,22 @@ export default function Dashboard() {
                   <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
                 </p>
                 {sessionVotingResults.individuals.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {sessionVotingResults.individuals.map((rankGroup) => (
-                      <div key={rankGroup.rank} className="space-y-1.5">
+                      <div key={rankGroup.rank} className="space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-muted-foreground">Top {rankGroup.rank}</span>
+                          <span className="font-bold text-muted-foreground">Rank {rankGroup.rank}</span>
                           <Badge variant="outline" className="text-[10px] h-4 font-mono px-1">{rankGroup.count} votes</Badge>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 pl-2">
+                        <div className="flex flex-wrap gap-2 pl-2">
                           {rankGroup.members.map((m: any) => (
                             <span 
                               key={m.id} 
                               className={cn(
-                                "text-[10px] px-2 py-0.5 rounded-sm transition-colors",
+                                "text-base py-1 px-3 rounded-md transition-all",
                                 m.id === userParticipantId 
-                                  ? "bg-primary text-primary-foreground font-bold shadow-sm" 
-                                  : "text-muted-foreground"
+                                  ? "bg-primary text-primary-foreground font-bold shadow-md scale-105" 
+                                  : "text-foreground font-bold"
                               )}
                             >
                               {m.name}
@@ -524,9 +524,9 @@ export default function Dashboard() {
                   <Trophy className="h-3 w-3 text-primary" /> Top Group
                 </p>
                 {sessionVotingResults.group ? (
-                  <div className="flex items-center justify-between text-sm bg-primary/5 p-3 rounded-lg border border-primary/10">
-                    <span className="font-bold text-primary">{sessionVotingResults.group.name}</span>
-                    <Badge className="bg-primary text-primary-foreground">{sessionVotingResults.group.count} votes</Badge>
+                  <div className="flex items-center justify-between text-lg bg-primary/5 p-4 rounded-lg border border-primary/20 shadow-sm">
+                    <span className="font-black text-primary uppercase tracking-tight">{sessionVotingResults.group.name}</span>
+                    <Badge className="bg-primary text-primary-foreground text-sm font-bold">{sessionVotingResults.group.count} votes</Badge>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
