@@ -5,6 +5,7 @@ import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebas
 import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Mic2, 
   Users, 
@@ -19,7 +20,8 @@ import {
   TrendingDown,
   ChevronRight,
   Calendar,
-  Vote as VoteIcon
+  Vote as VoteIcon,
+  Medal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -32,6 +34,7 @@ export default function Dashboard() {
   const { user, isUserLoading: authLoading } = useUser();
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [sessionFilterId, setSessionFilterId] = useState<string>("");
 
   // Check admin status
   useEffect(() => {
@@ -98,6 +101,14 @@ export default function Dashboard() {
   const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: allVotes, isLoading: votesLoading } = useCollection(votesQuery);
 
+  // Set initial filter to most recent session
+  useEffect(() => {
+    if (allSessions && allSessions.length > 0 && !sessionFilterId) {
+      const sorted = [...allSessions].sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
+      setSessionFilterId(sorted[0].id);
+    }
+  }, [allSessions, sessionFilterId]);
+
   // Filter my events in memory
   const myEvents = useMemo(() => {
     if (!rawEvents || !userParticipantId) return [];
@@ -114,13 +125,11 @@ export default function Dashboard() {
     return myEvents[0];
   }, [myEvents]);
 
-  // Comprehensive fine calculation with session-aware group logic
+  // Comprehensive fine calculation
   const stats = useMemo(() => {
     if (!myEvents || !allSessions || !allGroups || !rawEvents || !userParticipantId) return { totalFines: 0, points: userData?.totalPoints || 0 };
     
     let totalFines = 0;
-
-    // To avoid double-counting or missing shares, we group events by (sessionId, groupId)
     const sessionGroupKeys = new Set<string>();
     myEvents.forEach(e => {
       if (e.preachingGroupId) {
@@ -128,14 +137,12 @@ export default function Dashboard() {
       }
     });
 
-    // 1. Add individual fines
     myEvents.forEach(e => {
       if (!e.preachingGroupId) {
         totalFines += (e.totalFineAmount || 0);
       }
     });
 
-    // 2. Add group fine shares (session-wide calculation)
     sessionGroupKeys.forEach(key => {
       const [sessionId, groupId] = key.split('_');
       const session = allSessions.find(s => s.id === sessionId);
@@ -190,32 +197,45 @@ export default function Dashboard() {
     return { longestIndividual: indMax, longestGroup: grpMax };
   }, [rawEvents]);
 
-  // Calculate voting results with session names
-  const votingResults = useMemo(() => {
-    if (!participants || !allVotes || !allSessions) return [];
+  // Session-specific voting results
+  const sessionVotingResults = useMemo(() => {
+    if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], group: null };
 
-    return participants
-      .map(p => {
-        // Find all votes cast for this participant across all sessions
-        const participantVotes = allVotes.filter(v => v.voteData?.individual?.includes(p.id));
-        
-        // Find unique sessions where this participant got votes
-        const sessionIds = Array.from(new Set(participantVotes.map(v => v.sessionId)));
-        const contributingSessions = sessionIds
-          .map(sid => allSessions.find(s => s.id === sid))
-          .filter(Boolean)
-          .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
+    const sessionVotes = allVotes.filter(v => v.sessionId === sessionFilterId);
+    
+    // Tally individual votes
+    const individualCounts: Record<string, number> = {};
+    sessionVotes.forEach(v => {
+      (v.voteData?.individual || []).forEach((id: string) => {
+        individualCounts[id] = (individualCounts[id] || 0) + 1;
+      });
+    });
 
-        return {
-          ...p,
-          recentSession: contributingSessions[0]?.title || null,
-          voteCount: participantVotes.length
-        };
+    const individuals = Object.entries(individualCounts)
+      .map(([id, count]) => {
+        const p = participants.find(p => p.id === id);
+        return { name: p?.name || 'Unknown', count, id };
       })
-      .filter(p => (p.totalPoints || 0) > 0 || p.voteCount > 0)
-      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
-      .slice(0, 5);
-  }, [participants, allVotes, allSessions]);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    // Tally group votes
+    const groupCounts: Record<string, number> = {};
+    sessionVotes.forEach(v => {
+      if (v.voteData?.group) {
+        groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+      }
+    });
+
+    const groupResult = Object.entries(groupCounts)
+      .map(([id, count]) => {
+        const g = allGroups.find(g => g.id === id);
+        return { name: g?.name || 'Unknown', count };
+      })
+      .sort((a, b) => b.count - a.count)[0] || null;
+
+    return { individuals, group: groupResult };
+  }, [allVotes, participants, allGroups, sessionFilterId]);
 
   function formatDuration(seconds: number) {
     const m = Math.floor(seconds / 60);
@@ -387,32 +407,59 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm border-none bg-card">
-              <CardHeader>
+            <Card className="shadow-sm border-none bg-card flex flex-col">
+              <CardHeader className="flex flex-col space-y-4">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <VoteIcon className="h-5 w-5 text-primary" /> 
                   Voting Results
                 </CardTitle>
+                <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
+                  <SelectTrigger className="w-full h-8 text-xs">
+                    <SelectValue placeholder="Filter by Session" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allSessions && [...allSessions]
+                      .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
+                      .map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                      ))
+                    }
+                  </SelectContent>
+                </Select>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6 flex-grow">
                 <div className="space-y-4">
-                  {votingResults.length > 0 ? votingResults.map((p, i) => (
-                    <div key={p.id} className="flex flex-col space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2">
-                          <span className="font-bold text-muted-foreground text-xs w-4">#{i+1}</span>
-                          <span className={cn("font-medium", p.id === userParticipantId ? "text-primary font-bold" : "")}>{p.name}</span>
-                        </span>
-                        <span className="font-bold text-primary">{p.totalPoints || 0} pts</span>
-                      </div>
-                      {p.recentSession && (
-                        <p className="text-[10px] text-muted-foreground pl-6 italic">
-                          Session: {p.recentSession}
-                        </p>
-                      )}
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
+                  </p>
+                  {sessionVotingResults.individuals.length > 0 ? (
+                    <div className="space-y-3">
+                      {sessionVotingResults.individuals.map((p, i) => (
+                        <div key={p.id} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="font-bold text-muted-foreground text-xs w-4">#{i+1}</span>
+                            <span className={cn("font-medium", p.id === userParticipantId ? "text-primary font-bold" : "")}>{p.name}</span>
+                          </span>
+                          <Badge variant="outline" className="text-[10px] font-mono">{p.count} votes</Badge>
+                        </div>
+                      ))}
                     </div>
-                  )) : (
-                    <p className="text-sm text-muted-foreground italic text-center py-4">No voting results yet.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic text-center py-2">No individual votes yet.</p>
+                  )}
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Trophy className="h-3 w-3 text-primary" /> Top Group
+                  </p>
+                  {sessionVotingResults.group ? (
+                    <div className="flex items-center justify-between text-sm bg-primary/5 p-3 rounded-lg border border-primary/10">
+                      <span className="font-bold text-primary">{sessionVotingResults.group.name}</span>
+                      <Badge className="bg-primary text-primary-foreground">{sessionVotingResults.group.count} votes</Badge>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
                   )}
                 </div>
               </CardContent>
