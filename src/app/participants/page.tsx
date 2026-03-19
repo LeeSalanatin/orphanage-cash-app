@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2, Mail } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Info, Settings2, Search, Filter } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
@@ -23,6 +24,7 @@ export default function ParticipantsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
+  const [searchTerm, setSearchTerm] = useState('');
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
@@ -66,7 +68,6 @@ export default function ParticipantsPage() {
     return collection(firestore, 'roles_admin');
   }, [firestore, user]);
 
-  // Global access: Everyone sees all groups
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'groups');
@@ -77,6 +78,17 @@ export default function ParticipantsPage() {
   const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
 
   const adminIds = new Set(admins?.map(a => a.id) || []);
+
+  const filteredParticipants = useMemo(() => {
+    if (!participants) return [];
+    if (!searchTerm.trim()) return participants;
+    
+    const lowerSearch = searchTerm.toLowerCase();
+    return participants.filter(p => 
+      p.name.toLowerCase().includes(lowerSearch) || 
+      (p.email && p.email.toLowerCase().includes(lowerSearch))
+    );
+  }, [participants, searchTerm]);
 
   function handleAddParticipant() {
     if (!newName.trim() || !firestore || !user) return;
@@ -180,179 +192,225 @@ export default function ParticipantsPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">Participants</h1>
-          <p className="text-muted-foreground">Global view of individuals, teams, and administrative roles.</p>
+          <p className="text-muted-foreground">Manage individuals, teams, and system access.</p>
         </div>
-        {isAdmin && (
-          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-3 py-1 flex gap-2">
-            <ShieldCheck className="h-4 w-4" /> Admin Access
-          </Badge>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && (
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 px-3 py-1 flex gap-2 h-9 items-center">
+              <ShieldCheck className="h-4 w-4" /> Admin View
+            </Badge>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="individuals" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
-          <TabsTrigger value="individuals">Individuals</TabsTrigger>
-          <TabsTrigger value="groups">Groups</TabsTrigger>
+          <TabsTrigger value="individuals" className="flex items-center gap-2">
+            <Users className="h-4 w-4" /> Individuals
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="flex items-center gap-2">
+            <Users className="h-4 w-4" /> Groups
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="individuals" className="space-y-8">
-          {isAdmin && (
-            <Card className="shadow-md">
-              <CardHeader>
-                <CardTitle>Add Participant</CardTitle>
-                <CardDescription>Register a new preacher.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div className="space-y-1">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input 
-                    id="name" 
-                    value={newName} 
-                    onChange={(e) => setNewName(e.target.value)} 
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="email">Email (Linkage)</Label>
-                  <Input 
-                    id="email" 
-                    type="email"
-                    value={newEmail} 
-                    onChange={(e) => setNewEmail(e.target.value)} 
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <Button onClick={handleAddParticipant} disabled={!newName.trim()}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add to Roster
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+        <TabsContent value="individuals" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-4 space-y-6">
+              {isAdmin && (
+                <Card className="shadow-md border-primary/10">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Register Preacher</CardTitle>
+                    <CardDescription>Add someone to the roster before they sign up.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input 
+                        id="name" 
+                        value={newName} 
+                        onChange={(e) => setNewName(e.target.value)} 
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input 
+                        id="email" 
+                        type="email"
+                        value={newEmail} 
+                        onChange={(e) => setNewEmail(e.target.value)} 
+                        placeholder="john@example.com"
+                      />
+                    </div>
+                    <Button className="w-full" onClick={handleAddParticipant} disabled={!newName.trim()}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Add to Roster
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
 
-          <Card className="shadow-md overflow-hidden">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Preacher Name</TableHead>
-                    <TableHead>Account Status</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Points</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {participantsLoading || adminsLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-10">
-                        <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-                      </TableCell>
-                    </TableRow>
-                  ) : participants && participants.map((p) => {
-                    const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email));
-                    const canEdit = isAdmin || (user && (user.uid === p.userId || user.email === p.email));
-                    
-                    return (
-                      <TableRow key={p.id} className={user?.uid === p.userId ? "bg-primary/5" : ""}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <span>{p.name} {user?.uid === p.userId && "(You)"}</span>
-                            {canEdit && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 opacity-50 hover:opacity-100"
-                                onClick={() => {
-                                  setEditingParticipant({ id: p.id, name: p.name, email: p.email || '' });
-                                  setEditNameValue(p.name);
-                                  setEditEmailValue(p.email || '');
-                                }}
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {p.userId ? (
-                            <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Registered</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Roster Only</Badge>
-                          )}
-                          <span className="block text-[10px] text-muted-foreground mt-1">{p.email || 'No email'}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {isParticipantAdmin ? (
-                              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">
-                                <ShieldCheck className="h-3 w-3 mr-1" /> Admin
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-muted-foreground">User</Badge>
-                            )}
-                            {isAdmin && p.userId && p.userId !== user?.uid && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-7 w-7" 
-                                title={isParticipantAdmin ? "Demote to User" : "Promote to Admin"}
-                                onClick={() => toggleAdmin(p.userId!, !!isParticipantAdmin, p.name)}
-                              >
-                                <UserCog className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-accent font-semibold">
-                            <Award className="h-4 w-4" /> {p.totalPoints || 0}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isAdmin && (
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteParticipant(p.id)}>
-                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive transition-colors" />
-                            </Button>
-                          )}
-                        </TableCell>
+              <Card className="shadow-md border-accent/10">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Filter className="h-4 w-4" /> Quick Search
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Search by name or email..." 
+                      className="pl-9"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-8">
+              <Card className="shadow-md overflow-hidden border-none bg-card">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead>Preacher</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Points</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {participantsLoading || adminsLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-20">
+                            <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary opacity-20" />
+                            <p className="text-xs text-muted-foreground mt-2">Loading preachers...</p>
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredParticipants.length > 0 ? (
+                        filteredParticipants.map((p) => {
+                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email));
+                          const canEdit = isAdmin || (user && (user.uid === p.userId || user.email === p.email));
+                          const isCurrentUser = user?.uid === p.userId;
+                          
+                          return (
+                            <TableRow key={p.id} className={cn("transition-colors", isCurrentUser && "bg-primary/5")}>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold">{p.name}</span>
+                                    {isCurrentUser && <Badge className="h-4 px-1 text-[8px] bg-primary/10 text-primary border-none">You</Badge>}
+                                    {canEdit && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => {
+                                          setEditingParticipant({ id: p.id, name: p.name, email: p.email || '' });
+                                          setEditNameValue(p.name);
+                                          setEditEmailValue(p.email || '');
+                                        }}
+                                      >
+                                        <Edit2 className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                    {p.email || 'No email registered'}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {p.userId ? (
+                                  <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px] h-5">Registered</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground text-[10px] h-5">Roster Only</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {isParticipantAdmin ? (
+                                    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 text-[10px] h-5">
+                                      <ShieldCheck className="h-3 w-3 mr-1" /> Admin
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-muted-foreground text-[10px] h-5">Preacher</Badge>
+                                  )}
+                                  {isAdmin && p.userId && p.userId !== user?.uid && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-6 w-6" 
+                                      title={isParticipantAdmin ? "Demote" : "Promote"}
+                                      onClick={() => toggleAdmin(p.userId!, !!isParticipantAdmin, p.name)}
+                                    >
+                                      <UserCog className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1 text-accent font-bold text-sm">
+                                  <Award className="h-4 w-4" /> {p.totalPoints || 0}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {isAdmin && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-20 hover:opacity-100 transition-opacity" onClick={() => handleDeleteParticipant(p.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-20 text-muted-foreground italic">
+                            No preachers found matching your search.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="groups" className="space-y-8">
           {isAdmin && (
-            <Card className="shadow-md">
+            <Card className="shadow-md border-primary/10">
               <CardHeader>
                 <CardTitle>Create New Group</CardTitle>
-                <CardDescription>Organize participants into teams.</CardDescription>
+                <CardDescription>Organize participants into missionary teams.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label htmlFor="groupName">Group Code (e.g., CCBB)</Label>
+                    <Label htmlFor="groupName">Group Code (e.g., CCBB, CE)</Label>
                     <Input 
                       id="groupName" 
                       value={newGroupName} 
                       onChange={(e) => setNewGroupName(e.target.value)} 
-                      placeholder="CCBB"
+                      placeholder="e.g., CCBB"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="groupDescription">Description</Label>
+                    <Label htmlFor="groupDescription">Full Team Description</Label>
                     <Input 
                       id="groupDescription" 
                       value={newGroupDescription} 
                       onChange={(e) => setNewGroupDescription(e.target.value)} 
-                      placeholder="Center, CDO, Bohol and Butuan"
+                      placeholder="e.g., Center, CDO, Bohol and Butuan"
                     />
                   </div>
                 </div>
@@ -367,57 +425,65 @@ export default function ParticipantsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groupsLoading ? (
               <div className="col-span-full py-20 text-center">
-                <Loader2 className="h-10 w-10 animate-spin mx-auto text-muted-foreground" />
+                <Loader2 className="h-10 w-10 animate-spin mx-auto text-primary opacity-20" />
               </div>
-            ) : groups && groups.map((g) => (
-              <Card key={g.id} className="shadow-sm hover:shadow-md transition-shadow h-full flex flex-col">
-                <CardHeader className="flex flex-row items-start justify-between pb-2">
-                  <div className="space-y-1">
-                    <CardTitle className="text-xl font-bold text-primary">{g.name}</CardTitle>
-                    {g.description && (
-                      <CardDescription className="text-xs flex items-center gap-1">
-                        <Info className="h-3 w-3" /> {g.description}
-                      </CardDescription>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    {(user?.uid === g.ownerId || isAdmin) && (
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenMemberManagement(g)}>
-                        <Settings2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                      </Button>
-                    )}
-                    {isAdmin && (
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteGroup(g.id)}>
-                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-grow">
-                  <div className="flex justify-between text-sm mb-4">
-                    <span className="text-muted-foreground">Team Points:</span>
-                    <span className="font-bold text-accent">{g.totalPoints || 0} pts</span>
-                  </div>
-                  
-                  <div className="space-y-2 mt-4 pt-4 border-t">
-                    <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1">
-                      <Users className="h-3 w-3" /> Members List
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {Object.keys(g.members || {}).map(mId => {
-                         const p = participants?.find(part => part.id === mId || part.userId === mId);
-                         if (!p) return null;
-                         return (
-                           <Badge key={mId} variant="outline" className="text-[9px] py-0 h-5 bg-background">
-                             {p.name}
-                           </Badge>
-                         );
-                      })}
+            ) : groups && groups.length > 0 ? (
+              groups.map((g) => (
+                <Card key={g.id} className="shadow-sm hover:shadow-lg transition-all h-full flex flex-col group border-none bg-card">
+                  <CardHeader className="flex flex-row items-start justify-between pb-2">
+                    <div className="space-y-1">
+                      <CardTitle className="text-2xl font-black text-primary tracking-tighter uppercase">{g.name}</CardTitle>
+                      {g.description && (
+                        <CardDescription className="text-[10px] leading-tight flex items-center gap-1 font-medium">
+                          {g.description}
+                        </CardDescription>
+                      )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="flex gap-1">
+                      {(user?.uid === g.ownerId || isAdmin) && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleOpenMemberManagement(g)}>
+                          <Settings2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={() => handleDeleteGroup(g.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-grow pt-4">
+                    <div className="flex justify-between items-center text-xs p-2 bg-accent/5 rounded-lg border border-accent/10">
+                      <span className="text-muted-foreground font-bold uppercase tracking-wider text-[9px]">Collective Points</span>
+                      <span className="font-black text-accent text-lg">{g.totalPoints || 0}</span>
+                    </div>
+                    
+                    <div className="space-y-2 mt-6">
+                      <p className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.2em] flex items-center gap-2">
+                        <Users className="h-3 w-3" /> Current Roster
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.keys(g.members || {}).map(mId => {
+                           if (mId === 'owner') return null;
+                           const p = participants?.find(part => part.id === mId || part.userId === mId);
+                           if (!p) return null;
+                           return (
+                             <Badge key={mId} variant="outline" className="text-[10px] py-0 h-5 bg-background font-bold border-muted">
+                               {p.name}
+                             </Badge>
+                           );
+                        })}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <div className="col-span-full py-20 text-center border-2 border-dashed rounded-xl">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                <p className="text-muted-foreground">No groups defined yet.</p>
+              </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -426,11 +492,11 @@ export default function ParticipantsPage() {
       <Dialog open={!!editingParticipant} onOpenChange={(open) => !open && setEditingParticipant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Participant Profile</DialogTitle>
+            <DialogTitle>Update Preacher Details</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="editName">Display Name</Label>
+              <Label htmlFor="editName">Full Name</Label>
               <Input 
                 id="editName" 
                 value={editNameValue} 
@@ -459,13 +525,26 @@ export default function ParticipantsPage() {
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Manage Members: {managingGroup?.name}</DialogTitle>
+            <DialogDescription>Select participants belonging to this missionary team.</DialogDescription>
           </DialogHeader>
           
           <div className="flex-grow overflow-y-auto py-4 space-y-2 pr-2">
-            {participants?.map((p) => (
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Find participant..." 
+                className="pl-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            {filteredParticipants?.map((p) => (
               <div 
                 key={p.id} 
-                className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                className={cn(
+                  "flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer",
+                  selectedMemberIds[p.id] ? "bg-primary/5 border-primary/20" : "hover:bg-muted/50"
+                )}
                 onClick={() => handleToggleMember(p.id, p.userId)}
               >
                 <Checkbox 
@@ -474,8 +553,8 @@ export default function ParticipantsPage() {
                   onCheckedChange={() => handleToggleMember(p.id, p.userId)}
                 />
                 <div className="flex-grow">
-                  <Label htmlFor={`member-${p.id}`} className="font-medium cursor-pointer">{p.name}</Label>
-                  <p className="text-[10px] text-muted-foreground">{p.email || 'No email'}</p>
+                  <Label htmlFor={`member-${p.id}`} className="font-bold cursor-pointer text-sm">{p.name}</Label>
+                  <p className="text-[10px] text-muted-foreground">{p.email || 'No email registered'}</p>
                 </div>
               </div>
             ))}
@@ -483,10 +562,11 @@ export default function ParticipantsPage() {
 
           <DialogFooter className="pt-4 border-t">
             <Button variant="outline" onClick={() => setManagingGroup(null)}>Cancel</Button>
-            <Button onClick={handleSaveGroupMembers}>Save Roster</Button>
+            <Button onClick={handleSaveGroupMembers}>Update Roster</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+

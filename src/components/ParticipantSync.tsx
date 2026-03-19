@@ -3,14 +3,14 @@
 
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 /**
  * A global component that ensures the current authenticated user has a Participant record.
- * 1. Checks if a participant with userId == current uid exists.
+ * 1. Checks if a participant with userId == current uid exists (direct ID match).
  * 2. If not, checks if a participant with email == current user email exists (pre-registered by admin).
- * 3. If an orphan record exists, it updates it with the userId.
- * 4. If no record exists, it creates a new one using the uid as doc ID.
+ * 3. If an orphan record exists, it updates it with the userId and current email to ensure exact match.
+ * 4. If no record exists at all, it creates a new one using the uid as doc ID.
  */
 export function ParticipantSync() {
   const { user, isUserLoading } = useUser();
@@ -18,21 +18,25 @@ export function ParticipantSync() {
   const [synced, setSynced] = useState(false);
 
   useEffect(() => {
+    // Only run if user is authenticated and we haven't synced in this session
     if (isUserLoading || !user || !firestore || synced) return;
 
     async function syncParticipant() {
       try {
-        // Step 1: Check by UID (doc ID)
+        // Step 1: Check by UID (direct document ID lookup is fastest)
         const directDocRef = doc(firestore!, 'participants', user!.uid);
         const directSnap = await getDoc(directDocRef);
 
         if (directSnap.exists()) {
-          // Profile exists and is linked
+          // Profile exists and is linked. Ensure userId field is set if it was missing.
+          if (!directSnap.data().userId) {
+            updateDocumentNonBlocking(directDocRef, { userId: user!.uid });
+          }
           setSynced(true);
           return;
         }
 
-        // Step 2: Check for existing userId field in any doc
+        // Step 2: Check if any document has this userId field (handles legacy IDs)
         const qByUserId = query(collection(firestore!, 'participants'), where('userId', '==', user!.uid));
         const snapByUserId = await getDocs(qByUserId);
         
@@ -41,41 +45,45 @@ export function ParticipantSync() {
           return;
         }
 
-        // Step 3: Search for pre-registered profile by email
+        // Step 3: Search for pre-registered (orphan) profile by email
         if (user!.email) {
           const emailLower = user!.email.toLowerCase();
-          // We'll fetch all participants and check in memory for safety against case mismatch
-          const allParticipantsSnap = await getDocs(collection(firestore!, 'participants'));
-          const orphanDoc = allParticipantsSnap.docs.find(d => {
-            const data = d.data();
-            return data.email?.toLowerCase() === emailLower && !data.userId;
-          });
+          
+          // Efficient query for email match
+          const qByEmail = query(collection(firestore!, 'participants'), where('email', '==', emailLower));
+          const emailSnap = await getDocs(qByEmail);
+          
+          const orphanDoc = emailSnap.docs.find(d => !d.data().userId);
 
           if (orphanDoc) {
-            // Orphan profile found, link it!
+            // Orphan profile found, link the authenticated UID to it!
             updateDocumentNonBlocking(doc(firestore!, 'participants', orphanDoc.id), {
               userId: user!.uid,
-              name: orphanDoc.data().name || user!.displayName || user!.email
+              lastSyncedAt: new Date().toISOString()
             });
             setSynced(true);
             return;
           }
         }
 
-        // Step 4: No profile found, create a new one
+        // Step 4: No profile found at all, create a new one using UID as document ID
         setDocumentNonBlocking(doc(firestore!, 'participants', user!.uid), {
           id: user!.uid,
           userId: user!.uid,
-          email: user!.email || '',
+          email: user!.email?.toLowerCase() || '',
           name: user!.displayName || user!.email || 'New Preacher',
           totalPoints: 0,
           totalFines: 0,
-          dateJoined: new Date().toISOString()
+          dateJoined: new Date().toISOString(),
+          lastSyncedAt: new Date().toISOString()
         }, { merge: true });
         
         setSynced(true);
       } catch (error) {
-        console.error("ParticipantSync Error:", error);
+        // Silent failure in background sync, but log for developer visibility
+        if (process.env.NODE_ENV === 'development') {
+          console.error("ParticipantSync Error:", error);
+        }
       }
     }
 
