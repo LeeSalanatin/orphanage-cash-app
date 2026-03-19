@@ -14,7 +14,8 @@ import {
   Users,
   User as UserIcon,
   BarChart3,
-  Search
+  Search,
+  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -76,7 +77,10 @@ function ResultsContent() {
     const individualRankings = Object.entries(individualCounts)
       .map(([id, count]) => {
         const p = participants.find(p => p.id === id);
-        return { id, name: p?.name || 'Unknown', count };
+        // Find group for this participant to include in the name
+        const group = allGroups.find(g => g.members?.[id] || (p?.userId && g.members?.[p.userId]));
+        const displayName = group ? `${group.name}: ${p?.name || 'Unknown'}` : (p?.name || 'Unknown');
+        return { id, name: displayName, count };
       })
       .sort((a, b) => b.count - a.count);
 
@@ -105,7 +109,12 @@ function ResultsContent() {
     const groupRankings = Object.entries(groupCounts)
       .map(([id, count]) => {
         const g = allGroups.find(g => g.id === id);
-        return { id, name: g?.name || 'Unknown', count };
+        return { 
+          id, 
+          name: g?.name || 'Unknown', 
+          description: g?.description || '', 
+          count 
+        };
       })
       .sort((a, b) => b.count - a.count);
 
@@ -175,7 +184,7 @@ function ResultsContent() {
                 <Star className="h-6 w-6 text-yellow-500" />
               </div>
               <div>
-                <CardTitle className="text-xl">Individual Performance</CardTitle>
+                <CardTitle className="text-xl">TALLY VOTE</CardTitle>
                 <CardDescription>Ranked by total member nominations received.</CardDescription>
               </div>
             </div>
@@ -191,12 +200,16 @@ function ResultsContent() {
                         <span className="text-lg font-black text-foreground">{rankGroup.rank}</span>
                       </div>
                       <div className="space-y-2">
-                        <div className="flex flex-wrap gap-3">
-                          {rankGroup.members.map((m: any) => (
-                            <span key={m.id} className="text-xl font-bold text-foreground">
-                              {m.name}
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap gap-1">
+                          {rankGroup.members.map((m: any, idx: number) => {
+                            const isLast = idx === rankGroup.members.length - 1;
+                            const isSecondLast = idx === rankGroup.members.length - 2;
+                            return (
+                              <span key={m.id} className="text-xl font-bold text-foreground">
+                                {m.name}{!isLast ? (isSecondLast ? ' and ' : ', ') : ''}
+                              </span>
+                            );
+                          })}
                         </div>
                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                           <UserIcon className="h-3 w-3" /> Peer Nominated
@@ -243,12 +256,23 @@ function ResultsContent() {
                           <span className="text-lg font-black text-accent">{rankGroup.rank}</span>
                         </div>
                         <div className="space-y-1">
-                          <div className="flex flex-wrap gap-3">
-                            {rankGroup.members.map((m: any) => (
-                              <span key={m.id} className="text-xl font-black text-primary uppercase tracking-tight">
-                                {m.name}
-                              </span>
-                            ))}
+                          <div className="flex flex-wrap gap-1">
+                            {rankGroup.members.map((m: any, idx: number) => {
+                              const isLast = idx === rankGroup.members.length - 1;
+                              const isSecondLast = idx === rankGroup.members.length - 2;
+                              return (
+                                <div key={m.id} className="flex flex-col">
+                                  <span className="text-xl font-black text-primary uppercase tracking-tight">
+                                    {m.name}{!isLast ? (isSecondLast ? ' and ' : ', ') : ''}
+                                  </span>
+                                  {m.description && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Info className="h-3 w-3" /> {m.description}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
