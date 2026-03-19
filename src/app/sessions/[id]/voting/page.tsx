@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Lock, CheckCircle2, Info, Star, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, CheckCircle2, Info, Star, Save, Mic2 } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
