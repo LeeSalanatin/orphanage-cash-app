@@ -21,7 +21,8 @@ import {
   ChevronRight,
   Calendar,
   Vote as VoteIcon,
-  Medal
+  Medal,
+  Filter
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -166,12 +167,16 @@ export default function Dashboard() {
     return { totalFines, points: userData?.totalPoints || 0 };
   }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
 
-  const globalRecords = useMemo(() => {
-    if (!rawEvents) return { longestIndividual: null, longestGroup: null };
+  const sessionRecords = useMemo(() => {
+    if (!rawEvents || !sessionFilterId) return { longestIndividual: null, longestGroup: null };
+    
+    // Filter events by selected session
+    const sessionEvents = rawEvents.filter(e => e.sessionId === sessionFilterId);
+    
     let indMax = { time: 0, name: '', session: '' };
     let grpMax = { time: 0, name: '', session: '' };
     
-    rawEvents.forEach(e => {
+    sessionEvents.forEach(e => {
       const simplifiedName = e.participantName.includes(' - ') 
         ? e.participantName.split(' - ').pop() 
         : e.participantName;
@@ -194,8 +199,11 @@ export default function Dashboard() {
         }
       }
     });
-    return { longestIndividual: indMax, longestGroup: grpMax };
-  }, [rawEvents]);
+    return { 
+      longestIndividual: indMax.time > 0 ? indMax : null, 
+      longestGroup: grpMax.time > 0 ? grpMax : null 
+    };
+  }, [rawEvents, sessionFilterId]);
 
   // Session-specific voting results with Tie Support
   const sessionVotingResults = useMemo(() => {
@@ -329,189 +337,188 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <HistoryIcon className="h-5 w-5 text-primary" />
-                Time & Fine History
-              </CardTitle>
-              <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {myEvents && myEvents.length > 0 ? (
-                <div className="space-y-4">
-                  {myEvents.slice(0, 10).map((event) => {
-                    const session = allSessions.find(s => s.id === event.sessionId);
-                    let displayFine = event.totalFineAmount || 0;
-                    
-                    if (event.preachingGroupId && session && rawEvents) {
-                      const groupEvents = rawEvents.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId);
-                      const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
-                      const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-                      const overage = Math.max(0, totalGroupSeconds - maxSeconds);
-                      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
-                      const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
-                      const groupInfo = allGroups.find(g => g.id === event.preachingGroupId);
-                      const memberCount = Math.max(1, Object.keys(groupInfo?.members || {}).filter(k => k !== 'owner').length);
-                      displayFine = totalSessionFine / memberCount;
-                    }
+      <div className="lg:col-span-2 space-y-8">
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HistoryIcon className="h-5 w-5 text-primary" />
+              Time & Fine History
+            </CardTitle>
+            <CardDescription>Comprehensive log of your personal and team participation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {myEvents && myEvents.length > 0 ? (
+              <div className="space-y-4">
+                {myEvents.slice(0, 10).map((event) => {
+                  const session = allSessions.find(s => s.id === event.sessionId);
+                  let displayFine = event.totalFineAmount || 0;
+                  
+                  if (event.preachingGroupId && session && rawEvents) {
+                    const groupEvents = rawEvents.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId);
+                    const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
+                    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+                    const overage = Math.max(0, totalGroupSeconds - maxSeconds);
+                    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+                    const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
+                    const groupInfo = allGroups.find(g => g.id === event.preachingGroupId);
+                    const memberCount = Math.max(1, Object.keys(groupInfo?.members || {}).filter(k => k !== 'owner').length);
+                    displayFine = totalSessionFine / memberCount;
+                  }
 
-                    return (
-                      <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
-                          <div>
-                            <p className="font-semibold text-sm">
-                              {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
-                              {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
-                              <span className="mx-1">•</span>
-                              <Calendar className="h-3 w-3" /> {new Date(event.startTime).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
-                          <p className="text-[10px] font-bold text-destructive">
-                            Fine Share: ₱{displayFine.toFixed(2)}
+                  return (
+                    <div key={event.id} className="flex justify-between items-center p-4 rounded-lg border hover:bg-muted/30 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-primary/10 p-2 rounded-full"><Clock className="h-4 w-4 text-primary" /></div>
+                        <div>
+                          <p className="font-semibold text-sm">
+                            {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            {event.preachingGroupId ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
+                            {event.preachingGroupId ? `Team: ${event.participantName.split(' - ')[0]}` : 'Individual Session'}
+                            <span className="mx-1">•</span>
+                            <Calendar className="h-3 w-3" /> {new Date(event.startTime).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
-                    );
-                  })}
-                  <ShadButton variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
-                    <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
-                  </ShadButton>
-                </div>
-              ) : (
-                <div className="text-center py-14 border-2 border-dashed rounded-lg">
-                  <HistoryIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
-                  <p className="text-muted-foreground">No participation history found yet.</p>
-                </div>
-              )}
+                      <div className="text-right">
+                        <p className="font-mono font-bold">{event.actualDurationFormatted}</p>
+                        <p className="text-[10px] font-bold text-destructive">
+                          Fine Share: ₱{displayFine.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <ShadButton variant="ghost" className="w-full text-xs text-muted-foreground" asChild>
+                  <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                </ShadButton>
+              </div>
+            ) : (
+              <div className="text-center py-14 border-2 border-dashed rounded-lg">
+                <HistoryIcon className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-20" />
+                <p className="text-muted-foreground">No participation history found yet.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-bold">Session Results</h2>
+          </div>
+          <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
+            <SelectTrigger className="w-full sm:w-[250px]">
+              <SelectValue placeholder="Filter by Session" />
+            </SelectTrigger>
+            <SelectContent>
+              {allSessions && [...allSessions]
+                .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
+                .map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                ))
+              }
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
+          <Card className="shadow-sm border-none bg-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Timer className="h-5 w-5 text-accent" /> 
+                Longest Time
+              </CardTitle>
+              <CardDescription>Record holders for the selected session.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <UserIcon className="h-3 w-3" /> Individual Record
+                </p>
+                {sessionRecords.longestIndividual ? (
+                  <>
+                    <p className="font-bold text-lg">{sessionRecords.longestIndividual.name}</p>
+                    <p className="text-xs text-primary font-mono">{formatDuration(sessionRecords.longestIndividual.time)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No individual record.</p>
+                )}
+              </div>
+              <div className="space-y-1 pt-4 border-t">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Users className="h-3 w-3" /> Group Record
+                </p>
+                {sessionRecords.longestGroup ? (
+                  <>
+                    <p className="font-bold text-lg">{sessionRecords.longestGroup.name}</p>
+                    <p className="text-xs text-accent font-mono">{formatDuration(sessionRecords.longestGroup.time)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No group record.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="shadow-sm border-none bg-card">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><Trophy className="h-5 w-5 text-yellow-500" /> Records & Tallies</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <UserIcon className="h-3 w-3" /> Longest Individual Preach
-                  </p>
-                  <p className="font-bold text-lg">{globalRecords.longestIndividual?.name || 'N/A'}</p>
-                  <p className="text-xs text-primary font-mono">{globalRecords.longestIndividual?.time ? formatDuration(globalRecords.longestIndividual.time) : '0:00'}</p>
-                </div>
-                <div className="space-y-1 pt-4 border-t">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Users className="h-3 w-3" /> Longest Group Performance
-                  </p>
-                  <p className="font-bold text-lg">{globalRecords.longestGroup?.name || 'N/A'}</p>
-                  <p className="text-xs text-accent font-mono">{globalRecords.longestGroup?.time ? formatDuration(globalRecords.longestGroup.time) : '0:00'}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm border-none bg-card flex flex-col">
-              <CardHeader className="flex flex-col space-y-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <VoteIcon className="h-5 w-5 text-primary" /> 
-                  Voting Results
-                </CardTitle>
-                <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
-                  <SelectTrigger className="w-full h-8 text-xs">
-                    <SelectValue placeholder="Filter by Session" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allSessions && [...allSessions]
-                      .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
-                      .map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
-                      ))
-                    }
-                  </SelectContent>
-                </Select>
-              </CardHeader>
-              <CardContent className="space-y-6 flex-grow">
-                <div className="space-y-4">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
-                  </p>
-                  {sessionVotingResults.individuals.length > 0 ? (
-                    <div className="space-y-4">
-                      {sessionVotingResults.individuals.map((rankGroup) => (
-                        <div key={rankGroup.rank} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-muted-foreground">Top {rankGroup.rank}</span>
-                            <Badge variant="outline" className="text-[10px] h-4 font-mono px-1">{rankGroup.count} votes</Badge>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 pl-2">
-                            {rankGroup.members.map((m: any) => (
-                              <span 
-                                key={m.id} 
-                                className={cn(
-                                  "text-[10px] px-2 py-0.5 rounded-sm transition-colors",
-                                  m.id === userParticipantId 
-                                    ? "bg-primary text-primary-foreground font-bold shadow-sm" 
-                                    : "text-muted-foreground bg-transparent"
-                                )}
-                              >
-                                {m.name}
-                              </span>
-                            ))}
-                          </div>
+          <Card className="shadow-sm border-none bg-card flex flex-col">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <VoteIcon className="h-5 w-5 text-primary" /> 
+                Voting Results
+              </CardTitle>
+              <CardDescription>Peer nominations for the selected session.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 flex-grow">
+              <div className="space-y-4">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Star className="h-3 w-3 text-yellow-500" /> Top Individuals
+                </p>
+                {sessionVotingResults.individuals.length > 0 ? (
+                  <div className="space-y-4">
+                    {sessionVotingResults.individuals.map((rankGroup) => (
+                      <div key={rankGroup.rank} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-muted-foreground">Top {rankGroup.rank}</span>
+                          <Badge variant="outline" className="text-[10px] h-4 font-mono px-1">{rankGroup.count} votes</Badge>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic text-center py-2">No individual votes yet.</p>
-                  )}
-                </div>
+                        <div className="flex flex-wrap gap-1.5 pl-2">
+                          {rankGroup.members.map((m: any) => (
+                            <span 
+                              key={m.id} 
+                              className={cn(
+                                "text-[10px] px-2 py-0.5 rounded-sm transition-colors",
+                                m.id === userParticipantId 
+                                  ? "bg-primary text-primary-foreground font-bold shadow-sm" 
+                                  : "text-muted-foreground"
+                              )}
+                            >
+                              {m.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic text-center py-2">No individual votes yet.</p>
+                )}
+              </div>
 
-                <div className="space-y-4 pt-4 border-t">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Trophy className="h-3 w-3 text-primary" /> Top Group
-                  </p>
-                  {sessionVotingResults.group ? (
-                    <div className="flex items-center justify-between text-sm bg-primary/5 p-3 rounded-lg border border-primary/10">
-                      <span className="font-bold text-primary">{sessionVotingResults.group.name}</span>
-                      <Badge className="bg-primary text-primary-foreground">{sessionVotingResults.group.count} votes</Badge>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="shadow-md">
-            <CardHeader><CardTitle>Explore System</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/sessions">
-                  <Mic2 className="mr-3 h-5 w-5 text-primary" /> Active Sessions
-                </Link>
-              </ShadButton>
-              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/participants">
-                  <Users className="mr-3 h-5 w-5 text-primary" /> Roster & Roles
-                </Link>
-              </ShadButton>
-              <ShadButton className="w-full justify-start h-12" variant="outline" asChild>
-                <Link href="/configurations">
-                  <Gavel className="mr-3 h-5 w-5 text-primary" /> System Rule Sets
-                </Link>
-              </ShadButton>
+              <div className="space-y-4 pt-4 border-t">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                  <Trophy className="h-3 w-3 text-primary" /> Top Group
+                </p>
+                {sessionVotingResults.group ? (
+                  <div className="flex items-center justify-between text-sm bg-primary/5 p-3 rounded-lg border border-primary/10">
+                    <span className="font-bold text-primary">{sessionVotingResults.group.name}</span>
+                    <Badge className="bg-primary text-primary-foreground">{sessionVotingResults.group.count} votes</Badge>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic text-center py-2">No group votes yet.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
