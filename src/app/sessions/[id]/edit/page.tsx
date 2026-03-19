@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, use } from 'react';
@@ -86,7 +85,7 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
       };
 
       // If a new config is selected, update those rules too
-      if (selectedConfigId) {
+      if (selectedConfigId && selectedConfigId !== 'none') {
         const config = configs?.find(c => c.id === selectedConfigId);
         if (config) {
           updateData.sessionType = config.sessionType;

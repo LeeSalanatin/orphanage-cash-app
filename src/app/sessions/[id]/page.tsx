@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
@@ -42,7 +41,8 @@ import {
   TrendingDown,
   Trash2,
   ChevronRight,
-  Edit2
+  Edit2,
+  Trophy
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -109,7 +109,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // UPDATED: Fine logic to divide by participating members only
+  // CORRECTED: Divide total group fine ONLY by members who actually preached in this session
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     
@@ -135,7 +135,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      // Divide by members who actually preached
+      // FIX: Use the size of the set of unique participant IDs for this group in this session
       const participatingCount = Math.max(1, groupPreacherCounts[groupId].size);
       
       map[groupId] = {
@@ -195,9 +195,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const overageSeconds = Math.max(0, timer - maxSeconds);
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
-    } else {
-      // Group fines are handled dynamically in groupStatsMap for the UI
-      fineToRecord = 0; 
     }
 
     const eventData = {
@@ -289,9 +286,19 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </div>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/sessions/${id}/edit`}><Edit2 className="mr-2 h-4 w-4" /> Edit</Link>
-            </Button>
+            <>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/sessions/${id}/edit`}><Edit2 className="mr-2 h-4 w-4" /> Edit</Link>
+              </Button>
+              <Button size="sm" onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { votingClosed: !session?.votingClosed })} variant="outline">
+                {session?.votingClosed ? 'Open Voting' : 'Close Voting'}
+              </Button>
+              {session?.votingClosed && !session?.rewardsDistributed && (
+                <Button size="sm" asChild className="bg-yellow-500 hover:bg-yellow-600">
+                  <Link href={`/sessions/${id}/distribute`}><Trophy className="mr-2 h-4 w-4" /> Distribute Points</Link>
+                </Button>
+              )}
+            </>
           )}
           {session?.votingConfig?.enabled && (
             <Button variant="outline" size="sm" asChild><Link href={`/sessions/${id}/voting`}><Vote className="mr-2 h-4 w-4" /> Voting</Link></Button>

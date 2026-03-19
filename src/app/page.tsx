@@ -127,11 +127,13 @@ export default function Dashboard() {
     return myEvents[0];
   }, [myEvents]);
 
-  // Comprehensive fine calculation
+  // Comprehensive fine calculation with CORRECTED GROUP SPLIT
   const stats = useMemo(() => {
     if (!myEvents || !allSessions || !allGroups || !rawEvents || !userParticipantId) return { totalFines: 0, points: userData?.totalPoints || 0 };
     
     let totalFines = 0;
+    
+    // Group logic: find unique session+group pairs the user was part of
     const sessionGroupKeys = new Set<string>();
     myEvents.forEach(e => {
       if (e.preachingGroupId) {
@@ -139,28 +141,33 @@ export default function Dashboard() {
       }
     });
 
+    // Individual fines: sum directly from events where user was NOT in a group
     myEvents.forEach(e => {
       if (!e.preachingGroupId) {
         totalFines += (e.totalFineAmount || 0);
       }
     });
 
+    // Group fines: divide by participating members in that specific session
     sessionGroupKeys.forEach(key => {
       const [sessionId, groupId] = key.split('_');
       const session = allSessions.find(s => s.id === sessionId);
-      const group = allGroups.find(g => g.id === groupId);
       
-      if (session && group) {
+      if (session) {
+        // Find all records for this group in this session
         const groupEvents = rawEvents.filter(re => re.sessionId === sessionId && re.preachingGroupId === groupId);
         const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
-        const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
         
+        // Calculate total fine for the group
+        const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
         const overage = Math.max(0, totalGroupSeconds - maxSeconds);
         const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
         const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
         
-        const members = group.members || {};
-        const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
+        // THE FIX: Only divide by unique members who actually preached in this group session
+        const participatingMemberIds = new Set(groupEvents.map(re => re.participantId));
+        const memberCount = Math.max(1, participatingMemberIds.size);
+        
         totalFines += (totalSessionFine / memberCount);
       }
     });
@@ -168,6 +175,7 @@ export default function Dashboard() {
     return { totalFines, points: userData?.totalPoints || 0 };
   }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
 
+  // ... (rest of dashboard logic remains same)
   const sessionRecords = useMemo(() => {
     if (!rawEvents || !sessionFilterId) return { topIndividuals: [], longestGroup: null };
     
@@ -377,6 +385,7 @@ export default function Dashboard() {
                   const session = allSessions.find(s => s.id === event.sessionId);
                   let displayFine = event.totalFineAmount || 0;
                   
+                  // Re-calculate the shared fine if it's a group session
                   if (event.preachingGroupId && session && rawEvents) {
                     const groupEvents = rawEvents.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId);
                     const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
@@ -384,8 +393,10 @@ export default function Dashboard() {
                     const overage = Math.max(0, totalGroupSeconds - maxSeconds);
                     const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
                     const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
-                    const groupInfo = allGroups.find(g => g.id === event.preachingGroupId);
-                    const memberCount = Math.max(1, Object.keys(groupInfo?.members || {}).filter(k => k !== 'owner').length);
+                    
+                    // FIX: Divide by unique members who preached in this session
+                    const participatingMemberIds = new Set(groupEvents.map(re => re.participantId));
+                    const memberCount = Math.max(1, participatingMemberIds.size);
                     displayFine = totalSessionFine / memberCount;
                   }
 
