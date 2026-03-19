@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
@@ -108,34 +109,40 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  // UPDATED: Fine logic to divide by participating members only
   const groupStatsMap = useMemo(() => {
     if (!records || !allGroups || !session) return {};
     
-    const groupTotals: Record<string, number> = {};
+    const groupTimeTotals: Record<string, number> = {};
+    const groupPreacherCounts: Record<string, Set<string>> = {};
+    
     records.forEach(r => {
       if (r.preachingGroupId) {
-        groupTotals[r.preachingGroupId] = (groupTotals[r.preachingGroupId] || 0) + r.actualDurationSeconds;
+        groupTimeTotals[r.preachingGroupId] = (groupTimeTotals[r.preachingGroupId] || 0) + r.actualDurationSeconds;
+        if (!groupPreacherCounts[r.preachingGroupId]) groupPreacherCounts[r.preachingGroupId] = new Set();
+        groupPreacherCounts[r.preachingGroupId].add(r.participantId);
       }
     });
 
     const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
     const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
 
-    const map: Record<string, { totalFine: number, splitFine: number, groupCode: string }> = {};
+    const map: Record<string, { totalFine: number, splitFine: number, groupCode: string, participatingCount: number }> = {};
     
-    Object.keys(groupTotals).forEach(groupId => {
+    Object.keys(groupTimeTotals).forEach(groupId => {
       const gInfo = allGroups.find(g => g.id === groupId);
-      const totalSeconds = groupTotals[groupId];
+      const totalSeconds = groupTimeTotals[groupId];
       const overageSeconds = Math.max(0, totalSeconds - maxSeconds);
       const totalFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
       
-      const members = gInfo?.members || {};
-      const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
+      // Divide by members who actually preached
+      const participatingCount = Math.max(1, groupPreacherCounts[groupId].size);
       
       map[groupId] = {
         totalFine,
-        splitFine: totalFine / memberCount,
-        groupCode: gInfo?.name || 'Unknown'
+        splitFine: totalFine / participatingCount,
+        groupCode: gInfo?.name || 'Unknown',
+        participatingCount
       };
     });
     
@@ -189,18 +196,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     } else {
-      const existingGroupTime = records
-        .filter(r => r.preachingGroupId === activeGroupId)
-        .reduce((sum, r) => sum + r.actualDurationSeconds, 0);
-      
-      const totalEstimatedTime = existingGroupTime + timer;
-      const overageSeconds = Math.max(0, totalEstimatedTime - maxSeconds);
-      const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
-      const totalEstimatedFine = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
-      
-      const members = targetGroup?.members || {};
-      const memberCount = Math.max(1, Object.keys(members).filter(k => k !== 'owner').length);
-      fineToRecord = totalEstimatedFine / memberCount;
+      // Group fines are handled dynamically in groupStatsMap for the UI
+      fineToRecord = 0; 
     }
 
     const eventData = {
@@ -274,29 +271,33 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
 
-  // Calculate default tab for group live roster
   const activeGroups = allGroups?.filter(group => 
     availableParticipants?.some(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]))
   ) || [];
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-primary flex items-center gap-3">
+          <h1 className="text-2xl font-headline font-bold text-primary flex items-center gap-3">
             {session?.title}
             <Badge variant={session?.status === 'active' ? 'default' : 'secondary'}>{session?.status}</Badge>
           </h1>
-          <p className="text-muted-foreground text-sm flex items-center gap-2 mt-1">
-            <Mic2 className="h-4 w-4" /> {session?.sessionType} Session • <Calendar className="h-4 w-4" /> {session?.sessionDate}
+          <p className="text-muted-foreground text-xs flex items-center gap-2 mt-1">
+            <Mic2 className="h-3.5 w-3.5" /> {session?.sessionType} Session • <Calendar className="h-3.5 w-3.5" /> {session?.sessionDate}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/sessions/${id}/edit`}><Edit2 className="mr-2 h-4 w-4" /> Edit</Link>
+            </Button>
+          )}
           {session?.votingConfig?.enabled && (
-            <Button variant="outline" asChild><Link href={`/sessions/${id}/voting`}><Vote className="mr-2 h-4 w-4" /> Voting</Link></Button>
+            <Button variant="outline" size="sm" asChild><Link href={`/sessions/${id}/voting`}><Vote className="mr-2 h-4 w-4" /> Voting</Link></Button>
           )}
           {isAdmin && (
-            <Button onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { status: session?.status === 'active' ? 'completed' : 'active' })} 
+            <Button size="sm" onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { status: session?.status === 'active' ? 'completed' : 'active' })} 
                     variant={session?.status === 'active' ? 'destructive' : 'default'}>
               {session?.status === 'active' ? 'End Session' : 'Start Session'}
             </Button>
@@ -305,28 +306,28 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       </div>
 
       <Tabs defaultValue="results">
-        <TabsList className="mb-6">
-          <TabsTrigger value="results"><Calculator className="h-4 w-4 mr-2" /> Incentives & Fines</TabsTrigger>
-          <TabsTrigger value="live"><History className="h-4 w-4 mr-2" /> Live Clock</TabsTrigger>
+        <TabsList className="mb-6 h-9">
+          <TabsTrigger value="results" className="text-xs"><Calculator className="h-3.5 w-3.5 mr-2" /> Incentives & Fines</TabsTrigger>
+          <TabsTrigger value="live" className="text-xs"><History className="h-3.5 w-3.5 mr-2" /> Live Clock</TabsTrigger>
         </TabsList>
 
         <TabsContent value="results">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+          <Card className="border-none shadow-md">
+            <CardHeader className="py-4">
+              <CardTitle className="text-lg flex items-center gap-2">
                 <TrendingDown className="h-5 w-5 text-destructive" /> Session Tally
               </CardTitle>
-              <CardDescription>Individual and shared fine distribution for this session.</CardDescription>
+              <CardDescription className="text-xs">Individual and shared fine distribution for this session.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Preacher</TableHead>
-                    <TableHead>Actual Time</TableHead>
-                    <TableHead>Group Fine Context</TableHead>
-                    <TableHead>Your Share (₱)</TableHead>
-                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                  <TableRow className="h-10">
+                    <TableHead className="text-[10px] uppercase font-bold">Preacher</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Actual Time</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Calculation Rule</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Your Share (₱)</TableHead>
+                    {isAdmin && <TableHead className="text-[10px] uppercase font-bold text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -337,28 +338,27 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       : r.participantName;
                     
                     const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
-                    const teamTotal = r.preachingGroupId && gStats ? gStats.totalFine : (r.totalFineAmount || 0);
 
                     return (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-bold">{simplifiedName}</TableCell>
-                        <TableCell className="font-mono">{r.actualDurationFormatted}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">
+                      <TableRow key={r.id} className="h-12">
+                        <TableCell className="font-bold text-xs">{simplifiedName}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
+                        <TableCell className="text-[10px] text-muted-foreground font-mono">
                           {r.preachingGroupId && gStats ? (
-                            `${gStats.groupCode} (${displayFine.toFixed(2)} / ${teamTotal.toFixed(2)})`
+                            `${gStats.groupCode} (Shared by ${gStats.participatingCount})`
                           ) : (
                             'Individual Fine'
                           )}
                         </TableCell>
-                        <TableCell className="text-destructive font-bold">₱{displayFine.toFixed(2)}</TableCell>
+                        <TableCell className="text-destructive font-bold text-xs">₱{displayFine.toFixed(2)}</TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => handleEditClick(r)}>
-                                <Edit2 className="h-4 w-4" />
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => handleEditClick(r)}>
+                                <Edit2 className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setRecordToDelete(r.id)}>
-                                <Trash2 className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setRecordToDelete(r.id)}>
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -368,7 +368,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   })}
                   {records.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-10 text-muted-foreground italic">
+                      <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-12 text-[10px] text-muted-foreground italic">
                         No preaching events recorded yet.
                       </TableCell>
                     </TableRow>
@@ -380,15 +380,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         </TabsContent>
 
         <TabsContent value="live">
-          <div className="grid grid-cols-1 gap-8">
+          <div className="grid grid-cols-1 gap-6">
             <div className="space-y-6">
               {activeParticipantId && (
-                <Card className="border-accent bg-accent/5 p-10 text-center animate-in zoom-in mb-6">
-                  <p className="text-xl text-muted-foreground mb-4">{availableParticipants?.find(p => p.id === activeParticipantId)?.name}</p>
-                  <p className="text-8xl font-mono font-bold tabular-nums mb-8">{formatDuration(timer)}</p>
-                  <div className="flex gap-4 justify-center">
-                    <Button size="lg" variant="secondary" onClick={() => setIsPaused(!isPaused)}>{isPaused ? 'Resume' : 'Pause'}</Button>
-                    <Button size="lg" variant="destructive" onClick={handleStopTracking}>Stop & Save</Button>
+                <Card className="border-accent bg-accent/5 p-8 text-center animate-in zoom-in mb-6">
+                  <p className="text-base text-muted-foreground mb-2">{availableParticipants?.find(p => p.id === activeParticipantId)?.name}</p>
+                  <p className="text-7xl font-mono font-bold tabular-nums mb-6">{formatDuration(timer)}</p>
+                  <div className="flex gap-3 justify-center">
+                    <Button size="sm" variant="secondary" onClick={() => setIsPaused(!isPaused)}>{isPaused ? 'Resume' : 'Pause'}</Button>
+                    <Button size="sm" variant="destructive" onClick={handleStopTracking}>Stop & Save</Button>
                   </div>
                 </Card>
               )}
@@ -400,7 +400,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       <TabsTrigger 
                         key={group.id} 
                         value={group.id}
-                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-6 py-2"
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground px-4 py-1.5 text-xs"
                       >
                         {group.name}
                       </TabsTrigger>
@@ -410,22 +410,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     const groupMembers = availableParticipants?.filter(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]));
                     return (
                       <TabsContent key={group.id} value={group.id} className="mt-0 focus-visible:ring-0">
-                        <Card className="shadow-md border-primary/10">
-                          <CardHeader className="bg-primary/5 pb-4">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <UsersIcon className="h-5 w-5 text-primary" />
+                        <Card className="shadow-sm border-primary/10">
+                          <CardHeader className="bg-primary/5 pb-3 py-3">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <UsersIcon className="h-4 w-4 text-primary" />
                               {group.name}
                             </CardTitle>
-                            {group.description && <CardDescription>{group.description}</CardDescription>}
                           </CardHeader>
-                          <CardContent className="pt-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <CardContent className="pt-4 px-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                               {groupMembers?.map(p => (
-                                <div key={p.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                                  <span className="font-medium text-sm">{p.name}</span>
+                                <div key={p.id} className="flex justify-between items-center p-2.5 border rounded-lg hover:bg-muted/30 transition-colors">
+                                  <span className="font-medium text-xs">{p.name}</span>
                                   {isAdmin && !activeParticipantId && (
-                                    <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id, group.id)}>
-                                      <Play className="h-4 w-4 mr-2" /> Start
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id, group.id)}>
+                                      <Play className="h-3 w-3 mr-1" /> Start
                                     </Button>
                                   )}
                                 </div>
@@ -438,15 +437,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   })}
                 </Tabs>
               ) : (
-                <Card>
-                  <CardHeader><CardTitle>Preaching Roster</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <Card className="border-none shadow-sm">
+                  <CardHeader className="py-4"><CardTitle className="text-base">Preaching Roster</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
                     {availableParticipants?.map(p => (
-                      <div key={p.id} className="p-4 border rounded-lg flex justify-between items-center bg-card">
-                        <span className="font-medium">{p.name}</span>
+                      <div key={p.id} className="p-3 border rounded-lg flex justify-between items-center bg-card">
+                        <span className="font-medium text-xs">{p.name}</span>
                         {isAdmin && !activeParticipantId && (
-                          <Button size="sm" variant="outline" onClick={() => handleStartTracking(p.id)}>
-                            <Play className="h-4 w-4" />
+                          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id)}>
+                            <Play className="h-3 w-3" />
                           </Button>
                         )}
                       </div>
@@ -460,54 +459,53 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       </Tabs>
 
       <AlertDialog open={!!recordToDelete} onOpenChange={o => !o && setRecordToDelete(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the preaching record and recalibrate the session tally.
+            <AlertDialogTitle className="text-base">Delete Record?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              This action cannot be undone. This will permanently remove this preaching entry.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteRecord} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete Record
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRecord} className="h-8 text-xs bg-destructive">
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={!!repeatPreachContext} onOpenChange={o => !o && setRepeatPreachContext(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Already Recorded</AlertDialogTitle>
-            <AlertDialogDescription>This preacher has already finished. Record another entry?</AlertDialogDescription>
+            <AlertDialogTitle className="text-base">Already Recorded</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">This preacher has already finished. Record another entry?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)}>Continue</AlertDialogAction>
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => repeatPreachContext && proceedWithTracking(repeatPreachContext.pId, repeatPreachContext.gId)} className="h-8 text-xs">Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Dialog open={!!editingRecord} onOpenChange={o => !o && setEditingRecord(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Edit Preaching Time</DialogTitle>
-            <DialogDescription>Manually adjust the duration for {editingRecord?.participantName}.</DialogDescription>
+            <DialogTitle className="text-base">Edit Time</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="space-y-2">
-              <Label>Minutes</Label>
-              <Input type="number" value={editMin} onChange={(e) => setEditMin(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-[10px]">Minutes</Label>
+              <Input className="h-8 text-xs" type="number" value={editMin} onChange={(e) => setEditMin(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Seconds</Label>
-              <Input type="number" min="0" max="59" value={editSec} onChange={(e) => setEditSec(e.target.value)} />
+            <div className="space-y-1">
+              <Label className="text-[10px]">Seconds</Label>
+              <Input className="h-8 text-xs" type="number" min="0" max="59" value={editSec} onChange={(e) => setEditSec(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingRecord(null)}>Cancel</Button>
-            <Button onClick={saveEditedTime}>Save Changes</Button>
+          <DialogFooter className="mt-4">
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditingRecord(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" onClick={saveEditedTime}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

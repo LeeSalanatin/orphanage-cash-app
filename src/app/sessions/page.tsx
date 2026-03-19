@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
@@ -11,7 +12,8 @@ import {
   Calendar, 
   Loader2, 
   ChevronRight, 
-  Trash2 
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -84,13 +86,13 @@ export default function SessionsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-headline font-bold text-primary">Preaching Sessions</h1>
-          <p className="text-xs text-muted-foreground">Browse active sessions or review records.</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Session History & Live</p>
         </div>
         {isAdmin && (
-          <Button asChild size="sm" className="shadow-md">
+          <Button asChild size="sm" className="shadow-md h-8 text-xs">
             <Link href="/sessions/new">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Session
+              <PlusCircle className="mr-2 h-3.5 w-3.5" />
+              New Session
             </Link>
           </Button>
         )}
@@ -99,7 +101,7 @@ export default function SessionsPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-40 bg-muted animate-pulse rounded-lg border" />
+            <div key={i} className="h-32 bg-muted animate-pulse rounded-lg border" />
           ))}
         </div>
       ) : sessions && sessions.length > 0 ? (
@@ -114,17 +116,17 @@ export default function SessionsPage() {
           ))}
         </div>
       ) : (
-        <Card className="text-center py-16 border-dashed border-2">
+        <Card className="text-center py-16 border-dashed border-2 bg-transparent">
           <CardContent className="space-y-3">
-            <div className="mx-auto bg-primary/10 p-3 rounded-full w-16 h-16 flex items-center justify-center">
-              <Mic2 className="h-8 w-8 text-primary" />
+            <div className="mx-auto bg-primary/10 p-3 rounded-full w-14 h-14 flex items-center justify-center">
+              <Mic2 className="h-6 w-6 text-primary" />
             </div>
-            <h3 className="text-xl font-semibold">No sessions found</h3>
-            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+            <h3 className="text-lg font-semibold">No sessions found</h3>
+            <p className="text-[10px] text-muted-foreground max-w-xs mx-auto">
               There are no recorded sessions yet.
             </p>
             {isAdmin && (
-              <Button asChild size="sm" className="mt-2">
+              <Button asChild size="sm" className="mt-2 h-8 text-xs">
                 <Link href="/sessions/new">Get Started</Link>
               </Button>
             )}
@@ -133,16 +135,16 @@ export default function SessionsPage() {
       )}
 
       <AlertDialog open={!!sessionToDelete} onOpenChange={(open) => !open && setSessionToDelete(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg">Delete Session?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              This will permanently delete the session and all records.
+            <AlertDialogTitle className="text-base">Delete Session?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[10px]">
+              This will permanently delete the session and all related preaching records.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs">
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 text-xs">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -169,26 +171,38 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
       <CardHeader className="pb-1 pt-4 px-4 relative z-10 pointer-events-none">
         <div className="flex justify-between items-start mb-1 pointer-events-auto">
           <div className="flex gap-1.5">
-            <Badge className={cn("capitalize text-[9px] h-4 text-white", statusColors[session.status] || 'bg-secondary')}>
+            <Badge className={cn("capitalize text-[9px] h-4 text-white border-none", statusColors[session.status] || 'bg-secondary')}>
               {session.status}
             </Badge>
-            <Badge variant="outline" className="capitalize text-[9px] h-4 font-bold">
+            <Badge variant="outline" className="capitalize text-[9px] h-4 font-bold border-muted-foreground/20">
               {session.sessionType}
             </Badge>
           </div>
           {isAdmin && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDelete(session.id);
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            <div className="flex gap-1 pointer-events-auto">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                asChild
+              >
+                <Link href={`/sessions/${session.id}/edit`}>
+                  <Edit2 className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete(session.id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           )}
         </div>
         <CardTitle className="text-base line-clamp-1 group-hover:text-primary transition-colors leading-tight">{session.title || 'Untitled Session'}</CardTitle>
@@ -199,13 +213,13 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
       <CardContent className="flex-grow pt-2 px-4 relative z-10 pointer-events-none">
         <div className="space-y-1 text-[10px]">
           <div className="flex justify-between items-center text-muted-foreground">
-            <span>Time Limit:</span>
+            <span>Limit:</span>
             <span className="font-semibold text-foreground">
               {session.maxPreachingTimeMinutes || '0'}m {session.maxPreachingTimeSeconds || '0'}s
             </span>
           </div>
           <div className="flex justify-between items-center text-muted-foreground">
-            <span>Fine Rate:</span>
+            <span>Fine:</span>
             <span className="font-semibold text-foreground">
               ₱{session.fineRules?.[0]?.amount || 0} ({session.fineRules?.[0]?.type === 'fixed' ? 'Fixed' : '/min'})
             </span>
@@ -213,8 +227,8 @@ function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: bo
         </div>
       </CardContent>
       <div className="p-3 pt-0 mt-auto relative z-10 pointer-events-none">
-        <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 h-7 text-[10px] justify-between">
-          {session.status === 'completed' ? 'View Results' : 'View Session'}
+        <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 h-7 text-[9px] justify-between font-bold uppercase tracking-tight">
+          {session.status === 'completed' ? 'View Records' : 'Open Session'}
           <ChevronRight className="h-3 w-3" />
         </Button>
       </div>
