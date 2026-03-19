@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
@@ -168,24 +167,23 @@ export default function Dashboard() {
   }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
 
   const sessionRecords = useMemo(() => {
-    if (!rawEvents || !sessionFilterId) return { longestIndividual: null, longestGroup: null };
+    if (!rawEvents || !sessionFilterId) return { topIndividuals: [], longestGroup: null };
     
     // Filter events by selected session
     const sessionEvents = rawEvents.filter(e => e.sessionId === sessionFilterId);
     
-    let indMax = { time: 0, name: '' };
-    const groupTotals: Record<string, { time: number, name: string }> = {};
-    
-    sessionEvents.forEach(e => {
-      // Individual record: Look at every single preaching event regardless of group
-      const simplifiedName = e.participantName.includes(' - ') 
+    // Individual records: Look at every single preaching event regardless of group
+    const indRecords = sessionEvents.map(e => ({
+      time: e.actualDurationSeconds,
+      name: e.participantName.includes(' - ') 
         ? e.participantName.split(' - ').pop() 
-        : e.participantName;
+        : e.participantName
+    })).sort((a, b) => b.time - a.time);
 
-      if (e.actualDurationSeconds > indMax.time) {
-        indMax = { time: e.actualDurationSeconds, name: simplifiedName || 'Unknown' };
-      }
+    const topIndividuals = indRecords.slice(0, 3);
 
+    const groupTotals: Record<string, { time: number, name: string }> = {};
+    sessionEvents.forEach(e => {
       // Group totals: Sum up by preachingGroupId to find group longest aggregate time
       if (e.preachingGroupId) {
         if (!groupTotals[e.preachingGroupId]) {
@@ -207,7 +205,7 @@ export default function Dashboard() {
     });
 
     return { 
-      longestIndividual: indMax.time > 0 ? indMax : null, 
+      topIndividuals, 
       longestGroup: grpMax.time > 0 ? grpMax : null 
     };
   }, [rawEvents, sessionFilterId]);
@@ -442,13 +440,21 @@ export default function Dashboard() {
             <CardContent className="space-y-4">
               <div className="space-y-1">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <UserIcon className="h-3 w-3" /> Individual Record
+                  <UserIcon className="h-3 w-3" /> Individual Records
                 </p>
-                {sessionRecords.longestIndividual ? (
-                  <>
-                    <p className="font-bold text-lg">{sessionRecords.longestIndividual.name}</p>
-                    <p className="text-xs text-primary font-mono">{formatDuration(sessionRecords.longestIndividual.time)}</p>
-                  </>
+                {sessionRecords.topIndividuals.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-col">
+                      <p className="font-bold text-lg">{sessionRecords.topIndividuals[0].name}</p>
+                      <p className="text-xs text-primary font-mono">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
+                    </div>
+                    {sessionRecords.topIndividuals.slice(1).map((record, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-[10px] text-muted-foreground border-t pt-1 border-border/50">
+                        <span>{idx + 2}. {record.name}</span>
+                        <span className="font-mono">{formatDuration(record.time)}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">No individual record.</p>
                 )}
