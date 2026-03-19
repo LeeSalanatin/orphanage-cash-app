@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
@@ -17,7 +18,8 @@ import {
   User as UserIcon,
   TrendingDown,
   ChevronRight,
-  Calendar
+  Calendar,
+  Vote as VoteIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -85,10 +87,16 @@ export default function Dashboard() {
     return collection(firestore, 'sessions');
   }, [firestore, user]);
 
+  const votesQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collectionGroup(firestore, 'votes');
+  }, [firestore, user]);
+
   const { data: participants, isLoading: participantsLoading } = useCollection(participantsQuery);
   const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
   const { data: rawEvents, isLoading: eventsLoading } = useCollection(allEventsQuery);
   const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
+  const { data: allVotes, isLoading: votesLoading } = useCollection(votesQuery);
 
   // Filter my events in memory
   const myEvents = useMemo(() => {
@@ -182,13 +190,40 @@ export default function Dashboard() {
     return { longestIndividual: indMax, longestGroup: grpMax };
   }, [rawEvents]);
 
+  // Calculate voting results with session names
+  const votingResults = useMemo(() => {
+    if (!participants || !allVotes || !allSessions) return [];
+
+    return participants
+      .map(p => {
+        // Find all votes cast for this participant across all sessions
+        const participantVotes = allVotes.filter(v => v.voteData?.individual?.includes(p.id));
+        
+        // Find unique sessions where this participant got votes
+        const sessionIds = Array.from(new Set(participantVotes.map(v => v.sessionId)));
+        const contributingSessions = sessionIds
+          .map(sid => allSessions.find(s => s.id === sid))
+          .filter(Boolean)
+          .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
+
+        return {
+          ...p,
+          recentSession: contributingSessions[0]?.title || null,
+          voteCount: participantVotes.length
+        };
+      })
+      .filter(p => (p.totalPoints || 0) > 0 || p.voteCount > 0)
+      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+      .slice(0, 5);
+  }, [participants, allVotes, allSessions]);
+
   function formatDuration(seconds: number) {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  const isLoading = authLoading || userLoading || participantsLoading || groupsLoading || eventsLoading || sessionsLoading || isAdmin === null;
+  const isLoading = authLoading || userLoading || participantsLoading || groupsLoading || eventsLoading || sessionsLoading || votesLoading || isAdmin === null;
 
   if (!user && !authLoading) {
     return (
@@ -354,19 +389,31 @@ export default function Dashboard() {
 
             <Card className="shadow-sm border-none bg-card">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><Star className="h-5 w-5 text-primary" /> Preacher Rankings (Points)</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <VoteIcon className="h-5 w-5 text-primary" /> 
+                  Voting Results
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {participants?.sort((a,b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 5).map((p, i) => (
-                    <div key={p.id} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="font-bold text-muted-foreground text-xs w-4">#{i+1}</span>
-                        <span className={p.id === userParticipantId ? "font-bold text-primary" : ""}>{p.name}</span>
-                      </span>
-                      <span className="font-bold">{p.totalPoints || 0} pts</span>
+                <div className="space-y-4">
+                  {votingResults.length > 0 ? votingResults.map((p, i) => (
+                    <div key={p.id} className="flex flex-col space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="font-bold text-muted-foreground text-xs w-4">#{i+1}</span>
+                          <span className={cn("font-medium", p.id === userParticipantId ? "text-primary font-bold" : "")}>{p.name}</span>
+                        </span>
+                        <span className="font-bold text-primary">{p.totalPoints || 0} pts</span>
+                      </div>
+                      {p.recentSession && (
+                        <p className="text-[10px] text-muted-foreground pl-6 italic">
+                          Session: {p.recentSession}
+                        </p>
+                      )}
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-sm text-muted-foreground italic text-center py-4">No voting results yet.</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
