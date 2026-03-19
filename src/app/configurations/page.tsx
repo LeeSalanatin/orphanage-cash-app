@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Settings2, PlusCircle, Trash2, Clock, Gavel, Trophy, Loader2, Edit2 } from 'lucide-react';
-import Link from 'link';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function ConfigurationsPage() {
