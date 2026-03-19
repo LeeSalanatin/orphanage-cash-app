@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemoFirebase, useCollection, useFirestore, useUser } from '@/firebase';
-import { collection, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, query, doc, getDoc, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2 } from 'lucide-react';
+import { Mic2, PlusCircle, Calendar, Clock, Filter, Loader2, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState, useEffect } from 'react';
 
@@ -34,22 +34,24 @@ export default function SessionsPage() {
     checkAdmin();
   }, [firestore, user]);
 
-  // Query sessions where the user is a member
+  // Query all sessions for everyone to allow viewing history
+  // Sorting is handled in memory to avoid index requirements for dynamic status/date combos
   const sessionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    if (isAdmin) return collection(firestore, 'sessions');
-    return query(
-      collection(firestore, 'sessions'),
-      where(`members.${user.uid}`, '!=', null)
-    );
-  }, [firestore, user, isAdmin]);
+    return collection(firestore, 'sessions');
+  }, [firestore, user]);
 
   const { data: rawSessions, isLoading } = useCollection(sessionsQuery);
 
-  // Sort in memory to avoid complex/impossible dynamic composite indexes
+  // Sort sessions: Active first, then by date descending
   const sessions = useMemo(() => {
     if (!rawSessions) return [];
     return [...rawSessions].sort((a, b) => {
+      // Primary sort: Status (active first)
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      
+      // Secondary sort: Date descending
       const dateA = a.sessionDate ? new Date(a.sessionDate).getTime() : (a.createdAt?.seconds || 0) * 1000;
       const dateB = b.sessionDate ? new Date(b.sessionDate).getTime() : (b.createdAt?.seconds || 0) * 1000;
       return dateB - dateA;
@@ -60,8 +62,8 @@ export default function SessionsPage() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-primary">Sessions</h1>
-          <p className="text-muted-foreground">Manage and track your preaching events.</p>
+          <h1 className="text-3xl font-headline font-bold text-primary">Preaching Sessions</h1>
+          <p className="text-muted-foreground">Browse active sessions or review previous preaching records.</p>
         </div>
         {isAdmin && (
           <Button asChild className="shadow-lg shadow-primary/20">
@@ -73,16 +75,9 @@ export default function SessionsPage() {
         )}
       </div>
 
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-        <Button variant="outline" size="sm" className="rounded-full bg-primary/5 border-primary/20 text-primary">
-          <Filter className="mr-2 h-3 w-3" />
-          All Available
-        </Button>
-      </div>
-
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="h-48 bg-muted animate-pulse rounded-lg border" />
           ))}
         </div>
@@ -100,7 +95,7 @@ export default function SessionsPage() {
             </div>
             <h3 className="text-2xl font-semibold">No sessions found</h3>
             <p className="text-muted-foreground max-w-xs mx-auto">
-              {isAdmin ? "Start by creating a new preaching session." : "You haven't been added to any preaching sessions yet."}
+              There are no recorded sessions yet. {isAdmin ? "Start by creating one!" : ""}
             </p>
             {isAdmin && (
               <Button asChild size="lg" className="mt-4">
@@ -116,15 +111,21 @@ export default function SessionsPage() {
 
 function SessionCard({ session }: { session: any }) {
   const displayDate = session.sessionDate 
-    ? new Date(session.sessionDate).toLocaleDateString() 
-    : (session.createdAt?.toDate ? session.createdAt.toDate().toLocaleDateString() : 'Just Created');
+    ? new Date(session.sessionDate).toLocaleDateString(undefined, { dateStyle: 'long' }) 
+    : 'No Date Set';
   
+  const statusColors: Record<string, string> = {
+    active: 'bg-green-500 hover:bg-green-600',
+    completed: 'bg-slate-500 hover:bg-slate-600',
+    pending: 'bg-amber-500 hover:bg-amber-600'
+  };
+
   return (
     <Link href={`/sessions/${session.id}`}>
       <Card className="hover:shadow-xl transition-all border-none shadow-sm h-full flex flex-col cursor-pointer group hover:-translate-y-1 duration-300 bg-card">
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start mb-2">
-            <Badge className="capitalize" variant={session.status === 'active' ? 'default' : 'secondary'}>
+            <Badge className={cn("capitalize text-white", statusColors[session.status] || 'bg-secondary')}>
               {session.status}
             </Badge>
             <Badge variant="outline" className="capitalize text-[10px] font-bold">
@@ -140,22 +141,29 @@ function SessionCard({ session }: { session: any }) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center text-muted-foreground">
               <span>Time Limit:</span>
-              <span className="font-semibold text-foreground">{session.maxPreachingTimeMinutes || '0'}m {session.maxPreachingTimeSeconds || '0'}s</span>
+              <span className="font-semibold text-foreground">
+                {session.maxPreachingTimeMinutes || '0'}m {session.maxPreachingTimeSeconds || '0'}s
+              </span>
             </div>
             <div className="flex justify-between items-center text-muted-foreground">
-              <span>Fine Model:</span>
+              <span>Fine Rate:</span>
               <span className="font-semibold text-foreground">
-                {session.fineRules?.[0]?.type === 'fixed' ? 'Fixed' : 'Variable'}
+                ₱{session.fineRules?.[0]?.amount || 0} ({session.fineRules?.[0]?.type === 'fixed' ? 'Fixed' : '/min'})
               </span>
             </div>
           </div>
         </CardContent>
         <div className="p-4 pt-0 mt-auto">
           <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 justify-between">
-            View Details <Clock className="h-4 w-4" />
+            {session.status === 'completed' ? 'View Results' : 'View Session'}
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </Card>
     </Link>
   );
+}
+
+function cn(...classes: any[]) {
+  return classes.filter(Boolean).join(' ');
 }
