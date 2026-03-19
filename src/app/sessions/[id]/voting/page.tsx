@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Lock, CheckCircle2, Info } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, CheckCircle2, Info, Star } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -144,10 +144,15 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
         <div className="space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>Top Preachers</CardTitle>
-              <CardDescription className="flex items-center gap-2">
-                <Info className="h-4 w-4 text-primary" />
-                Select up to 3 preachers of your choice.
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                Top Preachers
+              </CardTitle>
+              <CardDescription className="flex items-start gap-2 text-sm">
+                <Info className="h-4 w-4 text-primary mt-0.5" />
+                <span>
+                  Nominate the best speakers from this session. You can <strong>select up to 3 preachers</strong> who stood out to you.
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
