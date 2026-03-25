@@ -259,13 +259,22 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         indCounts[pId] = (indCounts[pId] || 0) + 1;
       });
     });
-    const individualTally = Object.entries(indCounts)
+    
+    const sortedInds = Object.entries(indCounts)
       .map(([pId, count]) => ({ 
         pId, 
         count, 
         name: availableParticipants.find(p => p.id === pId)?.name || 'Unknown' 
       }))
       .sort((a, b) => b.count - a.count);
+
+    let indRank = 1;
+    const individualTally = sortedInds.map((item, idx, arr) => {
+      if (idx > 0 && item.count < arr[idx-1].count) {
+        indRank++;
+      }
+      return { ...item, rank: indRank };
+    });
 
     // 3. Group Tally
     const grpCounts: Record<string, number> = {};
@@ -274,7 +283,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         grpCounts[v.voteData.group] = (grpCounts[v.voteData.group] || 0) + 1;
       }
     });
-    const groupTally = Object.entries(grpCounts)
+
+    const sortedGroups = Object.entries(grpCounts)
       .map(([gId, count]) => ({ 
         gId, 
         count, 
@@ -282,7 +292,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }))
       .sort((a, b) => b.count - a.count);
 
-    return { voterStatus, individualTally, groupTally };
+    let grpRank = 1;
+    const groupTally = sortedGroups.map((item, idx, arr) => {
+      if (idx > 0 && item.count < arr[idx-1].count) {
+        grpRank++;
+      }
+      return { ...item, rank: grpRank };
+    });
+
+    return { 
+      voterStatus, 
+      individualTally, 
+      groupTally,
+      votedCount: votedIds.size,
+      pendingCount: availableParticipants.length - votedIds.size
+    };
   }, [availableParticipants, votes, allGroups]);
 
   useEffect(() => {
@@ -609,127 +633,126 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         
         {isAdmin && (
           <TabsContent value="audit">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Participation Status */}
-              <Card className="lg:col-span-2 border-none shadow-md">
-                <CardHeader className="py-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <UsersIcon className="h-5 w-5 text-primary" /> Participation Tracker
-                      </CardTitle>
-                      <CardDescription className="text-xs">Monitor who has cast their ballots for this session.</CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                       <Badge variant="outline" className="text-[10px] bg-green-500/5 text-green-600 border-green-200">
-                         {auditData.voterStatus.filter(v => v.hasVoted).length} Voted
-                       </Badge>
-                       <Badge variant="outline" className="text-[10px] bg-orange-500/5 text-orange-600 border-orange-200">
-                         {auditData.voterStatus.filter(v => !v.hasVoted).length} Pending
-                       </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="h-10">
-                        <TableHead className="text-[10px] uppercase font-bold">Preacher</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold">Status</TableHead>
-                        <TableHead className="text-[10px] uppercase font-bold text-right">Vote Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {auditData.voterStatus.map(v => (
-                        <TableRow key={v.id} className="h-12">
-                          <TableCell className="font-bold text-xs">{v.name}</TableCell>
-                          <TableCell>
-                            {v.hasVoted ? (
-                              <div className="flex items-center gap-1.5 text-green-600 text-[10px] font-bold">
-                                <CheckSquare className="h-3.5 w-3.5" /> Voted
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 text-orange-500 text-[10px] font-bold">
-                                <XSquare className="h-3.5 w-3.5" /> Pending
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right text-[10px] text-muted-foreground font-mono">
-                            {v.hasVoted && v.voteTimestamp ? new Date(v.voteTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              {/* Voting Tally */}
-              <div className="space-y-6">
-                <Card className="border-none shadow-md">
-                  <CardHeader className="py-4 px-5">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Star className="h-4 w-4 text-yellow-500" /> Individual Tally
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-5 pb-5">
-                    <div className="space-y-3">
-                      {auditData.individualTally.length > 0 ? (
-                        auditData.individualTally.map((item, idx) => (
-                          <div key={item.pId} className="flex justify-between items-center p-2.5 rounded-lg bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
-                            <span className="text-xs font-bold flex items-center gap-2">
-                              <span className="text-[10px] text-muted-foreground font-mono w-4">{idx + 1}.</span>
-                              {item.name}
-                            </span>
-                            <Badge className="font-mono text-[10px] h-5 bg-primary/10 text-primary border-none">{item.count} votes</Badge>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-center py-4 text-[10px] text-muted-foreground italic">No votes recorded yet.</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
+            <Tabs defaultValue="voted" className="w-full">
+              <TabsList className="mb-6 h-auto p-1 bg-muted/40 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-1">
+                <TabsTrigger value="voted" className="text-[10px] py-1.5 font-bold uppercase transition-all data-[state=active]:bg-green-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg">
+                  <CheckSquare className="h-3 w-3 mr-1.5" /> 
+                  Voted ({auditData.voterStatus.filter(v => v.hasVoted).length})
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="text-[10px] py-1.5 font-bold uppercase transition-all data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg">
+                  <XSquare className="h-3 w-3 mr-1.5" /> 
+                  Pending ({auditData.voterStatus.filter(v => !v.hasVoted).length})
+                </TabsTrigger>
+                <TabsTrigger value="ind_tally" className="text-[10px] py-1.5 font-bold uppercase transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md rounded-lg">
+                  <Star className="h-3 w-3 mr-1.5" /> Individual Tally
+                </TabsTrigger>
                 {session?.sessionType === 'group' && (
-                  <Card className="border-none shadow-md">
-                    <CardHeader className="py-4 px-5">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Mic2 className="h-4 w-4 text-accent" /> Group Tally
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5">
-                      <div className="space-y-3">
-                        {auditData.groupTally.length > 0 ? (
-                          auditData.groupTally.map((item, idx) => (
-                            <div key={item.gId} className="flex justify-between items-center p-2.5 rounded-lg bg-accent/5 border border-transparent hover:border-accent/20 transition-all">
-                              <span className="text-xs font-bold flex items-center gap-2">
-                                <span className="text-[10px] text-muted-foreground font-mono w-4">{idx + 1}.</span>
-                                {item.name}
-                              </span>
-                              <Badge className="font-mono text-[10px] h-5 bg-accent/10 text-accent border-none">{item.count} votes</Badge>
-                            </div>
+                  <TabsTrigger value="grp_tally" className="text-[10px] py-1.5 font-bold uppercase transition-all data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg">
+                    <Mic2 className="h-3 w-3 mr-1.5" /> Group Tally
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              <TabsContent value="voted">
+                <Card className="border-none shadow-sm bg-card/50">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader className="bg-muted/30">
+                        <TableRow className="h-10 hover:bg-transparent">
+                          <TableHead className="text-[10px] uppercase font-black pl-6">Preacher Name</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-right pr-6">Time Cast</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {auditData.voterStatus.filter(v => v.hasVoted).length > 0 ? (
+                          auditData.voterStatus.filter(v => v.hasVoted).map(v => (
+                            <TableRow key={v.id} className="h-14 hover:bg-muted/10 transition-colors">
+                              <TableCell className="font-black text-xs pl-6 text-foreground/80">{v.name}</TableCell>
+                              <TableCell className="text-right pr-6 text-[10px] text-muted-foreground font-mono font-bold">
+                                {v.voteTimestamp && new Date(v.voteTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </TableCell>
+                            </TableRow>
                           ))
                         ) : (
-                          <p className="text-center py-4 text-[10px] text-muted-foreground italic">No group votes yet.</p>
+                          <TableRow><TableCell colSpan={2} className="text-center py-20 text-xs italic text-muted-foreground">No votes cast yet.</TableCell></TableRow>
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-                
-                <Card className="border-none shadow-md bg-primary/5">
-                  <CardHeader className="py-3 px-4">
-                    <CardTitle className="text-xs uppercase tracking-widest font-black opacity-50">Audit Note</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <p className="text-[10px] text-muted-foreground leading-relaxed italic">
-                      This audit allows admins to verify point integrity. Individual points are distributed based on the top 3 ranked preachers, while group points go to the team with the most votes.
-                    </p>
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
-              </div>
-            </div>
+              </TabsContent>
+
+              <TabsContent value="pending">
+                <Card className="border-none shadow-sm bg-card/50">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader className="bg-muted/30">
+                        <TableRow className="h-10 hover:bg-transparent">
+                          <TableHead className="text-[10px] uppercase font-black pl-6">Pending Preacher</TableHead>
+                          <TableHead className="text-[10px] uppercase font-black text-right pr-6">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {auditData.voterStatus.filter(v => !v.hasVoted).length > 0 ? (
+                          auditData.voterStatus.filter(v => !v.hasVoted).map(v => (
+                            <TableRow key={v.id} className="h-14 hover:bg-muted/10 transition-colors">
+                              <TableCell className="font-black text-xs pl-6 text-foreground/80">{v.name}</TableCell>
+                              <TableCell className="text-right pr-6">
+                                <Badge variant="secondary" className="bg-orange-500/10 text-orange-600 text-[9px] font-black border-none uppercase tracking-tighter">Needs to Vote</Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow><TableCell colSpan={2} className="text-center py-20 text-xs italic text-muted-foreground">All preachers have voted!</TableCell></TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="ind_tally">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {auditData.individualTally.length > 0 ? (
+                    auditData.individualTally.map((item) => (
+                      <Card key={item.pId} className="border-none shadow-sm bg-card hover:bg-muted/5 transition-colors overflow-hidden relative">
+                        {item.rank === 1 && <div className="absolute top-0 right-0 w-8 h-8 bg-yellow-500/10 flex items-center justify-center rounded-bl-xl"><Trophy className="h-4 w-4 text-yellow-500" /></div>}
+                        <CardContent className="p-4 flex flex-col gap-2">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-black uppercase tracking-tighter">Rank {item.rank}</span>
+                            <span className="font-mono text-xs font-black text-primary">{item.count}v</span>
+                          </div>
+                          <p className="font-black text-sm uppercase tracking-tight text-foreground/90">{item.name}</p>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full py-20 text-center text-muted-foreground italic text-xs bg-muted/5 rounded-xl border-2 border-dashed">No individual votes recorded.</div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="grp_tally">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {auditData.groupTally.length > 0 ? (
+                    auditData.groupTally.map((item) => (
+                      <Card key={item.gId} className="border-none shadow-sm bg-card hover:bg-muted/5 transition-colors overflow-hidden relative">
+                        {item.rank === 1 && <div className="absolute top-0 right-0 w-8 h-8 bg-accent/10 flex items-center justify-center rounded-bl-xl"><Trophy className="h-4 w-4 text-accent" /></div>}
+                        <CardContent className="p-4 flex flex-col gap-2">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-black uppercase tracking-tighter">Rank {item.rank}</span>
+                            <span className="font-mono text-xs font-black text-accent">{item.count}v</span>
+                          </div>
+                          <p className="font-black text-sm uppercase tracking-tight text-foreground/90">{item.name}</p>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full py-20 text-center text-muted-foreground italic text-xs bg-muted/5 rounded-xl border-2 border-dashed">No group votes recorded.</div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         )}
       </Tabs>
