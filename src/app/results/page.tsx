@@ -28,6 +28,8 @@ function ResultsContent() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [sessionFilterId, setSessionFilterId] = useState<string>(searchParams.get('sessionId') || "");
+  const [filterYear, setFilterYear] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
 
   const participantsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -45,26 +47,53 @@ function ResultsContent() {
   }, [firestore, user]);
 
   const votesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collectionGroup(firestore, 'votes');
-  }, [firestore, user]);
+    if (!firestore || !user || !sessionFilterId) return null;
+    return collection(firestore, 'sessions', sessionFilterId, 'votes');
+  }, [firestore, user, sessionFilterId]);
 
   const { data: participants } = useCollection(participantsQuery);
   const { data: allGroups } = useCollection(groupsQuery);
   const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: allVotes, isLoading: votesLoading } = useCollection(votesQuery);
 
-  useEffect(() => {
-    if (allSessions && allSessions.length > 0 && !sessionFilterId) {
-      const sorted = [...allSessions].sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
-      setSessionFilterId(sorted[0].id);
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    if (allSessions) {
+      allSessions.forEach((s: any) => {
+        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+        if (date && !isNaN(date.getTime()) && date.getFullYear() > 2000) {
+          years.add(date.getFullYear().toString());
+        }
+      });
     }
-  }, [allSessions, sessionFilterId]);
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [allSessions]);
+
+  const filteredSessions = useMemo(() => {
+    if (!allSessions) return [];
+    return [...allSessions].filter((s: any) => {
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      if (!date || isNaN(date.getTime())) return false;
+      const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
+      const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
+      return yearMatch && monthMatch;
+    }).sort((a: any, b: any) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
+  }, [allSessions, filterYear, filterMonth]);
+
+  useEffect(() => {
+    if (filteredSessions && filteredSessions.length > 0) {
+      if (!sessionFilterId || !filteredSessions.find(s => s.id === sessionFilterId)) {
+        setSessionFilterId(filteredSessions[0].id);
+      }
+    } else if (filteredSessions && filteredSessions.length === 0) {
+      setSessionFilterId("");
+    }
+  }, [filteredSessions, sessionFilterId]);
 
   const rankedResults = useMemo(() => {
     if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], groups: [] };
 
-    const sessionVotes = allVotes.filter(v => v.sessionId === sessionFilterId);
+    const sessionVotes = allVotes || [];
     
     // Process Individuals
     const individualCounts: Record<string, number> = {};
@@ -157,21 +186,54 @@ function ResultsContent() {
           </h1>
           <p className="text-muted-foreground">Complete ranked breakdown for {selectedSession?.title || 'Selected Session'}.</p>
         </div>
-        <div className="w-full sm:w-[300px] flex items-center gap-2">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
-            <SelectTrigger className="w-full bg-card shadow-sm border-none">
-              <SelectValue placeholder="Select Session" />
-            </SelectTrigger>
-            <SelectContent>
-              {allSessions && [...allSessions]
-                .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
-                .map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
-                ))
-              }
-            </SelectContent>
-          </Select>
+        <div className="w-full sm:w-auto flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 rounded-lg bg-card/50 p-1">
+          <div className="flex items-center gap-2">
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="w-[90px] h-9 text-xs bg-card shadow-sm border-none">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {availableYears.map(year => (
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-[90px] h-9 text-xs bg-card shadow-sm border-none">
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Months</SelectItem>
+                <SelectItem value="1">Jan</SelectItem>
+                <SelectItem value="2">Feb</SelectItem>
+                <SelectItem value="3">Mar</SelectItem>
+                <SelectItem value="4">Apr</SelectItem>
+                <SelectItem value="5">May</SelectItem>
+                <SelectItem value="6">Jun</SelectItem>
+                <SelectItem value="7">Jul</SelectItem>
+                <SelectItem value="8">Aug</SelectItem>
+                <SelectItem value="9">Sep</SelectItem>
+                <SelectItem value="10">Oct</SelectItem>
+                <SelectItem value="11">Nov</SelectItem>
+                <SelectItem value="12">Dec</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-[250px] bg-card rounded-md shadow-sm px-3 border border-border/40">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
+              <SelectTrigger className="w-full border-none shadow-none focus:ring-0 text-xs h-9 px-0">
+                <SelectValue placeholder="Select Session" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredSessions && filteredSessions.map(s => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">{s.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

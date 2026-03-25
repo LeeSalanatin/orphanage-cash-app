@@ -5,6 +5,7 @@ import { collection, query, limit, doc, getDoc, collectionGroup, where } from 'f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Mic2, 
   Users, 
@@ -37,6 +38,8 @@ export default function Dashboard() {
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [sessionFilterId, setSessionFilterId] = useState<string>("");
+  const [filterYear, setFilterYear] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
 
   // Check admin status
   useEffect(() => {
@@ -103,13 +106,28 @@ export default function Dashboard() {
   const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
   const { data: allVotes, isLoading: votesLoading } = useCollection(votesQuery);
 
-  // Set initial filter to most recent session
+  // Filter sessions for the dropdown based on global year/month
+  const filteredSessions = useMemo(() => {
+    if (!allSessions) return [];
+    return [...allSessions].filter((s: any) => {
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      if (!date || isNaN(date.getTime())) return false;
+      const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
+      const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
+      return yearMatch && monthMatch;
+    }).sort((a: any, b: any) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
+  }, [allSessions, filterYear, filterMonth]);
+
+  // Set filter to most recent matching session, or empty if none
   useEffect(() => {
-    if (allSessions && allSessions.length > 0 && !sessionFilterId) {
-      const sorted = [...allSessions].sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime());
-      setSessionFilterId(sorted[0].id);
+    if (filteredSessions && filteredSessions.length > 0) {
+      if (!sessionFilterId || !filteredSessions.find(s => s.id === sessionFilterId)) {
+        setSessionFilterId(filteredSessions[0].id);
+      }
+    } else if (filteredSessions && filteredSessions.length === 0) {
+      setSessionFilterId("");
     }
-  }, [allSessions, sessionFilterId]);
+  }, [filteredSessions, sessionFilterId]);
 
   // Filter my events in memory
   const myEvents = useMemo(() => {
@@ -129,9 +147,11 @@ export default function Dashboard() {
 
   // Comprehensive fine calculation with CORRECTED GROUP SPLIT
   const stats = useMemo(() => {
-    if (!myEvents || !allSessions || !allGroups || !rawEvents || !userParticipantId) return { totalFines: 0, points: userData?.totalPoints || 0 };
+    if (!myEvents || !allSessions || !allGroups || !rawEvents || !userParticipantId) return { totalFines: 0, points: userData?.totalPoints || 0, rawTotalFines: 0, totalTime: 0, avgTime: 0 };
     
     let totalFines = 0;
+    const totalTime = myEvents.reduce((sum, e) => sum + (e.actualDurationSeconds || 0), 0);
+    const avgTime = myEvents.length > 0 ? totalTime / myEvents.length : 0;
     
     // Group logic: find unique session+group pairs the user was part of
     const sessionGroupKeys = new Set<string>();
@@ -172,8 +192,146 @@ export default function Dashboard() {
       }
     });
 
-    return { totalFines, points: userData?.totalPoints || 0 };
+    const points = userData?.totalPoints || 0;
+    const finalFines = Math.max(0, totalFines - points);
+
+    return { totalFines: finalFines, rawTotalFines: totalFines, points, totalTime, avgTime };
   }, [myEvents, allSessions, allGroups, rawEvents, userData, userParticipantId]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    if (allSessions) {
+      allSessions.forEach((s: any) => {
+        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+        if (date && !isNaN(date.getTime()) && date.getFullYear() > 2000) {
+          years.add(date.getFullYear().toString());
+        }
+      });
+    }
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [allSessions]);
+
+  const timeFilteredEvents = useMemo(() => {
+    if (!rawEvents || !allSessions) return [];
+    return rawEvents.filter((e: any) => {
+      const session = allSessions.find((s: any) => s.id === e.sessionId);
+      if (!session) return false;
+      const date = session.sessionDate ? new Date(session.sessionDate) : (session.createdAt?.seconds ? new Date(session.createdAt.seconds * 1000) : null);
+      if (!date || isNaN(date.getTime())) return false;
+      const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
+      const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
+      return yearMatch && monthMatch;
+    });
+  }, [rawEvents, allSessions, filterYear, filterMonth]);
+
+  const timeFilteredMyEvents = useMemo(() => {
+    if (!timeFilteredEvents || !userParticipantId) return [];
+    return timeFilteredEvents.filter((re: any) => re.participantId === userParticipantId || (user?.uid && re.participantId === user.uid))
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }, [timeFilteredEvents, userParticipantId, user]);
+
+  const myMonthlyStats = useMemo(() => {
+    if (!myEvents || !allSessions || !allVotes || !userParticipantId || !rawEvents) 
+      return { fines: 0, points: 0, diff: 0, isActive: false };
+
+    let fines = 0;
+    let isActive = false;
+    let dynamicPoints = 0;
+
+    if (timeFilteredMyEvents.length > 0) isActive = true;
+    if (userData?.status === 'inactive') isActive = false;
+
+    // Fines
+    const sessionGroupKeys = new Set<string>();
+    timeFilteredMyEvents.forEach((e: any) => {
+      if (e.preachingGroupId) sessionGroupKeys.add(`${e.sessionId}_${e.preachingGroupId}`);
+    });
+    timeFilteredMyEvents.forEach((e: any) => {
+      if (!e.preachingGroupId) fines += (e.totalFineAmount || 0);
+    });
+
+    sessionGroupKeys.forEach(key => {
+      const [sessionId, groupId] = key.split('_');
+      const session = allSessions.find((s: any) => s.id === sessionId);
+      if (session) {
+        const groupEvents = timeFilteredEvents.filter((re: any) => re.sessionId === sessionId && re.preachingGroupId === groupId);
+        const totalGroupSeconds = groupEvents.reduce((sum: number, re: any) => sum + re.actualDurationSeconds, 0);
+        const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+        const overage = Math.max(0, totalGroupSeconds - maxSeconds);
+        const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+        const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
+        const participatingMemberIds = new Set(groupEvents.map((re: any) => re.participantId));
+        const memberCount = Math.max(1, participatingMemberIds.size);
+        fines += (totalSessionFine / memberCount);
+      }
+    });
+
+    // Points
+    allSessions.forEach((s: any) => {
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      if (!date || isNaN(date.getTime())) return;
+      const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
+      const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
+      
+      if (yearMatch && monthMatch && s.rewardsDistributed) {
+        const config = s.pointDistribution || { enabled: false };
+        if (!config.enabled) return;
+        
+        const sessionVotes = allVotes.filter((v: any) => v.sessionId === s.id);
+        const individualCounts: Record<string, number> = {};
+        sessionVotes.forEach((v: any) => {
+          (v.voteData?.individual || []).forEach((id: string) => { individualCounts[id] = (individualCounts[id] || 0) + 1; });
+        });
+        const rankedInd = Object.entries(individualCounts).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
+        const groupedInd: any[] = [];
+        rankedInd.forEach(item => {
+          const last = groupedInd[groupedInd.length - 1];
+          if (last && last.count === item.count) last.members.push(item);
+          else groupedInd.push({ count: item.count, rank: groupedInd.length + 1, members: [item] });
+        });
+        groupedInd.forEach(group => {
+          let reward = 0;
+          if (group.rank === 1) reward = config.rewardTop1 || 100;
+          else if (group.rank === 2) reward = config.rewardTop2 || 50;
+          else if (group.rank === 3) reward = config.rewardTop3 || 25;
+          if (reward > 0) {
+            group.members.forEach((m: any) => {
+              if (m.id === userParticipantId || m.id === user?.uid) dynamicPoints += reward;
+            });
+          }
+        });
+
+        if (s.sessionType === 'group') {
+          const groupCounts: Record<string, number> = {};
+          sessionVotes.forEach((v: any) => {
+            if (v.voteData?.group) groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+          });
+          const topGroups = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]);
+          const maxVotes = topGroups[0]?.[1] || 0;
+          const winningGroups = topGroups.filter(e => e[1] === maxVotes && maxVotes > 0);
+          winningGroups.forEach(([groupId]) => {
+            const groupEvents = timeFilteredEvents.filter((e: any) => e.preachingGroupId === groupId && e.sessionId === s.id);
+            const participatingMemberIds = Array.from(new Set(groupEvents.map((e: any) => e.participantId)));
+            if (participatingMemberIds.length > 0) {
+              const splitPoints = Math.floor((config.rewardGroupTop1 || 100) / participatingMemberIds.length);
+              if (participatingMemberIds.includes(userParticipantId) || (user?.uid && participatingMemberIds.includes(user.uid))) {
+                dynamicPoints += splitPoints;
+              }
+            }
+          });
+        }
+      }
+    });
+
+    const points = (filterYear === 'all' && filterMonth === 'all') ? (userData?.totalPoints || 0) : dynamicPoints;
+    
+    return { 
+      fines, 
+      points, 
+      diff: Math.max(0, fines - points), 
+      isActive 
+    };
+  }, [myEvents, rawEvents, allSessions, allVotes, userParticipantId, userData, filterYear, filterMonth, user]);
 
   const sessionRecords = useMemo(() => {
     if (!rawEvents || !sessionFilterId) return { topIndividuals: [], longestGroup: null };
@@ -225,7 +383,7 @@ export default function Dashboard() {
   const sessionVotingResults = useMemo(() => {
     if (!allVotes || !participants || !allGroups || !sessionFilterId) return { individuals: [], topGroups: null, otherGroups: [] };
 
-    const sessionVotes = allVotes.filter(v => v.sessionId === sessionFilterId);
+    const sessionVotes = (allVotes || []).filter((v: any) => v.sessionId === sessionFilterId);
     
     const individualCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
@@ -289,10 +447,89 @@ export default function Dashboard() {
   }, [allVotes, participants, allGroups, sessionFilterId]);
 
   function formatDuration(seconds: number) {
-    const m = Math.floor(seconds / 60);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
+
+  const consolidatedHistory = useMemo(() => {
+    if (!timeFilteredMyEvents || !allSessions || !rawEvents) return [];
+    
+    const historyMap = new Map();
+
+    timeFilteredMyEvents.forEach((event: any) => {
+      const session = allSessions.find((s: any) => s.id === event.sessionId);
+      if (!session) return;
+
+      if (event.preachingGroupId) {
+        const key = `${event.sessionId}_${event.preachingGroupId}`;
+        if (!historyMap.has(key)) {
+          historyMap.set(key, {
+            isGroup: true,
+            id: key,
+            sessionId: event.sessionId,
+            groupId: event.preachingGroupId,
+            groupName: event.participantName.includes(' - ') ? event.participantName.split(' - ')[0] : 'Group',
+            startTime: event.startTime,
+            totalGroupSeconds: 0,
+            displayFine: 0,
+            uniqueParticipants: new Set(),
+            session
+          });
+        }
+      } else {
+        historyMap.set(event.id, {
+          isGroup: false,
+          id: event.id,
+          sessionId: event.sessionId,
+          participantName: event.participantName,
+          startTime: event.startTime,
+          actualDurationSeconds: event.actualDurationSeconds,
+          displayFine: event.totalFineAmount || 0,
+          session
+        });
+      }
+    });
+
+    Array.from(historyMap.values()).forEach((item: any) => {
+      if (item.isGroup) {
+        const groupEvents = rawEvents.filter((re: any) => re.sessionId === item.sessionId && re.preachingGroupId === item.groupId);
+        
+        // Sum ALL members' times
+        item.totalGroupSeconds = groupEvents.reduce((sum: number, re: any) => sum + re.actualDurationSeconds, 0);
+        
+        // Find everyone who participated
+        groupEvents.forEach((re: any) => item.uniqueParticipants.add(re.participantId));
+        
+        // Keep the latest start time
+        const latestTime = groupEvents.reduce((latest: Date, re: any) => {
+          const t = new Date(re.startTime);
+          return t.getTime() > latest.getTime() ? t : latest;
+        }, new Date(0));
+        item.startTime = latestTime.toISOString();
+
+        const maxSeconds = ((item.session.maxPreachingTimeMinutes || 0) * 60) + (item.session.maxPreachingTimeSeconds || 0);
+        const overage = Math.max(0, item.totalGroupSeconds - maxSeconds);
+        const rule = item.session.fineRules?.find((r: any) => r.appliesTo === 'group') || item.session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+        const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
+        
+        const memberCount = Math.max(1, item.uniqueParticipants.size);
+        item.displayFine = totalSessionFine / memberCount;
+      }
+    });
+
+    return Array.from(historyMap.values()).sort((a: any, b: any) => {
+      const dateA = a.session?.sessionDate ? new Date(a.session.sessionDate) : (a.session?.createdAt?.seconds ? new Date(a.session.createdAt.seconds * 1000) : new Date(a.startTime));
+      const dateB = b.session?.sessionDate ? new Date(b.session.sessionDate) : (b.session?.createdAt?.seconds ? new Date(b.session.createdAt.seconds * 1000) : new Date(b.startTime));
+      const dateDiff = dateB.getTime() - dateA.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+    });
+  }, [timeFilteredMyEvents, allSessions, rawEvents]);
 
   const isLoading = authLoading || userLoading || participantsLoading || groupsLoading || eventsLoading || sessionsLoading || votesLoading || isAdmin === null;
 
@@ -348,16 +585,16 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard 
-          title="Total Events" 
-          value={myEvents?.length.toString() || "0"} 
-          icon={<Mic2 className="h-4 w-4" />}
-          description="Personal history"
+          title="Total Incentives/Fines" 
+          value={`${stats.points} / ₱${(stats.rawTotalFines || 0).toFixed(2)}`} 
+          icon={<BarChart3 className="h-4 w-4" />}
+          description="Before deductions"
         />
         <StatCard 
-          title="Recent Time" 
-          value={recentPreaching?.actualDurationFormatted || "0:00"} 
+          title="Total / Avg Time" 
+          value={`${formatDuration(stats.totalTime)} / ${formatDuration(stats.avgTime)}`} 
           icon={<Timer className="h-4 w-4" />}
-          description={recentPreaching ? `Performed on ${new Date(recentPreaching.startTime).toLocaleDateString()}` : "No recent activity"}
+          description="Your personal time"
           variant="accent"
         />
         <StatCard 
@@ -368,65 +605,176 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="space-y-6">
+      <Tabs defaultValue="recent" className="w-full">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <TabsList className="grid w-full sm:w-[400px] grid-cols-2">
+            <TabsTrigger value="recent" className="text-xs sm:text-sm">My Sessions</TabsTrigger>
+            <TabsTrigger value="monthly" className="text-xs sm:text-sm">Monthly Summary</TabsTrigger>
+          </TabsList>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="w-[100px] h-9 text-xs bg-card">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {availableYears.map(year => (
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-[100px] h-9 text-xs bg-card">
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Months</SelectItem>
+                <SelectItem value="1">Jan</SelectItem>
+                <SelectItem value="2">Feb</SelectItem>
+                <SelectItem value="3">Mar</SelectItem>
+                <SelectItem value="4">Apr</SelectItem>
+                <SelectItem value="5">May</SelectItem>
+                <SelectItem value="6">Jun</SelectItem>
+                <SelectItem value="7">Jul</SelectItem>
+                <SelectItem value="8">Aug</SelectItem>
+                <SelectItem value="9">Sep</SelectItem>
+                <SelectItem value="10">Oct</SelectItem>
+                <SelectItem value="11">Nov</SelectItem>
+                <SelectItem value="12">Dec</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <TabsContent value="monthly">
+          <Card className="shadow-sm border-primary/10 overflow-hidden relative group">
+            <div className="absolute top-0 left-0 w-1 h-full bg-primary/80"></div>
+        <CardHeader className="py-3 px-4 border-b bg-muted/10">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="space-y-0.5">
+              <CardTitle className="text-sm font-bold flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-primary" />
+                My Monthly Summary
+              </CardTitle>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 text-center">
+            <div className="p-3 space-y-1 bg-card hover:bg-muted/5 transition-colors">
+              <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">Activity Status</p>
+              <div>
+                <Badge className={cn("text-[10px] h-5 px-2", myMonthlyStats.isActive ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : "bg-neutral-500/10 text-neutral-500 border-none")}>
+                  {myMonthlyStats.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
+            <div className="p-3 space-y-1 bg-primary/5 hover:bg-primary/10 transition-colors">
+              <p className="text-[9px] uppercase font-bold text-primary/70 tracking-widest flex items-center justify-center gap-1"><Trophy className="h-2.5 w-2.5" /> Points Earned</p>
+              <p className="text-xl font-bold text-primary font-mono">{myMonthlyStats.points}</p>
+            </div>
+            <div className="p-3 space-y-1 bg-destructive/5 hover:bg-destructive/10 transition-colors">
+              <p className="text-[9px] uppercase font-bold text-destructive/70 tracking-widest flex items-center justify-center gap-1"><TrendingDown className="h-2.5 w-2.5" /> Tot. Fine</p>
+              <p className="text-xl font-bold text-destructive font-mono">₱{myMonthlyStats.fines.toFixed(2)}</p>
+            </div>
+            <div className="p-3 space-y-1 bg-orange-500/5 hover:bg-orange-500/10 transition-colors">
+              <p className="text-[9px] uppercase font-bold text-orange-600/70 tracking-widest">Diff Fine</p>
+              <p className="text-xl font-bold text-orange-600 font-mono">₱{myMonthlyStats.diff.toFixed(2)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+        </TabsContent>
+
+        <TabsContent value="recent">
+          <div className="space-y-6">
         <Card className="shadow-sm">
           <CardHeader className="py-4">
             <CardTitle className="text-lg flex items-center gap-2">
               <HistoryIcon className="h-4 w-4 text-primary" />
-              Time & Fine History
+              Recent Session Record
             </CardTitle>
-            <CardDescription className="text-xs">Log of your participation.</CardDescription>
+            <CardDescription className="text-xs">Detailed breakdown of your last session.</CardDescription>
           </CardHeader>
           <CardContent>
-            {myEvents && myEvents.length > 0 ? (
-              <div className="space-y-2">
-                {myEvents.slice(0, 5).map((event) => {
-                  const session = allSessions.find(s => s.id === event.sessionId);
-                  let displayFine = event.totalFineAmount || 0;
-                  
-                  // Re-calculate the shared fine if it's a group session
-                  if (event.preachingGroupId && session && rawEvents) {
-                    const groupEvents = rawEvents.filter(re => re.sessionId === event.sessionId && re.preachingGroupId === event.preachingGroupId);
-                    const totalGroupSeconds = groupEvents.reduce((sum, re) => sum + re.actualDurationSeconds, 0);
-                    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-                    const overage = Math.max(0, totalGroupSeconds - maxSeconds);
-                    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
-                    const totalSessionFine = rule.type === 'fixed' ? (overage > 0 ? rule.amount : 0) : overage * (rule.amount / 60);
-                    
-                    // FIX: Divide by unique members who preached in this session
-                    const participatingMemberIds = new Set(groupEvents.map(re => re.participantId));
-                    const memberCount = Math.max(1, participatingMemberIds.size);
-                    displayFine = totalSessionFine / memberCount;
-                  }
+            {consolidatedHistory && consolidatedHistory.length > 0 ? (
+              <div className="space-y-4">
+                {(() => {
+                  const item = consolidatedHistory[0];
+                  // If it's a group, pull all individual pieces from rawEvents
+                  const groupMembers = item.isGroup && rawEvents
+                    ? rawEvents
+                        .filter((re: any) => re.sessionId === item.sessionId && re.preachingGroupId === item.groupId)
+                        .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                    : [];
 
                   return (
-                    <div key={event.id} className="flex justify-between items-center p-3 rounded-md border hover:bg-muted/20 transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-primary/10 p-1.5 rounded-full"><Clock className="h-3 w-3 text-primary" /></div>
-                        <div>
-                          <p className="font-semibold text-xs leading-tight">
-                            {event.participantName.includes(' - ') ? event.participantName.split(' - ').pop() : event.participantName}
+                    <div className="space-y-3">
+                      <div className={cn("flex justify-between items-center p-3 rounded-lg border", item.displayFine > 0 ? "bg-destructive/5 border-destructive/10" : "bg-card")}>
+                        <div className="flex items-center gap-3">
+                          <div className={cn("p-2 rounded-full", item.displayFine > 0 ? "bg-destructive/10" : "bg-primary/10")}>
+                            <Clock className={cn("h-3.5 w-3.5", item.displayFine > 0 ? "text-destructive" : "text-primary")} />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-xs leading-tight">
+                              {item.isGroup ? item.groupName : (item.participantName.includes(' - ') ? item.participantName.split(' - ').pop() : item.participantName)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                              {item.isGroup ? <Users className="h-3 w-3" /> : <Mic2 className="h-3 w-3" />}
+                              {item.isGroup ? 'Group Preach' : 'Individual'}
+                              <span className="mx-0.5">•</span>
+                              <Calendar className="h-3 w-3" /> {new Date(item.session?.sessionDate ? item.session.sessionDate : (item.session?.createdAt?.seconds ? item.session.createdAt.seconds * 1000 : item.startTime)).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end justify-center">
+                          <p className="font-mono font-bold text-xs bg-background border px-2 py-0.5 rounded shadow-sm mb-1">
+                            {formatDuration(item.isGroup ? item.totalGroupSeconds : item.actualDurationSeconds)}
                           </p>
-                          <p className="text-[9px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                            {event.preachingGroupId ? <Users className="h-2.5 w-2.5" /> : <Mic2 className="h-2.5 w-2.5" />}
-                            {event.preachingGroupId ? `${event.participantName.split(' - ')[0]}` : 'Individual'}
-                            <span className="mx-1">•</span>
-                            <Calendar className="h-2.5 w-2.5" /> {new Date(event.startTime).toLocaleDateString()}
-                          </p>
+                          {item.displayFine > 0 ? (
+                            <div className="flex items-center gap-1">
+                              <TrendingDown className="h-3 w-3 text-destructive" />
+                              <p className="text-[11px] font-black text-destructive">₱{item.displayFine.toFixed(2)}</p>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                              <p className="text-[10px] font-bold text-emerald-600">No Fine</p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-mono font-bold text-xs">{event.actualDurationFormatted}</p>
-                        <p className="text-[9px] font-bold text-destructive">
-                          ₱{displayFine.toFixed(2)}
-                        </p>
-                      </div>
+
+                      {item.isGroup && groupMembers.length > 0 && (
+                        <div className="bg-muted/10 border rounded-lg p-3 space-y-2 relative">
+                          <h4 className="text-[9px] items-center gap-1 font-bold uppercase tracking-widest text-muted-foreground mb-3 flex">
+                            <Users className="h-3 w-3 opacity-50"/> Group Member Breakdown
+                          </h4>
+                          {groupMembers.map((member: any) => (
+                            <div key={member.id} className="flex justify-between items-center py-2 border-b last:border-0 border-muted/20">
+                              <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary/40"></span>
+                                <span className="text-xs font-semibold text-foreground/80">
+                                  {member.participantName.includes(' - ') ? member.participantName.split(' - ').pop() : member.participantName}
+                                </span>
+                              </div>
+                              <span className="text-[11px] font-mono font-bold bg-background shadow-sm border px-2 py-0.5 rounded text-foreground/70">
+                                {formatDuration(member.actualDurationSeconds)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
-                })}
-                <ShadButton variant="ghost" className="w-full text-[10px] h-8 text-muted-foreground mt-2" asChild>
-                  <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-2.5 w-2.5" /></Link>
-                </ShadButton>
+                })()}
+
+                <div className="pt-2">
+                  <ShadButton variant="outline" className="w-full text-xs h-9" asChild>
+                    <Link href="/sessions">View All Sessions <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                  </ShadButton>
+                </div>
               </div>
             ) : (
               <div className="text-center py-10 border-2 border-dashed rounded-md">
@@ -447,12 +795,9 @@ export default function Dashboard() {
               <SelectValue placeholder="Filter by Session" />
             </SelectTrigger>
             <SelectContent>
-              {allSessions && [...allSessions]
-                .sort((a, b) => new Date(b.sessionDate || 0).getTime() - new Date(a.sessionDate || 0).getTime())
-                .map(s => (
-                  <SelectItem key={s.id} value={s.id} className="text-xs">{s.title}</SelectItem>
-                ))
-              }
+              {filteredSessions && filteredSessions.map(s => (
+                <SelectItem key={s.id} value={s.id} className="text-xs">{s.title}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -641,6 +986,8 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
