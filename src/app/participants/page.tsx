@@ -602,6 +602,9 @@ export default function ParticipantsPage() {
                         >
                           <div className="flex items-center justify-end gap-1">Diff Fine <ArrowUpDown className={cn("h-3 w-3", sortColumn === 'diffFines' ? "text-primary" : "text-muted-foreground/30")} /></div>
                         </TableHead>
+                        {isAdmin && (
+                          <TableHead className="text-[10px] uppercase font-bold px-3 text-right">Actions</TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -672,6 +675,18 @@ export default function ParticipantsPage() {
                               <TableCell className="px-3 text-right">
                                 <span className="text-orange-500 font-bold text-xs">₱{Math.max(0, (participantStats[p.id]?.totalFines || 0) - (participantStats[p.id]?.points || p.totalPoints || 0)).toFixed(2)}</span>
                               </TableCell>
+                              {isAdmin && (
+                                <TableCell className="px-3 text-right">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => setParticipantToDelete(p.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })

@@ -9,10 +9,23 @@ import { Settings2, PlusCircle, Trash2, Clock, Gavel, Trophy, Loader2, Edit2 } f
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState } from 'react';
+
 export default function ConfigurationsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const router = useRouter();
+  const [configToDelete, setConfigToDelete] = useState<string | null>(null);
 
   const configsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -21,9 +34,11 @@ export default function ConfigurationsPage() {
 
   const { data: configs, isLoading } = useCollection(configsQuery);
 
-  function handleDelete(id: string) {
-    if (!firestore) return;
-    deleteDocumentNonBlocking(doc(firestore, 'session_configurations', id));
+  function handleConfirmDelete() {
+    if (configToDelete && firestore) {
+      deleteDocumentNonBlocking(doc(firestore, 'session_configurations', configToDelete));
+      setConfigToDelete(null);
+    }
   }
 
   return (
@@ -69,7 +84,7 @@ export default function ConfigurationsPage() {
                       variant="ghost" 
                       size="icon" 
                       className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
-                      onClick={() => handleDelete(config.id)}
+                      onClick={() => setConfigToDelete(config.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -121,6 +136,22 @@ export default function ConfigurationsPage() {
           </CardContent>
         </Card>
       )}
+      <AlertDialog open={!!configToDelete} onOpenChange={(open) => !open && setConfigToDelete(null)}>
+        <AlertDialogContent className="max-w-sm p-4">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">Delete Rule Set?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              This will permanently delete the rule set. Sessions already using these rules will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="h-8 text-xs bg-destructive">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
