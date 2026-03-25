@@ -65,10 +65,7 @@ function NewSessionContent() {
 
   const configsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
-    return query(
-      collection(db, 'session_configurations'),
-      where('ownerId', '==', user.uid)
-    );
+    return collection(db, 'session_configurations');
   }, [db, user]);
 
   const { data: configs, isLoading: configsLoading } = useCollection(configsQuery);

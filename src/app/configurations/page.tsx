@@ -16,10 +16,7 @@ export default function ConfigurationsPage() {
 
   const configsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'session_configurations'),
-      where('ownerId', '==', user.uid)
-    );
+    return collection(firestore, 'session_configurations');
   }, [firestore, user]);
 
   const { data: configs, isLoading } = useCollection(configsQuery);
