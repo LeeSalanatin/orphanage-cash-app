@@ -43,7 +43,10 @@ import {
   ChevronRight,
   Edit2,
   Trophy,
-  Star
+  Star,
+  ClipboardList,
+  CheckSquare,
+  XSquare
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -235,6 +238,52 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
     return points;
   }, [session, votes, records, allGroups]);
+  
+  // --- Admin Audit Logic ---
+  const auditData = useMemo(() => {
+    if (!availableParticipants || !votes) return { voterStatus: [], individualTally: [], groupTally: [] };
+
+    const votedIds = new Set(votes.map(v => v.voterParticipantId));
+    
+    // 1. Participation
+    const voterStatus = availableParticipants.map(p => ({
+      ...p,
+      hasVoted: votedIds.has(p.id) || (p.userId && votedIds.has(p.userId)),
+      voteTimestamp: votes.find(v => v.voterParticipantId === p.id || (p.userId && v.voterParticipantId === p.userId))?.timestamp
+    }));
+
+    // 2. Individual Tally
+    const indCounts: Record<string, number> = {};
+    votes.forEach(v => {
+      (v.voteData?.individual || []).forEach((pId: string) => {
+        indCounts[pId] = (indCounts[pId] || 0) + 1;
+      });
+    });
+    const individualTally = Object.entries(indCounts)
+      .map(([pId, count]) => ({ 
+        pId, 
+        count, 
+        name: availableParticipants.find(p => p.id === pId)?.name || 'Unknown' 
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // 3. Group Tally
+    const grpCounts: Record<string, number> = {};
+    votes.forEach(v => {
+      if (v.voteData?.group) {
+        grpCounts[v.voteData.group] = (grpCounts[v.voteData.group] || 0) + 1;
+      }
+    });
+    const groupTally = Object.entries(grpCounts)
+      .map(([gId, count]) => ({ 
+        gId, 
+        count, 
+        name: allGroups?.find(g => g.id === gId)?.name || 'Unknown' 
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return { voterStatus, individualTally, groupTally };
+  }, [availableParticipants, votes, allGroups]);
 
   useEffect(() => {
     let interval: any;
@@ -403,6 +452,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         <TabsList className="mb-6 h-9">
           <TabsTrigger value="results" className="text-xs"><Calculator className="h-3.5 w-3.5 mr-2" /> Incentives & Fines</TabsTrigger>
           <TabsTrigger value="live" className="text-xs"><History className="h-3.5 w-3.5 mr-2" /> Live Clock</TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="audit" className="text-xs border-l border-primary/10 ml-1 pl-3"><ClipboardList className="h-3.5 w-3.5 mr-2" /> Voting Audit</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="results">
@@ -554,6 +606,132 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </div>
           </div>
         </TabsContent>
+        
+        {isAdmin && (
+          <TabsContent value="audit">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Participation Status */}
+              <Card className="lg:col-span-2 border-none shadow-md">
+                <CardHeader className="py-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <UsersIcon className="h-5 w-5 text-primary" /> Participation Tracker
+                      </CardTitle>
+                      <CardDescription className="text-xs">Monitor who has cast their ballots for this session.</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                       <Badge variant="outline" className="text-[10px] bg-green-500/5 text-green-600 border-green-200">
+                         {auditData.voterStatus.filter(v => v.hasVoted).length} Voted
+                       </Badge>
+                       <Badge variant="outline" className="text-[10px] bg-orange-500/5 text-orange-600 border-orange-200">
+                         {auditData.voterStatus.filter(v => !v.hasVoted).length} Pending
+                       </Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="h-10">
+                        <TableHead className="text-[10px] uppercase font-bold">Preacher</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold">Status</TableHead>
+                        <TableHead className="text-[10px] uppercase font-bold text-right">Vote Time</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {auditData.voterStatus.map(v => (
+                        <TableRow key={v.id} className="h-12">
+                          <TableCell className="font-bold text-xs">{v.name}</TableCell>
+                          <TableCell>
+                            {v.hasVoted ? (
+                              <div className="flex items-center gap-1.5 text-green-600 text-[10px] font-bold">
+                                <CheckSquare className="h-3.5 w-3.5" /> Voted
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-orange-500 text-[10px] font-bold">
+                                <XSquare className="h-3.5 w-3.5" /> Pending
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-[10px] text-muted-foreground font-mono">
+                            {v.hasVoted && v.voteTimestamp ? new Date(v.voteTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Voting Tally */}
+              <div className="space-y-6">
+                <Card className="border-none shadow-md">
+                  <CardHeader className="py-4 px-5">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Star className="h-4 w-4 text-yellow-500" /> Individual Tally
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-5 pb-5">
+                    <div className="space-y-3">
+                      {auditData.individualTally.length > 0 ? (
+                        auditData.individualTally.map((item, idx) => (
+                          <div key={item.pId} className="flex justify-between items-center p-2.5 rounded-lg bg-muted/30 border border-transparent hover:border-primary/20 transition-all">
+                            <span className="text-xs font-bold flex items-center gap-2">
+                              <span className="text-[10px] text-muted-foreground font-mono w-4">{idx + 1}.</span>
+                              {item.name}
+                            </span>
+                            <Badge className="font-mono text-[10px] h-5 bg-primary/10 text-primary border-none">{item.count} votes</Badge>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center py-4 text-[10px] text-muted-foreground italic">No votes recorded yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {session?.sessionType === 'group' && (
+                  <Card className="border-none shadow-md">
+                    <CardHeader className="py-4 px-5">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Mic2 className="h-4 w-4 text-accent" /> Group Tally
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-5 pb-5">
+                      <div className="space-y-3">
+                        {auditData.groupTally.length > 0 ? (
+                          auditData.groupTally.map((item, idx) => (
+                            <div key={item.gId} className="flex justify-between items-center p-2.5 rounded-lg bg-accent/5 border border-transparent hover:border-accent/20 transition-all">
+                              <span className="text-xs font-bold flex items-center gap-2">
+                                <span className="text-[10px] text-muted-foreground font-mono w-4">{idx + 1}.</span>
+                                {item.name}
+                              </span>
+                              <Badge className="font-mono text-[10px] h-5 bg-accent/10 text-accent border-none">{item.count} votes</Badge>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-center py-4 text-[10px] text-muted-foreground italic">No group votes yet.</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                <Card className="border-none shadow-md bg-primary/5">
+                  <CardHeader className="py-3 px-4">
+                    <CardTitle className="text-xs uppercase tracking-widest font-black opacity-50">Audit Note</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    <p className="text-[10px] text-muted-foreground leading-relaxed italic">
+                      This audit allows admins to verify point integrity. Individual points are distributed based on the top 3 ranked preachers, while group points go to the team with the most votes.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
 
       <AlertDialog open={!!recordToDelete} onOpenChange={o => !o && setRecordToDelete(null)}>

@@ -182,6 +182,10 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                 <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <span>
                   Nominate the best speakers from this session. You can select up to 3 preachers who stood out to you.
+                  <br />
+                  <span className="text-[10px] font-bold text-accent italic mt-1 block">
+                    * Only other session members are shown; you cannot vote for yourself.
+                  </span>
                 </span>
               </CardDescription>
             </CardHeader>
@@ -229,7 +233,12 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
                   <Mic2 className="h-5 w-5 text-accent" />
                   Best Group
                 </CardTitle>
-                <CardDescription>Select the team you think performed best overall.</CardDescription>
+                <CardDescription>
+                  Select the team you think performed best overall.
+                  <span className="text-[10px] font-bold text-accent italic mt-1 block">
+                    * You cannot vote for your own team.
+                  </span>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <RadioGroup 
