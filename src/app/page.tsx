@@ -607,9 +607,10 @@ export default function Dashboard() {
 
       <Tabs defaultValue="recent" className="w-full">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-          <TabsList className="grid w-full sm:w-[400px] grid-cols-2">
-            <TabsTrigger value="recent" className="text-xs sm:text-sm">My Sessions</TabsTrigger>
-            <TabsTrigger value="monthly" className="text-xs sm:text-sm">Monthly Summary</TabsTrigger>
+          <TabsList className="grid w-full sm:w-[500px] grid-cols-3">
+            <TabsTrigger value="recent" className="text-[10px] sm:text-xs">My Sessions</TabsTrigger>
+            <TabsTrigger value="results" className="text-[10px] sm:text-xs">Session Results</TabsTrigger>
+            <TabsTrigger value="monthly" className="text-[10px] sm:text-xs">Monthly Summary</TabsTrigger>
           </TabsList>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -784,208 +785,236 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+      </div>
+    </TabsContent>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-primary" />
-            <h2 className="text-lg font-bold">Session Results</h2>
-          </div>
-          <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
-            <SelectTrigger className="w-full sm:w-[220px] h-8 text-xs">
-              <SelectValue placeholder="Filter by Session" />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredSessions && filteredSessions.map(s => (
-                <SelectItem key={s.id} value={s.id} className="text-xs">{s.title}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <TabsContent value="results">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/20 p-4 rounded-xl border border-primary/10">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <Filter className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Session Performance</h2>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Select a session to view detailed analytics</p>
+                </div>
+              </div>
+              <Select value={sessionFilterId} onValueChange={setSessionFilterId}>
+                <SelectTrigger className="w-full sm:w-[260px] h-10 text-xs font-bold border-primary/20 hover:border-primary/50 transition-colors shadow-sm bg-background">
+                  <SelectValue placeholder="Choose a preaching session..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredSessions && filteredSessions.map(s => (
+                    <SelectItem key={s.id} value={s.id} className="text-xs py-2">{s.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8">
-          <Card className="shadow-sm border-none bg-card">
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Timer className="h-4 w-4 text-accent" /> 
-                Longest Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-4">
-              <div className="space-y-1">
-                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <UserIcon className="h-2.5 w-2.5" /> Individual Records
-                </p>
-                {sessionRecords.topIndividuals.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <div className={cn(
-                      "flex flex-col p-1.5 rounded-md transition-all",
-                      sessionRecords.topIndividuals[0].id === userParticipantId ? "bg-primary/10 border-l-2 border-primary" : "bg-muted/10"
-                    )}>
-                      <p className={cn(
-                        "font-bold text-sm",
-                        sessionRecords.topIndividuals[0].id === userParticipantId ? "text-primary" : ""
-                      )}>{sessionRecords.topIndividuals[0].name}</p>
-                      <p className="text-[10px] text-primary font-mono leading-none">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
-                    </div>
-                    {sessionRecords.topIndividuals.slice(1).map((record, idx) => (
-                      <div key={idx} className={cn(
-                        "flex justify-between items-center text-[10px] p-1.5 rounded border-t border-border/30",
-                        record.id === userParticipantId ? "bg-primary/5 text-primary font-bold border-l-2 border-primary/40" : "text-muted-foreground"
-                      )}>
-                        <span>{idx + 2}. {record.name}</span>
-                        <span className="font-mono">{formatDuration(record.time)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground italic">No individual record.</p>
-                )}
-              </div>
-              <div className="space-y-1 pt-3 border-t">
-                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Users className="h-2.5 w-2.5" /> Group Record
-                </p>
-                {sessionRecords.longestGroup ? (
-                  <div className={cn(
-                    "p-1.5 rounded-md",
-                    allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "bg-accent/10 border-l-2 border-accent" : "bg-muted/10"
-                  )}>
-                    <p className={cn(
-                      "font-bold text-sm",
-                      allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "text-accent" : ""
-                    )}>{sessionRecords.longestGroup.name}</p>
-                    {sessionRecords.longestGroup.description && (
-                      <p className="text-[9px] text-muted-foreground italic leading-tight mb-1">
-                        {sessionRecords.longestGroup.description}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-accent font-mono leading-none">{formatDuration(sessionRecords.longestGroup.time)}</p>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground italic">No group record.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm border-none bg-card flex flex-col">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-              <div className="space-y-0.5">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <VoteIcon className="h-4 w-4 text-primary" /> 
-                  Voting Results
-                </CardTitle>
-              </div>
-              <ShadButton variant="ghost" size="icon" asChild className="h-6 w-6 text-primary hover:bg-primary/5">
-                <Link href={`/results?sessionId=${sessionFilterId}`}>
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </ShadButton>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-4 flex-grow">
-              <div className="space-y-2">
-                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Star className="h-2.5 w-2.5 text-yellow-500" /> Top Individuals
-                </p>
-                {sessionVotingResults.individuals.length > 0 ? (
-                  <div className="space-y-2">
-                    {sessionVotingResults.individuals.map((rankGroup) => (
-                      <div key={rankGroup.rank} className="space-y-1">
-                        <div className="flex items-center justify-between text-[9px]">
-                          <span className="font-bold text-muted-foreground">Rank {rankGroup.rank}</span>
-                          <span className="font-mono px-1 border rounded">{rankGroup.count} votes</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="shadow-lg border-none bg-card hover:shadow-xl transition-all duration-300 group overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-accent"></div>
+                <CardHeader className="py-4 px-6">
+                  <CardTitle className="text-base flex items-center gap-2.5 font-bold">
+                    <Timer className="h-5 w-5 text-accent animate-pulse-slow" /> 
+                    Longest Time
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-6 pb-6 space-y-5">
+                  <div className="space-y-3">
+                    <p className="text-[10px] uppercase font-black text-muted-foreground/60 flex items-center gap-2 tracking-widest">
+                      <UserIcon className="h-3 w-3" /> Individual Records
+                    </p>
+                    {sessionRecords.topIndividuals.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className={cn(
+                          "flex flex-col p-4 rounded-xl transition-all relative overflow-hidden",
+                          sessionRecords.topIndividuals[0].id === userParticipantId 
+                            ? "bg-primary/10 border border-primary/20 ring-1 ring-primary/5 shadow-inner" 
+                            : "bg-muted/10 border border-transparent"
+                        )}>
+                          {sessionRecords.topIndividuals[0].id === userParticipantId && (
+                            <div className="absolute top-0 right-0 p-1 bg-primary text-white rounded-bl-lg shadow-sm">
+                              <Trophy className="h-3 w-3" />
+                            </div>
+                          )}
+                          <p className={cn(
+                            "font-black text-base uppercase tracking-tight",
+                            sessionRecords.topIndividuals[0].id === userParticipantId ? "text-primary" : "text-foreground"
+                          )}>{sessionRecords.topIndividuals[0].name}</p>
+                          <p className="text-lg font-black text-primary font-mono mt-1">{formatDuration(sessionRecords.topIndividuals[0].time)}</p>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 pl-1">
-                          {rankGroup.members.map((m: any) => (
-                            <span 
-                              key={m.id} 
+                        {sessionRecords.topIndividuals.slice(1).map((record, idx) => (
+                          <div key={idx} className={cn(
+                            "flex justify-between items-center text-xs p-3 rounded-lg border transition-colors",
+                            record.id === userParticipantId 
+                              ? "bg-primary/5 text-primary font-black border-primary/20 shadow-sm" 
+                              : "text-muted-foreground border-transparent hover:bg-muted/5"
+                          )}>
+                            <span className="font-bold">{idx + 2}. {record.name}</span>
+                            <span className="font-mono bg-background px-2 py-0.5 rounded shadow-xs border">{formatDuration(record.time)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 bg-muted/5 rounded-xl border border-dashed">
+                        <p className="text-xs text-muted-foreground font-bold opacity-40 uppercase tracking-tighter">No individual record.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3 pt-5 border-t border-muted/20">
+                    <p className="text-[10px] uppercase font-black text-muted-foreground/60 flex items-center gap-2 tracking-widest">
+                      <Users className="h-3 w-3" /> Group Record
+                    </p>
+                    {sessionRecords.longestGroup ? (
+                      <div className={cn(
+                        "p-4 rounded-xl border transition-all",
+                        allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] 
+                          ? "bg-accent/10 border-accent/20 shadow-inner" 
+                          : "bg-muted/10 border-transparent"
+                      )}>
+                        <p className={cn(
+                          "font-black text-base uppercase tracking-tight",
+                          allGroups?.find(g => g.id === sessionRecords.longestGroup?.id)?.members?.[userParticipantId] ? "text-accent" : "text-foreground"
+                        )}>{sessionRecords.longestGroup.name}</p>
+                        {sessionRecords.longestGroup.description && (
+                          <p className="text-[10px] text-muted-foreground font-bold italic leading-tight mb-2 mt-1 uppercase tracking-tighter opacity-70">
+                            {sessionRecords.longestGroup.description}
+                          </p>
+                        )}
+                        <p className="text-lg font-black text-accent font-mono mt-1 leading-none">{formatDuration(sessionRecords.longestGroup.time)}</p>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 bg-muted/5 rounded-xl border border-dashed">
+                        <p className="text-xs text-muted-foreground font-bold opacity-40 uppercase tracking-tighter">No group record.</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-lg border-none bg-card hover:shadow-xl transition-all duration-300 group flex flex-col overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+                <CardHeader className="py-4 px-6 flex flex-row items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2.5 font-bold">
+                    <VoteIcon className="h-5 w-5 text-primary" /> 
+                    Voting Results
+                  </CardTitle>
+                  <ShadButton variant="ghost" size="sm" asChild className="h-8 py-0 px-2 text-primary font-black uppercase text-[10px] tracking-tighter hover:bg-primary/10">
+                    <Link href={`/results?sessionId=${sessionFilterId}`} className="flex items-center gap-1">
+                      Full Details <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </ShadButton>
+                </CardHeader>
+                <CardContent className="px-6 pb-6 space-y-6 flex-grow">
+                  <div className="space-y-3">
+                    <p className="text-[10px] uppercase font-black text-muted-foreground/60 flex items-center gap-2 tracking-widest">
+                      <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" /> Top Individuals
+                    </p>
+                    {sessionVotingResults.individuals.length > 0 ? (
+                      <div className="space-y-4">
+                        {sessionVotingResults.individuals.map((rankGroup) => (
+                          <div key={rankGroup.rank} className="space-y-2">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-black text-muted-foreground/80 uppercase tracking-tighter bg-muted/20 px-2 py-0.5 rounded">Rank {rankGroup.rank}</span>
+                              <span className="font-black font-mono text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/10 shadow-sm">{rankGroup.count} votes</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pl-1">
+                              {rankGroup.members.map((m: any) => (
+                                <span 
+                                  key={m.id} 
+                                  className={cn(
+                                    "text-xs py-1.5 px-3 rounded-lg transition-all shadow-sm",
+                                    m.id === userParticipantId 
+                                      ? "bg-primary text-primary-foreground font-black ring-2 ring-primary/20" 
+                                      : "text-foreground font-bold bg-background border border-border/50 hover:border-primary/30"
+                                  )}
+                                >
+                                  {m.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 bg-muted/5 rounded-xl border border-dashed">
+                        <p className="text-xs text-muted-foreground font-bold opacity-40 uppercase tracking-tighter">No votes recorded yet.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 pt-5 border-t border-muted/20">
+                    <p className="text-[10px] uppercase font-black text-muted-foreground/60 flex items-center gap-2 tracking-widest">
+                      <Trophy className="h-3 w-3 text-primary" /> Top Group
+                    </p>
+                    {sessionVotingResults.topGroups ? (
+                      <div className="space-y-4">
+                        <div className="space-y-2.5">
+                          {sessionVotingResults.topGroups.members.map((winner: any) => (
+                            <div 
+                              key={winner.id} 
                               className={cn(
-                                "text-xs py-0.5 px-2 rounded-md transition-all",
-                                m.id === userParticipantId 
-                                  ? "bg-primary text-primary-foreground font-bold shadow-sm" 
-                                  : "text-foreground font-bold bg-muted/20"
+                                "flex flex-col gap-1 p-3.5 rounded-xl border transition-all duration-300",
+                                allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
+                                  ? "bg-primary text-primary-foreground border-primary shadow-lg scale-[1.02]" 
+                                  : "bg-background border-border/60 hover:border-primary/40 shadow-sm"
                               )}
                             >
-                              {m.name}
-                            </span>
+                              <div className="flex items-center justify-between">
+                                <span className={cn(
+                                  "font-black uppercase tracking-tight text-sm",
+                                  allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground" : "text-primary"
+                                )}>{winner.name}</span>
+                                <Badge className={cn(
+                                  "text-[10px] h-5 font-black px-2 shadow-sm border-none",
+                                  allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
+                                    ? "bg-white text-primary" 
+                                    : "bg-primary text-primary-foreground"
+                                )}>{winner.count}v</Badge>
+                              </div>
+                              {winner.description && (
+                                <p className={cn(
+                                  "text-[9px] font-bold uppercase tracking-tighter leading-tight opacity-70",
+                                  allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground/90" : "text-muted-foreground"
+                                )}>
+                                  {winner.description}
+                                </p>
+                              )}
+                            </div>
                           ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground italic text-center py-1">No votes yet.</p>
-                )}
-              </div>
 
-              <div className="space-y-2 pt-3 border-t">
-                <p className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                  <Trophy className="h-2.5 w-2.5 text-primary" /> Top Group
-                </p>
-                {sessionVotingResults.topGroups ? (
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      {sessionVotingResults.topGroups.members.map((winner: any) => (
-                        <div 
-                          key={winner.id} 
-                          className={cn(
-                            "flex flex-col gap-0.5 p-1.5 rounded-md border",
-                            allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
-                              ? "bg-primary text-primary-foreground border-primary" 
-                              : "bg-primary/5 border-primary/10"
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className={cn(
-                              "font-bold uppercase tracking-tight text-xs",
-                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground" : "text-primary"
-                            )}>{winner.name}</span>
-                            <Badge className={cn(
-                              "text-[8px] h-3.5 font-bold px-1",
-                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] 
-                                ? "bg-white text-primary" 
-                                : "bg-primary text-primary-foreground"
-                            )}>{winner.count}v</Badge>
+                        {sessionVotingResults.otherGroups.length > 0 && (
+                          <div className="space-y-2 pt-2">
+                            <p className="text-[9px] uppercase font-black text-muted-foreground/50 tracking-widest text-center">Tally Leaderboard</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {sessionVotingResults.otherGroups.map((rankGroup: any) => 
+                                rankGroup.members.map((other: any) => (
+                                  <div key={other.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/5 border border-transparent hover:border-primary/10 transition-colors">
+                                    <span className={cn(
+                                      "font-bold text-[10px] uppercase truncate max-w-[100px]",
+                                      allGroups?.find(g => g.id === other.id)?.members?.[userParticipantId] ? "text-primary" : "text-foreground/80"
+                                    )}>{other.name}</span>
+                                    <span className="font-black font-mono text-[10px] bg-background px-1.5 py-0.5 rounded shadow-xs border">{other.count}v</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
                           </div>
-                          {winner.description && (
-                            <p className={cn(
-                              "text-[8px] italic leading-tight",
-                              allGroups?.find(g => g.id === winner.id)?.members?.[userParticipantId] ? "text-primary-foreground/80" : "text-muted-foreground"
-                            )}>
-                              {winner.description}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {sessionVotingResults.otherGroups.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-[8px] uppercase font-black text-muted-foreground tracking-widest">Other Tally</p>
-                        <div className="space-y-0.5 pl-0.5">
-                          {sessionVotingResults.otherGroups.map((rankGroup: any) => 
-                            rankGroup.members.map((other: any) => (
-                              <div key={other.id} className="flex justify-between items-center text-[9px] text-muted-foreground">
-                                <span className={cn(
-                                  "font-bold",
-                                  allGroups?.find(g => g.id === other.id)?.members?.[userParticipantId] ? "text-primary" : ""
-                                )}>{other.name}</span>
-                                <span className="font-mono">{other.count}v</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 bg-muted/5 rounded-xl border border-dashed">
+                        <p className="text-xs text-muted-foreground font-bold opacity-40 uppercase tracking-tighter">No team votes cast yet.</p>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground italic text-center py-1">No votes yet.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
