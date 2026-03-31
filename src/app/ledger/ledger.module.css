@@ -1,0 +1,91 @@
+.header {
+  margin-bottom: 2rem;
+}
+
+.backLink {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.backLink:hover {
+  color: var(--primary);
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.025em;
+}
+
+.description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.tableWrapper {
+  margin-top: 2rem;
+}
+
+.globalPrintView {
+  display: none;
+}
+
+.printTitle {
+  font-size: 1.5rem;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #000;
+}
+
+.printSection {
+  margin-bottom: 3rem;
+}
+
+.printSectionTitle {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: #000;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+@media print {
+  :global(.print-all-branches) .header,
+  :global(.print-all-branches) .backLink,
+  :global(.print-all-branches) .filters,
+  :global(.print-all-branches) nav,
+  :global(.print-all-branches) form,
+  :global(.print-all-branches) .tabWrapper,
+  :global(.print-all-branches) [class*="printBar"],
+  :global(.print-all-branches) [class*="BranchTabs"],
+  :global(.print-both) .header,
+  :global(.print-both) .backLink,
+  :global(.print-both) .tabWrapper,
+  :global(.print-both) [class*="printBar"] {
+    display: none !important;
+  }
+
+  :global(.print-all-branches) .globalPrintView {
+    display: block !important;
+  }
+
+  :global(.print-all-branches) [class*="tabContentActive"] {
+    display: none !important;
+  }
+
+  .branchReportGroup {
+    page-break-after: always;
+    padding-top: 2rem;
+  }
+
+  .branchReportGroup:last-child {
+    page-break-after: auto;
+  }
+}

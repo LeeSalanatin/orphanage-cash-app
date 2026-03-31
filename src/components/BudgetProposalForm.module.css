@@ -1,0 +1,813 @@
+.form {
+  background: var(--surface);
+  padding: 1.25rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.tabSwitcher {
+  display: flex;
+  background: var(--surface-sub);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-right: 1.5rem;
+}
+
+.tabSwitcher button {
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tabSwitcher button.activeTab {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.summaryContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.summaryBox {
+  background: var(--surface-sub);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tabBtn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hiddenOnScreen {
+  display: none !important;
+}
+
+.tableContainer {
+  display: block;
+}
+
+.summaryHeader {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.summaryRow:last-child {
+  border-bottom: none;
+}
+
+.categoryBlock {
+  border-bottom: 1px solid var(--border);
+  padding: 1rem;
+}
+
+.categoryBlock:last-child {
+  border-bottom: none;
+}
+
+.categoryTitle {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.branchList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--border);
+}
+
+.branchSubRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.categoryTotalRow {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+}
+
+.summaryFinalBox {
+  background: var(--surface-sub);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.finalRow {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+}
+
+.grandTotalLine {
+  height: 2px;
+  background: var(--border);
+  margin: 1rem 0;
+}
+
+.finalTotalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.finalTotalRow .grandValue {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.positiveAmount { color: var(--success); }
+.negativeAmount { color: var(--error); }
+.emptySummary { padding: 2rem; text-align: center; color: var(--text-dim); }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  gap: 1.5rem;
+}
+
+.titleInfo h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.titleInfo p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.totalBadge {
+  background: var(--surface-hover);
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 280px;
+  box-shadow: var(--shadow-sm);
+}
+
+.breakdownItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.labelSmall { color: var(--text-muted); font-weight: 500; }
+.valueSmall { font-weight: 600; font-family: monospace; color: var(--text-main); }
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.15rem 0;
+}
+
+.totalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-top: 0.15rem;
+}
+
+.labelLarge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.valueLarge {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  font-family: monospace;
+}
+
+.mainLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 0.75rem;
+}
+
+.calendarSection {
+  width: 100%;
+}
+
+.detailsSection {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.detailsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 800;
+}
+
+.detailControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.showAllBtn {
+  background: var(--active-highlight);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.showAllBtn:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.filterInfo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.tableContainer {
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  border-bottom: 2px solid var(--border);
+  text-transform: uppercase;
+}
+
+.table td {
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.rowCarryOver td {
+  background: var(--surface-hover);
+  font-weight: 600;
+}
+
+.inputDay, .input, .select, .inputAmount {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.inputDay { width: 55px; text-align: center; font-weight: 700; }
+
+.amountInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  padding-left: 0.75rem;
+  border-radius: 8px;
+  width: 130px;
+}
+
+.amountInputWrapper:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--active-highlight);
+}
+
+.amountInputWrapper span {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.amountInputWrapper .inputAmount {
+  border: none;
+  padding: 0.6rem 0.5rem 0.6rem 0;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.input:focus, .select:focus, .inputDay:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--active-highlight);
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.actionBtn, .removeBtn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.actionBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--active-highlight);
+}
+
+.removeBtn:hover {
+  border-color: var(--error, #ef4444);
+  background: #fee2e2;
+  color: var(--error, #ef4444);
+}
+
+.addBtn {
+  width: 100%;
+  padding: 1.25rem;
+  background: var(--background);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: auto;
+}
+
+.addBtn:hover {
+  background: var(--active-highlight);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.footer {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+
+.submitBtn {
+  min-width: 320px;
+  padding: 1.25rem 3rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-lg);
+}
+
+.submitBtn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 25px -5px rgba(0, 0, 0, 0.2);
+  filter: brightness(1.1);
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+@media (max-width: 1100px) {
+  .mainLayout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .detailsSection {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .detailsHeader {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .headerActions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1rem;
+  }
+
+  .printControl {
+    position: relative;
+  }
+
+  .printBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .printBtn:hover {
+    background: var(--border);
+  }
+
+  .printDropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    z-index: 100;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .printDropdown button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    background: none;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 0.875rem;
+    text-align: left;
+    transition: background 0.2s;
+  }
+
+  .printDropdown button:hover {
+    background: var(--surface-hover);
+  }
+
+  .printOnlyHeader {
+    display: none;
+  }
+  
+  .detailsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+  
+  .submitBtn {
+    width: 100%;
+  }
+}
+/* --- Printing Support --- */
+
+@media print {
+  /* Hide all non-essential UI */
+  :global(.container) {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .header, 
+  .footer, 
+  .backLink, 
+  .showAllBtn, 
+  .addBtn, 
+  .rowActions, 
+  .printControl,
+  .sectionTitle,
+  .tabSwitcher,
+  :global(.header), 
+  :global(nav), 
+  :global(.budget-period-filter) {
+    display: none !important;
+  }
+
+  /* Show Print-only Header */
+  .printHeader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .printHeader h2 {
+    font-size: 24px;
+    margin: 0;
+    letter-spacing: 2px;
+  }
+  .printHeader h3 {
+    font-size: 16px;
+    margin: 2px 0;
+    color: #666;
+  }
+  .printHeader p {
+    font-size: 9px;
+    margin: 2px 0;
+    color: #999;
+  }
+
+  /* Force light theme colors for printing efficiency */
+  .form {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .totalBadge {
+    border: 1px solid #ddd !important;
+    background: #fafafa !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin-bottom: 1rem;
+    padding: 0.5rem !important;
+  }
+
+  .table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .table th, .table td {
+    border: 1px solid #eee !important;
+    color: #000 !important;
+    background: transparent !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Handle Row Carry Over Styling in Print */
+  .rowCarryOver td {
+    background-color: #f0f0f0 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Hide inputs, show values only where needed */
+  .input, .inputAmount, .inputDay, .select {
+    border: none !important;
+    padding: 0 !important;
+    background: none !important;
+    font-size: 0.85rem !important;
+    appearance: none !important;
+    -webkit-appearance: none;
+    color: #000 !important;
+  }
+
+  /* Global Hides for Printing */
+  .filtersSection,
+  .activeFilters,
+  .filterBadge,
+  .tabSwitcher,
+  .addBtn,
+  .removeBtn,
+  .actionBtn,
+  .printButton {
+    display: none !important;
+  }
+
+  /* Dynamic Visibility based on Print Mode */
+  .printMode_calendar .detailsSection {
+    display: none !important;
+  }
+
+  .printMode_details .calendarSection {
+    display: none !important;
+  }
+
+  /* Calendar Print Optimization */
+  .calendarSection {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+
+  .detailsSection {
+    page-break-before: auto;
+  }
+
+  .tableContainer {
+    overflow: visible !important;
+  }
+
+  /* Controlled Visibility by Print Mode */
+  .detailsSection { display: none; }
+  .calendarSection { display: none; }
+  .summaryContainer { display: none !important; }
+
+  .printMode_calendar .calendarSection { display: block; }
+  
+  .printMode_details .detailsSection { display: block; }
+  .printMode_details .tableContainer { display: block !important; }
+  .printMode_details .summaryContainer { display: none !important; }
+
+  /* --- Summary Mode --- */
+  /* Hide filters in all print modes except maybe calendar? 
+     But for professional reports (summary/details/all), they take too much space. */
+  .printMode_details .filtersSection,
+  .printMode_summary .filtersSection,
+  .printMode_all .filtersSection {
+    display: none !important;
+  }
+
+  .printMode_details .detailsSection,
+  .printMode_summary .detailsSection {
+    display: block !important;
+  }
+  .printMode_summary .summaryContainer {
+    display: flex !important;
+    gap: 8px; /* Tighten gap */
+    flex-direction: column;
+    font-size: 11px; /* Smaller base font for print */
+  }
+  .printMode_summary .summaryHeader {
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .printMode_summary .summaryBox {
+    margin-bottom: 8px;
+    border-radius: 4px;
+    padding-bottom: 4px;
+  }
+  .printMode_summary .summaryRow {
+    padding: 3px 8px;
+  }
+  .printMode_summary .categoryBlock {
+    margin: 4px 8px;
+    padding-bottom: 4px;
+  }
+  .printMode_summary .categoryTitle {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  .printMode_summary .branchSubRow {
+    padding: 1px 0 1px 12px;
+    font-size: 10px;
+  }
+  .printMode_summary .categoryTotalRow {
+    margin-top: 3px;
+    padding-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .printMode_summary .summaryFinalBox {
+    padding: 8px;
+    margin-top: 4px;
+  }
+  .printMode_summary .finalTotalRow {
+    font-size: 14px;
+  }
+  .printMode_summary .grandValue {
+    font-size: 16px;
+  }
+
+  /* Ensure the summary isn't hidden if the user is on table tab */
+  .printMode_summary .hiddenOnScreen {
+    display: block !important;
+  }
+  .printMode_summary .tableSection,
+  .printMode_summary .tableContainer,
+  .printMode_summary .calendarSection,
+  .printMode_summary .filtersSection,
+  .printMode_summary .tabSwitcher {
+    display: none !important;
+  }
+
+  .printMode_all .calendarSection { display: block; }
+  .printMode_all .detailsSection { display: block; }
+  .printMode_all .summaryContainer { display: flex !important; }
+  .printMode_all .tableContainer { display: block !important; }
+
+  .summaryBox {
+    border: 1px solid #000 !important;
+    background: transparent !important;
+    margin-bottom: 1rem;
+  }
+  
+  .summaryHeader {
+    background: #eee !important;
+    color: #000 !important;
+    border-bottom: 1px solid #000 !important;
+  }
+
+  .summaryFinalBox {
+    border: 2px solid #000 !important;
+    color: #000 !important;
+  }
+
+  .categoryTitle { color: #000 !important; }
+  .positiveAmount, .negativeAmount { color: #000 !important; }
+  .finalRow, .grandValue { color: #000 !important; }
+}

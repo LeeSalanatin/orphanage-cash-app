@@ -1,0 +1,195 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
+  position: relative;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.1));
+}
+
+.icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.card:hover .actions {
+  opacity: 1;
+}
+
+.editBtn,
+.deleteTriggerBtn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.editBtn:hover {
+  background: var(--surface-hover);
+}
+
+.deleteTriggerBtn:hover {
+  background: var(--surface-hover);
+}
+
+/* Inline edit form */
+.editForm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.editInput {
+  flex: 1;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid var(--primary, #e11d48);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.saveBtn {
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveBtn:hover { background: #15803d; }
+
+.cancelIconBtn {
+  background: var(--surface-hover);
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.cancelIconBtn:hover { background: #d1d5db; }
+
+/* Confirm modal */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modalTitle {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.75rem;
+}
+
+.modalBody {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 0.55rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.cancelBtn:hover { background: #e2e8f0; }
+
+.deleteBtn {
+  padding: 0.55rem 1.2rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteBtn:hover:not(:disabled) { background: #b91c1c; }
+.deleteBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.error {
+  font-size: 0.8rem;
+  color: #dc2626;
+  margin-bottom: 0.5rem;
+}
+
+.inlineError {
+  font-size: 0.75rem;
+  color: #dc2626;
+  position: absolute;
+  bottom: -1.2rem;
+  left: 0;
+}

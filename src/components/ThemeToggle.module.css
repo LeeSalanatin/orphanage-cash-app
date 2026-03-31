@@ -1,0 +1,115 @@
+.container {
+  position: relative;
+  display: inline-block;
+}
+
+.toggleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.toggleButton:hover {
+  background: var(--border);
+  color: var(--text-main);
+}
+
+.dropdown {
+  position: absolute;
+  width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 1rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dropdownBottom {
+  top: 100%;
+  margin-top: 0.5rem;
+}
+
+.dropdownTop {
+  bottom: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.dropdownRight {
+  right: 0;
+}
+
+.dropdownLeft {
+  left: 0;
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.modeButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.modeBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  color: var(--text-main);
+  background: transparent;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+}
+
+.modeBtn:hover {
+  background: var(--border);
+}
+
+.modeBtn.active {
+  background: var(--border);
+  font-weight: 600;
+}
+
+.modeText {
+  font-size: 0.875rem;
+}
+
+.colorGrid {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.colorBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px inset rgba(0,0,0,0.1);
+  transition: transform 0.15s;
+}
+
+.colorBtn:hover {
+  transform: scale(1.1);
+}

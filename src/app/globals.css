@@ -1,59 +1,128 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  /* Default Theme (Red) */
+  --theme-color: #d32f2f;
+  --theme-color-light: #ff6659;
+  --theme-color-dark: #9a0007;
 
-@layer base {
-  :root {
-    --background: 210 33% 96%; /* #EDF1F5 */
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 216 66% 48%; /* #296BCC */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 33% 90%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 33% 90%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 191 73% 51%; /* #26B9DD */
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 85%;
-    --input: 214 32% 85%;
-    --ring: 216 66% 48%;
-    --radius: 0.75rem;
-  }
+  --primary: var(--theme-color);
+  --primary-light: var(--theme-color-light);
+  --primary-dark: var(--theme-color-dark);
+  --secondary: #ffc107;
+  
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-hover: #f1f5f9;
+  --active-highlight: #fee2e2;
+  --active-highlight-text: var(--primary);
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --radius: 12px;
+}
 
-  .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 216 66% 48%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217 32% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 32% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 191 73% 51%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 32% 17%;
-    --input: 217 32% 17%;
-    --ring: 216 66% 48%;
+.dark {
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-hover: #334155;
+  --active-highlight: #312e81; /* Indigo-ish or dark red? Let's use dark red for red theme? */
+  --active-highlight-text: #fca5a5;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+}
+
+[data-color='blue'] {
+  --theme-color: #3b82f6;
+  --theme-color-light: #60a5fa;
+  --theme-color-dark: #2563eb;
+}
+
+[data-color='orange'] {
+  --theme-color: #f97316;
+  --theme-color-light: #fb923c;
+  --theme-color-dark: #ea580c;
+}
+
+[data-color='green'] {
+  --theme-color: #10b981;
+  --theme-color-light: #34d399;
+  --theme-color-dark: #059669;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--background);
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul {
+  list-style: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1.25rem 0.75rem;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@media print {
+  header, .header, .no-print, [class*="filtersSection"], [class*="activeFilters"], [class*="filterBadge"] {
+    display: none !important;
   }
-  body {
-    @apply bg-background text-foreground font-body antialiased;
+  .container {
+    padding: 0 !important;
+    max-width: 100% !important;
   }
 }

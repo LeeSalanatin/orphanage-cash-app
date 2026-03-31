@@ -1,0 +1,228 @@
+.card {
+  background: var(--surface, white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 0.75rem);
+  padding: 1.25rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s, transform 0.2s;
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow, 0 4px 12px rgba(0,0,0,0.1));
+}
+
+.editing {
+  border-color: var(--primary, #e11d48);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.1);
+  transform: none;
+}
+
+.branchIcon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.branchInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.branchName {
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.2rem;
+  font-size: 1rem;
+}
+
+.branchAddress {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.childrenBadge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  background: var(--active-highlight);
+  color: var(--active-highlight-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+/* Hover-reveal action buttons */
+.actions {
+  display: flex;
+  gap: 0.2rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.card:hover .actions {
+  opacity: 1;
+}
+
+.editBtn, .deleteTriggerBtn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.editBtn:hover    { background: var(--surface-hover); }
+.deleteTriggerBtn:hover { background: rgba(239, 68, 68, 0.15); }
+
+/* Inline edit form */
+.editForm {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.input {
+  padding: 0.45rem 0.7rem;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary, #e11d48);
+}
+
+.formActions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.saveBtn {
+  padding: 0.5rem 1.1rem;
+  background: var(--primary, #e11d48);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.saveBtn:hover:not(:disabled) { filter: brightness(1.1); }
+.saveBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cancelBtn {
+  padding: 0.5rem 1rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.cancelBtn:hover:not(:disabled) { background: #e2e8f0; }
+.cancelBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Delete modal */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modalTitle {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.75rem;
+}
+
+.modalBody {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.deleteBtn {
+  padding: 0.55rem 1.2rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteBtn:hover:not(:disabled) { background: #b91c1c; }
+.deleteBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.error {
+  font-size: 0.8rem;
+  color: #dc2626;
+}

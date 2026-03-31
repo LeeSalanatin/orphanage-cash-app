@@ -1,0 +1,219 @@
+.row {
+  position: relative;
+}
+
+.actionCell {
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0.4rem !important;
+}
+
+.row:hover .actionCell {
+  opacity: 1;
+}
+
+.editBtn, .deleteBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.editBtn:hover   { background: var(--surface-hover); }
+.deleteBtn:hover { background: var(--active-highlight); }
+
+/* Inline edit form */
+.editRow td {
+  padding: 0 !important;
+  background: var(--background);
+  border-left: 3px solid var(--primary);
+}
+
+.editForm {
+  padding: 1rem 1.25rem;
+}
+
+.editGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.editField label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.editField input, .editField select {
+  padding: 0.4rem 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+}
+
+.editField input:focus, .editField select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.editActions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.saveBtn {
+  padding: 0.45rem 1.1rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.saveBtn:hover:not(:disabled) { filter: brightness(1.1); }
+.saveBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cancelBtn {
+  padding: 0.45rem 0.9rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.cancelBtn:hover:not(:disabled) { background: #e2e8f0; }
+.cancelBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.error {
+  font-size: 0.78rem;
+  color: #dc2626;
+  margin-top: 0.25rem;
+}
+
+/* Confirmation modal */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modalTitle {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.6rem;
+}
+
+.modalBody {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.confirmDeleteBtn {
+  padding: 0.5rem 1.2rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.confirmDeleteBtn:hover:not(:disabled) { background: #b91c1c; }
+.confirmDeleteBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Calculator integration styles */
+.inputWithAction {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputWithAction input {
+  flex: 1;
+  padding-right: 2.2rem !important;
+}
+
+.calcTrigger {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: var(--surface-hover);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  z-index: 5;
+}
+
+.calcTrigger:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.calcTrigger svg {
+  width: 14px;
+  height: 14px;
+}

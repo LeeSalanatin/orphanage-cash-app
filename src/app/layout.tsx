@@ -1,14 +1,29 @@
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import Header from "@/components/Header";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { ColorThemeProvider } from "@/components/ColorThemeProvider";
 
-import type {Metadata} from 'next';
-import './globals.css';
-import { Navbar } from '@/components/layout/Navbar';
-import { Toaster } from '@/components/ui/toaster';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { ParticipantSync } from '@/components/ParticipantSync';
+const inter = Inter({ subsets: ["latin"] });
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
-  title: 'PreachPoint - Preaching Time Management',
-  description: 'Manage preaching sessions, fines, and voting rewards.',
+  title: "FOFJ Children Funds | Funds Management",
+  description: "Secure and transparent funds management system for FOFJ Children Funds.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "FOFJ Funds",
+  },
 };
 
 export default function RootLayout({
@@ -17,21 +32,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased bg-background text-foreground flex flex-col min-h-screen">
-        <FirebaseClientProvider>
-          <ParticipantSync />
-          <Navbar />
-          <main className="flex-grow">
-            {children}
-          </main>
-          <Toaster />
-        </FirebaseClientProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem themes={['light', 'dark']}>
+          <ColorThemeProvider>
+            <Header />
+            <main>{children}</main>
+          </ColorThemeProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,0 +1,148 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 120px;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.content {
+  z-index: 1;
+}
+
+.title {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.amount {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.receipts .indicator {
+  background: var(--success);
+}
+
+.disbursements .indicator {
+  background: var(--danger);
+}
+
+.balance .indicator {
+  background: #60a5fa;
+}
+
+.receipts .amount {
+  color: var(--success);
+}
+
+.disbursements .amount {
+  color: var(--danger);
+}
+
+.balance .amount {
+  color: #60a5fa;
+}
+
+.balance {
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+}
+
+:global(.dark) .balance {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #1e40af;
+}
+
+/* Branch breakdown list */
+.breakdown {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.breakdownRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.branchName {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.branchAmount {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--primary);
+}
+
+/* Colour the branch amount by card type */
+.receipts      .branchAmount { color: var(--success); }
+.disbursements .branchAmount { color: var(--danger);  }
+.balance       .branchAmount { color: #60a5fa; }
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+    min-height: 100px;
+  }
+  
+  .amount {
+    font-size: 1.4rem;
+  }
+
+  .title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .breakdown {
+    margin-top: 0.5rem;
+    padding-top: 0.4rem;
+  }
+
+  .breakdownRow {
+    font-size: 0.72rem;
+  }
+}

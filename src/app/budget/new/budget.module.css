@@ -1,0 +1,39 @@
+.pageHeader {
+  margin-bottom: 2rem;
+  padding: 2rem 0;
+}
+
+.backLink {
+  display: inline-block;
+  color: var(--text-muted, #64748b);
+  text-decoration: none;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  transition: color 0.2s ease;
+}
+
+.backLink:hover {
+  color: var(--primary, #2563eb);
+}
+
+.pageTitle {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--text-main, #1e293b);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: var(--text-muted, #64748b);
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+@media print {
+  .pageHeader {
+    display: none !important;
+  }
+}

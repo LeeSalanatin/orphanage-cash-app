@@ -1,0 +1,32 @@
+.header {
+  margin-bottom: 2rem;
+}
+
+.backLink {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.backLink:hover {
+  color: var(--primary);
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.025em;
+}
+
+.description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.formWrapper {
+  max-width: 800px;
+  margin-top: 2rem;
+}

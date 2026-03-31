@@ -1,0 +1,190 @@
+.formCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  margin-bottom: 3rem;
+  border-top: 4px solid var(--secondary);
+}
+
+.formTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: var(--text-main);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fullWidth {
+  grid-column: span 2;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.field input, .field select, .field textarea {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--text-main);
+  transition: all 0.2s;
+}
+
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.1);
+}
+
+.submitButton {
+  margin-top: 1.25rem;
+  background: var(--primary);
+  color: white;
+  padding: 1rem;
+  border-radius: var(--radius);
+  font-weight: 700;
+  width: 100%;
+  transition: all 0.2s;
+  font-size: 1rem;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(211, 47, 47, 0.2);
+}
+
+.submitButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.message {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.success {
+  background: var(--success);
+  color: white;
+  opacity: 0.9;
+}
+
+.error {
+  background: var(--danger);
+  color: white;
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .fullWidth {
+    grid-column: span 1;
+  }
+}
+
+/* ── Smart field states ── */
+
+.disabledLabel {
+  color: #cbd5e1 !important;
+}
+
+.disabledInput {
+  background: var(--surface-hover) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--border) !important;
+  cursor: not-allowed;
+}
+
+.activeBadge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #15803d;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hint {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+}
+
+.required {
+  color: var(--primary);
+}
+
+.inputWithAction {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputWithAction input {
+  flex: 1;
+  padding-right: 3rem !important; /* Make room for the button */
+}
+
+.calcTrigger {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface-hover);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+}
+
+.calcTrigger:hover {
+  background: var(--primary);
+  color: white;
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 4px 6px -1px rgba(211, 47, 47, 0.2);
+}
+
+.calcTrigger svg {
+  width: 18px;
+  height: 18px;
+}
