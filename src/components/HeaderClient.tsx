@@ -85,14 +85,12 @@ export default function HeaderClient({ session }: HeaderClientProps) {
               >
                 <Building2 size={18} /> Branches
               </Link>
-              {session.role !== 'Admin' && (
-                <Link 
-                  href="/budget/new" 
-                  className={`${styles.navLink} ${isActive('/budget/new') ? styles.navLinkActive : ''}`}
-                >
-                  <Wallet size={18} /> Budget
-                </Link>
-              )}
+              <Link 
+                href="/budget/new" 
+                className={`${styles.navLink} ${isActive('/budget/new') ? styles.navLinkActive : ''}`}
+              >
+                <Wallet size={18} /> Budget
+              </Link>
               <Link href="/new" className={styles.addButton}>
                 <PlusCircle size={18} /> New Entry
               </Link>
@@ -154,15 +152,13 @@ export default function HeaderClient({ session }: HeaderClientProps) {
               >
                 <Building2 size={20} /> Branches
               </Link>
-              {session.role !== 'Admin' && (
-                <Link 
-                  href="/budget/new" 
-                  className={`${styles.sidebarLink} ${isActive('/budget/new') ? styles.sidebarLinkActive : ''}`} 
-                  onClick={closeMenu}
-                >
-                  <Wallet size={20} /> Budget
-                </Link>
-              )}
+              <Link 
+                href="/budget/new" 
+                className={`${styles.sidebarLink} ${isActive('/budget/new') ? styles.sidebarLinkActive : ''}`} 
+                onClick={closeMenu}
+              >
+                <Wallet size={20} /> Budget
+              </Link>
               <Link href="/new" className={styles.sidebarAddButton} onClick={closeMenu}>
                 <PlusCircle size={20} /> New Entry
               </Link>
