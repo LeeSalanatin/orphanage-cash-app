@@ -116,9 +116,56 @@
 }
 
 @media (max-width: 768px) {
+  .calendarContainer {
+    padding: 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .grid {
+    min-width: 550px;
+    gap: 0.4rem;
+  }
+  .dayName {
+    font-size: 0.7rem;
+    letter-spacing: 0;
+  }
   .day {
-    min-height: 60px;
-    padding: 0.25rem;
+    min-height: 70px;
+    padding: 0.4rem;
+    gap: 0.2rem;
+    overflow: hidden;
+  }
+  .dayNumber {
+    font-size: 0.8rem;
+  }
+  .dayInfo {
+    padding-top: 0.2rem;
+    gap: 0.2rem;
+  }
+  .branchRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.1rem;
+  }
+  .branchTitle {
+    display: block;
+    max-width: 55%;
+  }
+  .branchAmount {
+    font-size: 0.65rem;
+  }
+  .dayTotal {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    padding-top: 0.2rem;
+    margin-top: 0.2rem;
+  }
+  .totalLabel {
+    display: inline;
   }
 }
 

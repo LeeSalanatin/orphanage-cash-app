@@ -35,10 +35,18 @@ export async function login(userData: { username: string; fofjBranch: string; ro
   const session = await encrypt({ ...userData, expires });
 
   const cookieStore = await cookies();
-  cookieStore.set('session', session, { expires, httpOnly: true });
+  cookieStore.set('session', session, { 
+    expires, 
+    httpOnly: true,
+    path: '/',
+    sameSite: 'lax'
+  });
 }
 
 export async function logout() {
   const cookieStore = await cookies();
-  cookieStore.set('session', '', { expires: new Date(0) });
+  cookieStore.set('session', '', { 
+    expires: new Date(0),
+    path: '/'
+  });
 }

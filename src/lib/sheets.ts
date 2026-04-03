@@ -21,8 +21,33 @@ const getOrInitDoc = async () => {
     return globalForSheets.googleSheetDoc;
   }
 
+  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+  
+  // BUILD-SAFE GUARD: Prevent build crashes if env vars are missing during pre-rendering
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+  const hasCredentials = serviceEmail && process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_SHEET_ID;
+
+  if (isBuildPhase || !hasCredentials) {
+    if (isBuildPhase) console.warn('[Build] Skipping real Google Sheets initialization during build phase.');
+    // Return a mock document that won't throw on common operations
+    return {
+      title: 'Mock Document',
+      loadInfo: async () => {},
+      sheetsByTitle: {},
+      sheetsByIndex: [
+        { 
+          title: 'Transactions', 
+          getRows: async () => [], 
+          addRow: async () => {},
+          rowNumber: 0
+        }
+      ],
+      addSheet: async () => ({ title: 'Mock Sheet', getRows: async () => [], addRow: async () => {} }),
+    } as any;
+  }
+
   const serviceAccountAuth = new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    email: serviceEmail,
     key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     scopes: SCOPES,
   });
@@ -339,9 +364,13 @@ export async function fetchBranchSummaries(filterMonth?: number, filterYear?: nu
 
     const branches = fofjRows.map(r => r.get('Name') as string).filter(Boolean);
     
+    const nextMonthDate = new Date(currentYear, currentMonth, 1);
+    const targetMonth = nextMonthDate.getMonth() + 1;
+    const targetYear = nextMonthDate.getFullYear();
+
     const currentBudgets = budgetRows.filter(r => 
-      parseInt(r.get('Month')) === currentMonth &&
-      parseInt(r.get('Year')) === currentYear
+      parseInt(r.get('Month')) === targetMonth &&
+      parseInt(r.get('Year')) === targetYear
     );
 
     function parseTxDate(s: string): Date | null {

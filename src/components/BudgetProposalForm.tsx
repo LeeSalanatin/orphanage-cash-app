@@ -25,6 +25,9 @@ interface BudgetProposalFormProps {
 
 export default function BudgetProposalForm({ month, year, monthName, childBranches, initialItems, openingBalance }: BudgetProposalFormProps) {
   const router = useRouter();
+  const prevMonthDate = new Date(year, month - 2, 1);
+  const prevMonthName = prevMonthDate.toLocaleString('en-US', { month: 'long' });
+  const prevMonthYear = prevMonthDate.getFullYear();
   
   // Initialize items - Ensure the carry-over row always has the LATEST balance from the prop
   const initialItemsWithBalance = initialItems?.map(item => {
@@ -489,16 +492,26 @@ export default function BudgetProposalForm({ month, year, monthName, childBranch
 
              {/* 4. Final Budget Request */}
              <div className={styles.summaryFinalBox}>
-                <div className={styles.finalRow}>
-                  <span>RECAP:</span>
+                <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: '0', color: 'var(--primary)', fontSize: '1.2rem', fontWeight: 800 }}>FOFJ SCHOOL - CENTER</h3>
+                  <h4 style={{ margin: '4px 0', color: 'var(--text-main)', fontSize: '1rem', fontWeight: 600 }}>MONTHLY FINANCIAL BUDGET</h4>
+                  <p style={{ margin: '0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <div className={styles.finalData}>
+                  <div style={{ fontWeight: 600, marginBottom: '0.5rem', textAlign: 'left', fontSize: '0.95rem' }}>Expense Budget:</div>
+                  {categorySummary.map(cs => (
+                    <div key={cs.category} className={styles.summaryRow}>
+                      <span style={{ paddingLeft: '1rem' }}>{cs.category}</span>
+                      <span>₱{cs.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
+                  <div className={styles.grandTotalLine} />
                   <div className={styles.summaryRow}>
-                    <span>Total Proposed Expenses:</span>
-                    <span>₱{proposedExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span style={{ fontWeight: 700 }}>Total proposed expense budget:</span>
+                    <span style={{ fontWeight: 700 }}>₱{proposedExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className={styles.summaryRow}>
-                    <span>Opening Cash Balance:</span>
+                    <span>Less: Cash Balance last {prevMonthName} {prevMonthYear}:</span>
                     <span className={cohBalance >= 0 ? styles.positiveAmount : styles.negativeAmount}>
                       {cohBalance >= 0 ? '' : '- '}₱{Math.abs(cohBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>

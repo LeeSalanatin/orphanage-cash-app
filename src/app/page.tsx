@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import SummaryCard from "@/components/SummaryCard";
 import LedgerTable from "@/components/LedgerTable";
 import DashboardFilter from "@/components/DashboardFilter";
@@ -131,14 +132,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
 
   const fofjBranchNames = (fofjBranches as any[]).map((b: any) => b.name as string);
 
-  // Check for missing reports (for non-admins)
-  // 1. Previous month report status
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonth = prevMonthDate.getMonth() + 1;
-  const prevYear = prevMonthDate.getFullYear();
+  // Check report status for the currently viewed month
+  const viewMonth = filterMonth ?? (now.getMonth() + 1);
+  const viewYear = filterYear ?? now.getFullYear();
   
-  const reportStatus = !isAdmin ? await fetchReportStatus(prevMonth, prevYear, session.fofjBranch) : null;
-  const showPrevReportAlert = !isAdmin && (!reportStatus || reportStatus.status !== 'Submitted');
+  const reportStatus = !isAdmin ? await fetchReportStatus(viewMonth, viewYear, session.fofjBranch) : null;
+  // If no specific month is selected (viewing whole year), don't show the submission alert
+  const showReportAlert = !isAdmin && (!reportStatus || reportStatus.status !== 'Submitted') && (filterMonth !== null || params?.month === undefined);
 
   // Check next month budget status for user
   const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -149,13 +149,42 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
 
   return (
     <div className="container animate-fade-in">
-      {showPrevReportAlert && (
-        <ReportAlert 
-          month={prevMonth} 
-          year={prevYear} 
-          monthName={MONTH_NAMES[prevMonth]} 
-        />
-      )}
+      <div className={styles.statusBanners}>
+        {/* LEDGER STATUS */}
+        {showReportAlert ? (
+          <ReportAlert 
+            month={viewMonth} 
+            year={viewYear} 
+            monthName={MONTH_NAMES[viewMonth]} 
+            isCurrentMonth={viewMonth === (now.getMonth() + 1) && viewYear === now.getFullYear()}
+          />
+        ) : (
+          !isAdmin && (filterMonth !== null) && (
+            <div className={styles.statusSuccess}>
+              <span className={styles.statusIcon}>✓</span>
+              <span>Ledger Report for <strong>{MONTH_NAMES[viewMonth]} {viewYear}</strong> is locked and submitted.</span>
+            </div>
+          )
+        )}
+
+        {/* BUDGET STATUS */}
+        {!isAdmin && (
+          hasSentBudget ? (
+            <div className={styles.statusSuccess}>
+              <span className={styles.statusIcon}>✓</span>
+              <span>Budget Proposal for <strong>{MONTH_NAMES[nextMonth]} {nextYear}</strong> has been submitted.</span>
+            </div>
+          ) : (
+            <div className={styles.statusPending}>
+              <span className={styles.statusIcon}>⚠️</span>
+              <span>
+                Budget Proposal for <strong>{MONTH_NAMES[nextMonth]} {nextYear}</strong> is pending.{' '}
+                <Link href={`/budget/new?month=${nextMonth}&year=${nextYear}`}>Click here to submit.</Link>
+              </span>
+            </div>
+          )
+        )}
+      </div>
 
       {/* ── Header ── */}
       <div className={styles.dashboardHeader}>

@@ -119,10 +119,32 @@ export const useFirebase = (): FirebaseServicesAndUser => {
   const context = useContext(FirebaseContext);
 
   if (context === undefined) {
+    // During SSR/Prerendering, we return dummy objects to avoid build crashes
+    if (typeof window === 'undefined') {
+      return {
+        firebaseApp: {} as any,
+        firestore: {} as any,
+        auth: {} as any,
+        user: null,
+        isUserLoading: false,
+        userError: null,
+      };
+    }
     throw new Error('useFirebase must be used within a FirebaseProvider.');
   }
 
+  // Handle case where services are not available (e.g., during SSR via provider)
   if (!context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth) {
+    if (typeof window === 'undefined') {
+      return {
+        firebaseApp: {} as any,
+        firestore: {} as any,
+        auth: {} as any,
+        user: null,
+        isUserLoading: false,
+        userError: null,
+      };
+    }
     throw new Error('Firebase core services not available. Check FirebaseProvider props.');
   }
 
