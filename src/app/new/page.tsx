@@ -29,6 +29,7 @@ export default async function NewEntryPage() {
           branches={branches}
           fofjBranches={(fofjBranches as any[]).map((b: any) => b.name as string)}
           isAdmin={isAdmin}
+          currentFofjBranch={session.fofjBranch}
         />
       </div>
     </div>

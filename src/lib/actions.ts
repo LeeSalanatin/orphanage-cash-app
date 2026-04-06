@@ -7,7 +7,8 @@ import {
   saveBudgetProposals, 
   syncCashFlowTotals,
   updateTransaction,
-  deleteTransaction
+  deleteTransaction,
+  fetchBudgetProposals
 } from '@/lib/sheets';
 import { revalidatePath } from 'next/cache';
 import { login as setSession, logout as clearSession, getSession } from '@/lib/auth';
@@ -286,5 +287,21 @@ export async function submitBudgetProposalAction(month: number, year: number, pr
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to save budget proposal.' };
+  }
+}
+
+export async function getBudgetProposalsAction(month: number, year: number, fofjBranch?: string) {
+  try {
+    const session = await getSession();
+    if (!session) return [];
+    
+    const targetBranch = (session.fofjBranch === 'All' && fofjBranch) 
+      ? fofjBranch 
+      : session.fofjBranch;
+
+    return await fetchBudgetProposals(month, year, targetBranch);
+  } catch (error) {
+    console.error('Error in getBudgetProposalsAction:', error);
+    return [];
   }
 }
