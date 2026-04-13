@@ -1,21 +1,24 @@
-# Orphanage Cash Management App
+# PreachPoint
 
-A premium web application for "Flames of Fire for Jesus Orphanage" to manage their cash position using Google Sheets as a database.
+**PreachPoint** is a premium sermon duration management and session tracking application. It helps preachers and ministry leaders manage time during preaching sessions, track historical recordings, and provide AI-powered feedback on preaching durations.
 
-## Features
-- **Dashboard**: Real-time summary of receipts, disbursements, and current balance.
-- **Ledger**: Detailed transaction history with running balance calculation.
-- **Easy Entry**: Mobile-friendly form to record new transactions instantly.
-- **Google Sheets Backend**: Data is stored securely in your own spreadsheet.
+## Core Features
+- **Session Tracking**: Start, record, and manage preaching sessions with precision timers.
+- **Participant Management**: Track speakers and their preaching history.
+- **AI Duration Insights**: Generate automated explanations for time overages and fine calculations.
+- **Secure Data**: Leverages Firebase Firestore for real-time session data.
+
+## Identity & Legacy
+Originally built as a sister app to the FOFJ Children Funds system, PreachPoint now operates as a standalone tool for the Flames of Fire for Jesus ministry.
 
 ## Tech Stack
 - Next.js (App Router)
+- Firebase Firestore & Auth
+- Genkit AI (Flows for Duration Logic)
 - Vanilla CSS (CSS Modules)
-- Google Sheets API
-- Vercel for Hosting
+- Lucide React Icons
 
-## Local Development
-1. Clone the repository.
-2. Install dependencies: `npm install`.
-3. Set up environment variables in `.env.local` (see `setup_guide.md`).
-4. Run: `npm run dev`.
+## Getting Started
+1. Install dependencies: `npm install`.
+2. Configure Firebase in `.env.local`.
+3. Run: `npm run dev`.

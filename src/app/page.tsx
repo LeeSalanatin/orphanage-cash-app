@@ -1,282 +1,318 @@
-export const dynamic = 'force-dynamic';
-import SummaryCard from "@/components/SummaryCard";
-import LedgerTable from "@/components/LedgerTable";
-import DashboardFilter from "@/components/DashboardFilter";
-import AdminBranchCards from "@/components/AdminBranchCards";
-import AdminLedgerFilter from "@/components/AdminLedgerFilter";
-import { fetchTransactions, fetchBranchSummaries, fetchFOFJBranches, fetchReportStatus, fetchBudgetProposals } from "@/lib/sheets";
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import styles from "./page.module.css";
-import { Suspense } from "react";
-import ReportAlert from "@/components/ReportAlert";
+"use client";
 
-const MONTH_NAMES = [
-  '', 'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, query, doc, getDoc, collectionGroup, where } from 'firebase/firestore';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Mic2, 
+  PlusCircle, 
+  Calendar, 
+  Loader2, 
+  ChevronRight, 
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  Filter
+} from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useMemo, useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
-function parseTxDate(dateStr: string): Date | null {
-  if (!dateStr) return null;
-  const parts = dateStr.split('/');
-  if (parts.length === 3) return new Date(+parts[2], +parts[0] - 1, +parts[1]);
-  const d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
-}
+const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
-interface SearchParams {
-  month?: string;
-  year?: string;
-  ledgerBranch?: string;
-}
+export default function SessionsPage() {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
 
-export default async function Home({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const session = await getSession();
-  if (!session) redirect('/login');
+  // Check admin status
+  useEffect(() => {
+    if (!firestore || !user) return;
+    const checkAdmin = async () => {
+      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
+        setIsAdmin(true);
+        return;
+      }
+      try {
+        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, [firestore, user]);
 
-  const isAdmin = session.role === 'Admin';
+  const sessionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return collection(firestore, 'sessions');
+  }, [firestore, user]);
 
-  const params = await searchParams;
+  const { data: rawSessions, isLoading } = useCollection(sessionsQuery);
 
-  const allTransactions = await fetchTransactions(session.fofjBranch);
+  const sessions = useMemo(() => {
+    if (!rawSessions) return [];
+    return [...rawSessions].sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      
+      const dateA = a.sessionDate ? new Date(a.sessionDate).getTime() : (a.createdAt?.seconds || 0) * 1000;
+      const dateB = b.sessionDate ? new Date(b.sessionDate).getTime() : (b.createdAt?.seconds || 0) * 1000;
+      return dateB - dateA;
+    });
+  }, [rawSessions]);
 
-  const filterYearStr = params?.year;
-  const filterMonthStr = params?.month;
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    sessions.forEach(s => {
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      if (date) years.add(date.getFullYear().toString());
+    });
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [sessions]);
 
-  const now = new Date();
-  const filterYear = filterYearStr !== undefined ? (filterYearStr ? parseInt(filterYearStr) : null) : now.getFullYear();
-  const filterMonth = filterMonthStr !== undefined ? (filterMonthStr ? parseInt(filterMonthStr) : null) : now.getMonth() + 1;
-  const ledgerBranch = params?.ledgerBranch || '';
+  const filteredSessions = useMemo(() => {
+    return sessions.filter(s => {
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      if (!date) return true;
+      
+      const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
+      const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
+      
+      return yearMatch && monthMatch;
+    });
+  }, [sessions, filterYear, filterMonth]);
 
-  // Date-filtered transactions
-  const transactions = (filterYear || filterMonth)
-    ? allTransactions.filter(t => {
-        const d = parseTxDate(t.date);
-        if (!d) return false;
-        if (filterYear  && d.getFullYear() !== filterYear)  return false;
-        if (filterMonth && d.getMonth() + 1 !== filterMonth) return false;
-        return true;
-      })
-    : allTransactions;
-
-  // Sort descending (newest first)
-  transactions.sort((a, b) => {
-    const da = parseTxDate(a.date)?.getTime() || 0;
-    const db = parseTxDate(b.date)?.getTime() || 0;
-    return db - da;
-  });
-
-  // For admin ledger table: also filter by selected FOFJ Branch
-  const ledgerTransactions = (isAdmin && ledgerBranch)
-    ? transactions.filter(t => t.fofjBranch === ledgerBranch)
-    : transactions;
-
-  // Period label
-  let periodLabel = 'All Time';
-  if (filterYear && filterMonth) periodLabel = `${MONTH_NAMES[filterMonth]} ${filterYear}`;
-  else if (filterYear)           periodLabel = `Year ${filterYear}`;
-  else if (filterMonth)          periodLabel = MONTH_NAMES[filterMonth];
-
-  const defaultMonth = filterMonth ?? (now.getMonth() + 1);
-  const defaultYear  = filterYear  ?? now.getFullYear();
-
-  // Summaries (for header cards)
-  const totalReceipts      = transactions.reduce((acc, t) => acc + (t.debit  || 0), 0);
-  const totalDisbursements = transactions.reduce((acc, t) => acc + (t.credit || 0), 0);
-  const currentBalance     = totalReceipts - totalDisbursements;
-
-  // User monthly breakdown: only when a year is selected but no specific month
-  const showMonthlyBreakdown = !isAdmin && filterYear && !filterMonth;
-  const monthlyBreakdown = (() => {
-    if (!showMonthlyBreakdown) return null;
-    const byMonth: Record<number, { receipts: number; disbursements: number }> = {};
-    for (const t of transactions) {
-      const d = parseTxDate(t.date);
-      if (!d) continue;
-      const m = d.getMonth() + 1;
-      if (!byMonth[m]) byMonth[m] = { receipts: 0, disbursements: 0 };
-      byMonth[m].receipts      += t.debit  || 0;
-      byMonth[m].disbursements += t.credit || 0;
+  function handleConfirmDelete() {
+    if (sessionToDelete && firestore) {
+      deleteDocumentNonBlocking(doc(firestore, 'sessions', sessionToDelete));
+      setSessionToDelete(null);
     }
-    return Object.entries(byMonth)
-      .sort(([a], [b]) => +a - +b)
-      .filter(([, v]) => v.receipts > 0 || v.disbursements > 0)
-      .map(([m, v]) => ({ m: +m, ...v, balance: v.receipts - v.disbursements }));
-  })();
-
-  // User category breakdown for disbursements (always shown when not admin, not specific-month)
-  const categoryBreakdown = (() => {
-    if (isAdmin) return null;
-    // Only show when year is selected OR specific month — i.e. any time there's a filter
-    const byCategory: Record<string, number> = {};
-    for (const t of transactions) {
-      if ((t.credit || 0) === 0) continue; // skip receipts
-      const cat = t.classification || 'Others';
-      byCategory[cat] = (byCategory[cat] || 0) + t.credit;
-    }
-    const entries = Object.entries(byCategory).filter(([, v]) => v > 0);
-    if (entries.length === 0) return null;
-    return entries
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, amount]) => ({ name, amount }));
-  })();
-
-  // Admin: per-branch summaries and FOFJ branch list
-  const [branchSummaries, fofjBranches] = isAdmin
-    ? await Promise.all([
-        fetchBranchSummaries(defaultMonth, defaultYear),
-        fetchFOFJBranches(),
-      ])
-    : [[], []];
-
-  const fofjBranchNames = (fofjBranches as any[]).map((b: any) => b.name as string);
-
-  // Check report status for the currently viewed month
-  const viewMonth = filterMonth ?? (now.getMonth() + 1);
-  const viewYear = filterYear ?? now.getFullYear();
-  
-  const reportStatus = !isAdmin ? await fetchReportStatus(viewMonth, viewYear, session.fofjBranch) : null;
-  // If no specific month is selected (viewing whole year), don't show the submission alert
-  const showReportAlert = !isAdmin && (!reportStatus || reportStatus.status !== 'Submitted') && (filterMonth !== null || params?.month === undefined);
-
-  // Check next month budget status for user
-  const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const nextMonth = nextMonthDate.getMonth() + 1;
-  const nextYear = nextMonthDate.getFullYear();
-  const existingBudget = !isAdmin ? await fetchBudgetProposals(nextMonth, nextYear, session.fofjBranch) : [];
-  const hasSentBudget = existingBudget.length > 0;
+  }
 
   return (
-    <div className="container animate-fade-in">
-      <div className={styles.statusBanners}>
-        {/* LEDGER STATUS */}
-        {showReportAlert ? (
-          <ReportAlert 
-            month={viewMonth} 
-            year={viewYear} 
-            monthName={MONTH_NAMES[viewMonth]} 
-            isCurrentMonth={viewMonth === (now.getMonth() + 1) && viewYear === now.getFullYear()}
-          />
-        ) : (
-          !isAdmin && (filterMonth !== null) && (
-            <div className={styles.statusSuccess}>
-              <span className={styles.statusIcon}>✓</span>
-              <span>Ledger Report for <strong>{MONTH_NAMES[viewMonth]} {viewYear}</strong> is locked and submitted.</span>
-            </div>
-          )
-        )}
-
-        {/* BUDGET STATUS */}
-        {!isAdmin && (
-          hasSentBudget ? (
-            <div className={styles.statusSuccess}>
-              <span className={styles.statusIcon}>✓</span>
-              <span>Budget Proposal for <strong>{MONTH_NAMES[nextMonth]} {nextYear}</strong> has been submitted.</span>
-            </div>
-          ) : (
-            <div className={styles.statusPending}>
-              <span className={styles.statusIcon}>⚠️</span>
-              <span>
-                Budget Proposal for <strong>{MONTH_NAMES[nextMonth]} {nextYear}</strong> is pending.{' '}
-                <Link href={`/budget/new?month=${nextMonth}&year=${nextYear}`}>Click here to submit.</Link>
-              </span>
-            </div>
-          )
-        )}
-      </div>
-
-      {/* ── Header ── */}
-      <div className={styles.dashboardHeader}>
-        <h2 className={styles.sectionTitle}>
-          {isAdmin ? 'Admin' : session.fofjBranch} Financial Dashboard
-        </h2>
-        <Suspense fallback={<p className={styles.dateRange}>Reporting Period: {periodLabel}</p>}>
-          <div className={styles.filterRow}>
-            <DashboardFilter />
-          </div>
-        </Suspense>
-        {(filterYear || filterMonth) && (
-          <p className={styles.dateRange} style={{ marginTop: '0.25rem' }}>
-            Showing: <strong>{periodLabel}</strong> — {transactions.length} entries
-          </p>
-        )}
-      </div>
-
-      {/* ── Global summary cards ── */}
-      <div className={styles.summaryGrid}>
-        <SummaryCard
-          title="Total Cash Receipts"
-          amount={totalReceipts}
-          type="receipts"
-          subtitle={filterYear || filterMonth ? `Receipts for ${periodLabel}` : 'All-time receipts'}
-          breakdown={
-            isAdmin && (branchSummaries as any[]).length > 0
-              ? (branchSummaries as any[]).map(b => ({ name: b.branch, amount: b.receipts }))
-              : monthlyBreakdown
-                ? monthlyBreakdown.map(mb => ({ name: MONTH_NAMES[mb.m], amount: mb.receipts }))
-                : undefined
-          }
-        />
-        <SummaryCard
-          title="Total Disbursements"
-          amount={totalDisbursements}
-          type="disbursements"
-          subtitle="Total expenses for children & workers"
-          breakdown={
-            isAdmin && (branchSummaries as any[]).length > 0
-              ? (branchSummaries as any[]).map(b => ({ name: b.branch, amount: b.disbursements }))
-              : categoryBreakdown ?? undefined
-          }
-        />
-        <SummaryCard
-          title="Current Cash Position"
-          amount={currentBalance}
-          type="balance"
-          subtitle="Available funds as of today"
-          breakdown={
-            isAdmin && (branchSummaries as any[]).length > 0
-              ? (branchSummaries as any[]).map(b => ({ name: b.branch, amount: b.balance }))
-              : monthlyBreakdown
-                ? monthlyBreakdown.map(mb => ({ name: MONTH_NAMES[mb.m], amount: mb.balance }))
-                : undefined
-          }
-        />
-      </div>
-
-      {/* ── Admin only: per-branch summary cards ── */}
-      {isAdmin && (
-        <AdminBranchCards
-          summaries={branchSummaries}
-          periodLabel={periodLabel === 'All Time'
-            ? `${MONTH_NAMES[defaultMonth]} ${defaultYear}`
-            : periodLabel}
-          year={defaultYear}
-          month={filterMonth}
-        />
-      )}
-
-      {/* ── Ledger section (user only) ── */}
-      {!isAdmin && (
-        <div className={styles.ledgerSection}>
-          <div className={styles.sectionHeader}>
-            <h3 className={styles.subTitle}>Recent Ledger Entries</h3>
-            <Link 
-              href={`/ledger?year=${filterYear ?? defaultYear}&month=${filterMonth ?? ''}`} 
-              className={styles.viewAll}
-            >
-              View Full Ledger →
-            </Link>
-          </div>
-          <LedgerTable
-            transactions={ledgerTransactions.slice(0, 10)}
-            editable={true}
-            branches={[]}
-            isMonthlyView={!!filterMonth}
-            periodLabel={periodLabel}
-          />
+    <div className="container mx-auto py-6 px-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div>
+          <h1 className="text-2xl font-headline font-bold text-primary">Preaching Sessions</h1>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Session History & Live</p>
         </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto mt-3 sm:mt-0">
+          <div className="flex items-center gap-2 mr-auto sm:mr-4 bg-muted/30 p-1.5 rounded-lg border">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+            <Select value={filterYear} onValueChange={setFilterYear}>
+              <SelectTrigger className="w-[90px] h-7 text-xs bg-card border-none shadow-sm font-medium">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {availableYears.map(year => (
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="w-px h-4 bg-border mx-1" />
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-[100px] h-7 text-xs bg-card border-none shadow-sm font-medium">
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Months</SelectItem>
+                <SelectItem value="1">Jan</SelectItem>
+                <SelectItem value="2">Feb</SelectItem>
+                <SelectItem value="3">Mar</SelectItem>
+                <SelectItem value="4">Apr</SelectItem>
+                <SelectItem value="5">May</SelectItem>
+                <SelectItem value="6">Jun</SelectItem>
+                <SelectItem value="7">Jul</SelectItem>
+                <SelectItem value="8">Aug</SelectItem>
+                <SelectItem value="9">Sep</SelectItem>
+                <SelectItem value="10">Oct</SelectItem>
+                <SelectItem value="11">Nov</SelectItem>
+                <SelectItem value="12">Dec</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {isAdmin && (
+            <Button asChild size="sm" className="shadow-md h-8 text-xs w-full sm:w-auto">
+              <Link href="/sessions/new">
+                <PlusCircle className="mr-2 h-3.5 w-3.5" />
+                New Session
+              </Link>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-32 bg-muted animate-pulse rounded-lg border" />
+          ))}
+        </div>
+      ) : filteredSessions && filteredSessions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredSessions.map((session) => (
+            <SessionCard 
+              key={session.id} 
+              session={session} 
+              isAdmin={isAdmin} 
+              onDelete={(id) => setSessionToDelete(id)} 
+            />
+          ))}
+        </div>
+      ) : (
+        <Card className="text-center py-16 border-dashed border-2 bg-transparent">
+          <CardContent className="space-y-3">
+            <div className="mx-auto bg-primary/10 p-3 rounded-full w-14 h-14 flex items-center justify-center">
+              <Mic2 className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="text-lg font-semibold">{sessions.length > 0 ? "No sessions match your filter" : "No sessions found"}</h3>
+            <p className="text-[10px] text-muted-foreground max-w-xs mx-auto">
+              {sessions.length > 0 ? "Try adjusting your year or month filters to see results." : "There are no recorded sessions yet."}
+            </p>
+            {isAdmin && sessions.length === 0 && (
+              <Button asChild size="sm" className="mt-2 h-8 text-xs">
+                <Link href="/sessions/new">Get Started</Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
+
+      <AlertDialog open={!!sessionToDelete} onOpenChange={(open) => !open && setSessionToDelete(null)}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">Delete Session?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[10px]">
+              This will permanently delete the session and all related preaching records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="h-8 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 text-xs">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+function SessionCard({ session, isAdmin, onDelete }: { session: any; isAdmin: boolean; onDelete: (id: string) => void }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const voteQuery = useMemoFirebase(() => {
+    if (!firestore || !user || !session?.id) return null;
+    return query(
+      collection(firestore, 'sessions', session.id, 'votes'),
+      where('voterParticipantId', '==', user.uid)
+    );
+  }, [firestore, user, session?.id]);
+  
+  const { data: userVotes } = useCollection(voteQuery);
+  const hasVoted = userVotes && userVotes.length > 0;
+
+  const displayDate = session.sessionDate 
+    ? new Date(session.sessionDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) 
+    : 'No Date';
+  
+  const statusColors: Record<string, string> = {
+    active: 'bg-green-500 hover:bg-green-600',
+    completed: 'bg-slate-500 hover:bg-slate-600',
+    pending: 'bg-amber-500 hover:bg-amber-600'
+  };
+
+  return (
+    <Card className="hover:shadow-md transition-all border-none shadow-sm h-full flex flex-col group hover:-translate-y-0.5 duration-200 bg-card relative overflow-hidden">
+      <Link href={`/sessions/${session.id}`} className="absolute inset-0 z-0" />
+      <CardHeader className="pb-1 pt-4 px-4 relative z-10 pointer-events-none">
+        <div className="flex justify-between items-start mb-1 pointer-events-auto">
+          <div className="flex gap-1.5 flex-wrap">
+            <Badge className={cn("capitalize text-[9px] h-4 text-white border-none", statusColors[session.status] || 'bg-secondary')}>
+              {session.status}
+            </Badge>
+            <Badge variant="outline" className="capitalize text-[9px] h-4 font-bold border-muted-foreground/20">
+              {session.sessionType}
+            </Badge>
+            {hasVoted && (
+              <Badge variant="secondary" className="capitalize text-[8px] h-4 font-bold bg-primary/10 text-primary border-none flex items-center gap-0.5">
+                <CheckCircle2 className="h-2.5 w-2.5" /> Voted
+              </Badge>
+            )}
+          </div>
+          {isAdmin && (
+            <div className="flex gap-1 pointer-events-auto">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                asChild
+              >
+                <Link href={`/sessions/${session.id}/edit`}>
+                  <Edit2 className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete(session.id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <CardTitle className="text-base line-clamp-1 group-hover:text-primary transition-colors leading-tight">{session.title || 'Untitled Session'}</CardTitle>
+        <CardDescription className="flex items-center gap-1 text-[10px] mt-0.5">
+          <Calendar className="h-2.5 w-2.5" /> {displayDate}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex-grow pt-2 px-4 relative z-10 pointer-events-none">
+        <div className="space-y-1 text-[10px]">
+          <div className="flex justify-between items-center text-muted-foreground">
+            <span>Limit:</span>
+            <span className="font-semibold text-foreground">
+              {session.maxPreachingTimeMinutes || '0'}m {session.maxPreachingTimeSeconds || '0'}s
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-muted-foreground">
+            <span>Fine:</span>
+            <span className="font-semibold text-foreground">
+              ₱{session.fineRules?.[0]?.amount || 0} ({session.fineRules?.[0]?.type === 'fixed' ? 'Fixed' : '/min'})
+            </span>
+          </div>
+        </div>
+      </CardContent>
+      <div className="p-3 pt-0 mt-auto relative z-10 pointer-events-none">
+        <Button variant="ghost" className="w-full text-primary hover:text-primary hover:bg-primary/5 p-0 h-7 text-[9px] justify-between font-bold uppercase tracking-tight">
+          {session.status === 'completed' ? 'View Records' : 'Open Session'}
+          <ChevronRight className="h-3 w-3" />
+        </Button>
+      </div>
+    </Card>
   );
 }

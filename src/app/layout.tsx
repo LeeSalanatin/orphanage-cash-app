@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/Header";
+import { Navbar } from "@/components/layout/Navbar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ColorThemeProvider } from "@/components/ColorThemeProvider";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
@@ -17,13 +17,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "FOFJ Children Funds | Funds Management",
-  description: "Secure and transparent funds management system for FOFJ Children Funds.",
+  title: "PreachPoint | Sermon Flow Manager",
+  description: "AI-powered sermon duration management and session tracking tool.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "FOFJ Funds",
+    title: "PreachPoint",
   },
 };
 
@@ -38,7 +38,7 @@ export default function RootLayout({
         <FirebaseClientProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem themes={['light', 'dark']}>
             <ColorThemeProvider>
-              <Header />
+              <Navbar />
               <main>{children}</main>
             </ColorThemeProvider>
           </ThemeProvider>

@@ -13,7 +13,9 @@ import {
   LogOut,
   Menu,
   X,
-  Wallet
+  Wallet,
+  Mic2,
+  Users
 } from 'lucide-react';
 import { logoutAction } from '@/lib/actions';
 import ThemeToggle from './ThemeToggle';
@@ -49,18 +51,13 @@ export default function HeaderClient({ session }: HeaderClientProps) {
             
             <Link href="/" className={styles.logo} onClick={closeMenu}>
               <div className={styles.logoWrapper}>
-                <Image 
-                  src="/logo.png" 
-                  alt="FOFJ Logo" 
-                  width={32} 
-                  height={32} 
-                  className={styles.logoImage}
-                  priority
-                />
+                <div className={styles.logoIcon}>
+                  <Mic2 size={24} className="text-primary" />
+                </div>
               </div>
               <div className={styles.logoInfo}>
-                <h1 className={styles.title}>FOFJ Children Funds</h1>
-                <p className={styles.subtitle}>Funds Management</p>
+                <h1 className={styles.title}>PreachPoint</h1>
+                <p className={styles.subtitle}>Sermon Flow Manager</p>
               </div>
             </Link>
           </div>
@@ -71,28 +68,22 @@ export default function HeaderClient({ session }: HeaderClientProps) {
                 href="/" 
                 className={`${styles.navLink} ${isActive('/') ? styles.navLinkActive : ''}`}
               >
-                <LayoutDashboard size={18} /> Dashboard
+                <LayoutDashboard size={18} /> Sessions
+              </Link>
+              <Link 
+                href="/participants" 
+                className={`${styles.navLink} ${isActive('/participants') ? styles.navLinkActive : ''}`}
+              >
+                <Users size={18} /> Participants
               </Link>
               <Link 
                 href="/ledger" 
                 className={`${styles.navLink} ${isActive('/ledger') ? styles.navLinkActive : ''}`}
               >
-                <ClipboardList size={18} /> Ledger & Summary
+                <ClipboardList size={18} /> Financials
               </Link>
-              <Link 
-                href="/branches" 
-                className={`${styles.navLink} ${isActive('/branches') ? styles.navLinkActive : ''}`}
-              >
-                <Building2 size={18} /> Branches
-              </Link>
-              <Link 
-                href="/budget/new" 
-                className={`${styles.navLink} ${isActive('/budget/new') ? styles.navLinkActive : ''}`}
-              >
-                <Wallet size={18} /> Budget
-              </Link>
-              <Link href="/new" className={styles.addButton}>
-                <PlusCircle size={18} /> New Entry
+              <Link href="/sessions/new" className={styles.addButton}>
+                <PlusCircle size={18} /> New Session
               </Link>
               
               <div className={styles.userProfile}>
@@ -136,31 +127,24 @@ export default function HeaderClient({ session }: HeaderClientProps) {
                 className={`${styles.sidebarLink} ${isActive('/') ? styles.sidebarLinkActive : ''}`} 
                 onClick={closeMenu}
               >
-                <LayoutDashboard size={20} /> Dashboard
+                <LayoutDashboard size={20} /> Sessions
               </Link>
               <Link 
                 href="/ledger" 
                 className={`${styles.sidebarLink} ${isActive('/ledger') ? styles.sidebarLinkActive : ''}`} 
                 onClick={closeMenu}
               >
-                <ClipboardList size={20} /> Ledger & Summary
+                <ClipboardList size={20} /> Financials
               </Link>
               <Link 
-                href="/branches" 
-                className={`${styles.sidebarLink} ${isActive('/branches') ? styles.sidebarLinkActive : ''}`} 
+                href="/participants" 
+                className={`${styles.sidebarLink} ${isActive('/participants') ? styles.sidebarLinkActive : ''}`} 
                 onClick={closeMenu}
               >
-                <Building2 size={20} /> Branches
+                <Users size={20} /> Participants
               </Link>
-              <Link 
-                href="/budget/new" 
-                className={`${styles.sidebarLink} ${isActive('/budget/new') ? styles.sidebarLinkActive : ''}`} 
-                onClick={closeMenu}
-              >
-                <Wallet size={20} /> Budget
-              </Link>
-              <Link href="/new" className={styles.sidebarAddButton} onClick={closeMenu}>
-                <PlusCircle size={20} /> New Entry
+              <Link href="/sessions/new" className={styles.sidebarAddButton} onClick={closeMenu}>
+                <PlusCircle size={20} /> New Session
               </Link>
               
               {session.role === 'Admin' && (
