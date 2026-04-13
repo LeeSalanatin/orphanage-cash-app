@@ -236,10 +236,10 @@ export default function BudgetProposalForm({ month, year, monthName, childBranch
             </div>
             <div className={styles.breakdownItem}>
               <span className={styles.labelSmall}>
-                {cohBalance >= 0 ? 'Cash Carry-Over (Surplus):' : 'Cash Deficit (To be covered):'}
+                {cohBalance >= 0 ? 'Cash Balance (Surplus):' : 'Cash Advance (Deficit):'}
               </span>
               <span className={styles.valueSmall} style={{ color: cohBalance >= 0 ? 'var(--success, #10b981)' : 'var(--error, #ef4444)' }}>
-                {cohBalance >= 0 ? '-' : '+'} ₱{Math.abs(cohBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {cohBalance >= 0 ? '-' : ''} ₱{Math.abs(cohBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
             <div className={styles.divider} />
@@ -511,9 +511,9 @@ export default function BudgetProposalForm({ month, year, monthName, childBranch
                     <span style={{ fontWeight: 700 }}>₱{proposedExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className={styles.summaryRow}>
-                    <span>Less: Cash Balance last {prevMonthName} {prevMonthYear}:</span>
-                    <span className={cohBalance >= 0 ? styles.positiveAmount : styles.negativeAmount}>
-                      {cohBalance >= 0 ? '' : '- '}₱{Math.abs(cohBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <span>{cohBalance >= 0 ? `Less: Cash Balance last ${prevMonthName} ${prevMonthYear}:` : `Cash Advance last ${prevMonthName} ${prevMonthYear}:`}</span>
+                    <span className={cohBalance >= 0 ? styles.negativeAmount : styles.positiveAmount}>
+                      {cohBalance >= 0 ? '-' : ''} ₱{Math.abs(cohBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className={styles.grandTotalLine} />
