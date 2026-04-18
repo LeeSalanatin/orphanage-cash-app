@@ -51,14 +51,15 @@ const getOrInitDoc = async () => {
     privateKey = privateKey.substring(1, privateKey.length - 1);
   }
 
-  // 2. Try Base64 decoding if it looks like Base64 (no PEM headers, no newlines)
-  const trimmedKey = privateKey.trim();
-  if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('\n')) {
+  // 2. Try Base64 decoding if it looks like Base64 (no PEM headers)
+  // We strip ALL whitespace for the check to ignore Vercel trailing newlines
+  const flattenedKey = privateKey.replace(/\s/g, '');
+  if (!flattenedKey.includes('-----BEGIN')) {
     try {
-      const decoded = Buffer.from(trimmedKey, 'base64').toString('utf8');
+      const decoded = Buffer.from(flattenedKey, 'base64').toString('utf8');
       if (decoded.includes('-----BEGIN')) {
         privateKey = decoded;
-        console.log('[Auth] Successfully decoded Base64 key.');
+        console.log('[Auth] Successfully decoded Base64 key (whitespace-stripped).');
       }
     } catch (e) {
       console.error('[Auth] Failed to decode potential Base64 key.');
