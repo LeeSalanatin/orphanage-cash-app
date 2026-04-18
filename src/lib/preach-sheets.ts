@@ -43,18 +43,26 @@ const getOrInitDoc = async () => {
     throw new Error('Missing Google Sheets environment variables');
   }
 
-  // Robust parsing: handle both escaped \n and actual newlines
+  // Robust parsing for Vercel formatting
   if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
     privateKey = privateKey.substring(1, privateKey.length - 1);
   }
-  
-  // Clean up any weird spaces and ensure literal \n are replaced with real newlines
-  privateKey = privateKey.trim().replace(/\\n/g, '\n');
 
-  // Diagnostic (Safe: only logs length and start/end markers)
-  console.log(`[Auth] Attempting init with Key Length: ${privateKey.length}`);
-  console.log(`[Auth] Key starts with: ${privateKey.substring(0, 25)}...`);
-  console.log(`[Auth] Key ends with: ...${privateKey.substring(privateKey.length - 25)}`);
+  // Handle Base64 encoded keys (The "Nuclear Option" for Vercel)
+  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('\n')) {
+    try {
+      const decoded = Buffer.from(privateKey, 'base64').toString('utf-8');
+      if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
+        privateKey = decoded;
+        console.log('[Auth] Detected and decoded Base64 private key.');
+      }
+    } catch (e) {
+      console.warn('[Auth] Key looks like Base64 but failed to decode.');
+    }
+  }
+  
+  // Ensure literal \n are replaced with real newlines for PEM format
+  privateKey = privateKey.trim().replace(/\\n/g, '\n');
 
   const auth = new JWT({
     email: serviceEmail,
