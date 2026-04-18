@@ -118,6 +118,7 @@ export interface Participant {
   dateJoined: string;
   totalPoints: number;
   totalFines: number;
+  paidFines: number;
 }
 
 export interface Group {
@@ -305,6 +306,7 @@ export async function fetchParticipants(): Promise<Participant[]> {
         dateJoined: r.get('dateJoined'),
         totalPoints: parseFloat(r.get('totalPoints') || '0'),
         totalFines: parseFloat(r.get('totalFines') || '0'),
+        paidFines: parseFloat(r.get('paidFines') || '0'),
         status: r.get('status') || 'active',
       })) as any;
     } catch (e) { return []; }
@@ -313,7 +315,7 @@ export async function fetchParticipants(): Promise<Participant[]> {
 
 export async function addParticipant(p: any) {
   const doc = await getSheetDoc();
-  const sheet = await ensureSheet(doc, 'Participants', ['id', 'name', 'email', 'userId', 'dateJoined', 'totalPoints', 'totalFines', 'status']);
+  const sheet = await ensureSheet(doc, 'Participants', ['id', 'name', 'email', 'userId', 'dateJoined', 'totalPoints', 'totalFines', 'paidFines', 'status']);
   const id = `PART_${Date.now()}`;
   await sheet.addRow({
     id,
@@ -323,6 +325,7 @@ export async function addParticipant(p: any) {
     dateJoined: p.dateJoined || new Date().toISOString(),
     totalPoints: (p.totalPoints || 0).toString(),
     totalFines: (p.totalFines || 0).toString(),
+    paidFines: (p.paidFines || 0).toString(),
     status: p.status || 'active',
   });
   invalidateCache(['participants']);
@@ -353,6 +356,14 @@ export async function updateParticipant(id: string, data: any) {
         row.set('totalFines', (current + data.totalFines.val).toString());
       } else {
         row.set('totalFines', data.totalFines.toString());
+      }
+    }
+    if (data.paidFines !== undefined) {
+       if (typeof data.paidFines === 'object' && data.paidFines.__type === 'increment') {
+        const current = parseFloat(row.get('paidFines') || '0');
+        row.set('paidFines', (current + data.paidFines.val).toString());
+      } else {
+        row.set('paidFines', data.paidFines.toString());
       }
     }
     await row.save();

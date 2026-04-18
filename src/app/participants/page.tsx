@@ -59,6 +59,11 @@ export default function ParticipantsPage() {
   const [editEmailValue, setEditEmailValue] = useState('');
   const [editStatusValue, setEditStatusValue] = useState<'active' | 'inactive'>('active');
   
+  // Payment State
+  const [payingParticipant, setPayingParticipant] = useState<any>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
   // Group Management State
   const [managingGroup, setManagingGroup] = useState<any>(null);
   const [selectedMemberIds, setSelectedMemberIds] = useState<Record<string, boolean>>({});
@@ -203,8 +208,14 @@ export default function ParticipantsPage() {
       // Use manually tracked totalPoints if viewing all time (in case of manual tweaks), otherwise use dynamic
       const displayPoints = (filterYear === 'all' && filterMonth === 'all') ? (p.totalPoints || 0) : dynamicPoints;
       
-      const myEvents = timeFilteredEvents.filter((re: any) => re.participantId === p.id || (p.userId && re.participantId === p.userId));
-
+      const myEvents = timeFilteredEvents.filter((re: any) => {
+        const isIdMatch = re.participantId === p.id || (p.userId && re.participantId === p.userId);
+        const isEmailMatch = p.email && re.participantName.toLowerCase().includes(p.email.toLowerCase());
+        const isNameMatch = re.participantName.toLowerCase() === p.name.toLowerCase() || 
+                           re.participantName.toLowerCase().includes(` - ${p.name.toLowerCase()}`);
+        return isIdMatch || isEmailMatch || isNameMatch;
+      });
+      
       const sessionGroupKeys = new Set<string>();
       myEvents.forEach((e: any) => {
         if (e.preachingGroupId) {
@@ -238,7 +249,7 @@ export default function ParticipantsPage() {
         }
       });
       
-      stats[p.id] = { totalFines, points: displayPoints };
+      stats[p.id] = { totalFines, points: displayPoints, paidFines: p.paidFines || 0 };
     });
 
     return stats;
@@ -447,6 +458,33 @@ export default function ParticipantsPage() {
     toast({ title: "Left Group" });
   }
 
+  async function handleRecordPayment() {
+    if (!payingParticipant || !paymentAmount || isNaN(parseFloat(paymentAmount))) return;
+    
+    setIsSubmittingPayment(true);
+    try {
+      const amount = parseFloat(paymentAmount);
+      const res = await fetch('/api/sheets/participants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: payingParticipant.id,
+          paidFines: { __type: 'increment', val: amount }
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to save payment');
+      
+      toast({ title: "Payment Recorded", description: `₱${amount.toFixed(2)} added to ${payingParticipant.name}` });
+      setPayingParticipant(null);
+      setPaymentAmount('');
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: 'destructive' });
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  }
+
   return (
     <div className="container mx-auto py-6 px-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
@@ -652,7 +690,22 @@ export default function ParticipantsPage() {
                                 <span className="text-destructive font-bold text-xs">₱{(participantStats[p.id]?.totalFines || 0).toFixed(2)}</span>
                               </TableCell>
                               <TableCell className="px-3 text-right">
-                                <span className="text-orange-500 font-bold text-xs">₱{Math.max(0, (participantStats[p.id]?.totalFines || 0) - (participantStats[p.id]?.points || p.totalPoints || 0)).toFixed(2)}</span>
+                                <div className="flex flex-col items-end">
+                                  <span className="text-orange-500 font-bold text-xs">₱{Math.max(0, (participantStats[p.id]?.totalFines || 0) - (participantStats[p.id]?.paidFines || p.paidFines || 0)).toFixed(2)}</span>
+                                  {isAdmin && (
+                                    <Button 
+                                      variant="link" 
+                                      size="sm" 
+                                      className="h-auto p-0 text-[9px] text-primary hover:text-primary/70"
+                                      onClick={() => {
+                                        setPayingParticipant(p);
+                                        setPaymentAmount('');
+                                      }}
+                                    >
+                                      Record Payment
+                                    </Button>
+                                  )}
+                                </div>
                               </TableCell>
                               {isAdmin && (
                                 <TableCell className="px-3 text-right">
@@ -826,6 +879,46 @@ export default function ParticipantsPage() {
             </div>
           </div>
           <DialogFooter><Button size="sm" className="h-8 text-xs" onClick={handleUpdateProfile}>Save</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Payment Dialog */}
+      <Dialog open={!!payingParticipant} onOpenChange={(o) => !o && setPayingParticipant(null)}>
+        <DialogContent className="max-w-sm p-4">
+          <DialogHeader>
+            <DialogTitle className="text-base">Record Payment</DialogTitle>
+            <DialogDescription className="text-xs">
+              Enter the amount paid by <strong>{payingParticipant?.name}</strong> to reduce their outstanding fine.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+             <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Original Total:</span>
+                <span className="font-bold">₱{(participantStats[payingParticipant?.id]?.totalFines || 0).toFixed(2)}</span>
+             </div>
+             <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Current Balance:</span>
+                <span className="font-bold text-orange-500">₱{Math.max(0, (participantStats[payingParticipant?.id]?.totalFines || 0) - (participantStats[payingParticipant?.id]?.paidFines || payingParticipant?.paidFines || 0)).toFixed(2)}</span>
+             </div>
+             <div className="pt-2">
+                <Label htmlFor="payAmount" className="text-[10px] uppercase font-bold text-muted-foreground">Payment Amount (₱)</Label>
+                <Input 
+                  id="payAmount" 
+                  type="number" 
+                  step="0.01"
+                  placeholder="0.00" 
+                  className="h-9 mt-1" 
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+             </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setPayingParticipant(null)} disabled={isSubmittingPayment}>Cancel</Button>
+            <Button size="sm" onClick={handleRecordPayment} disabled={isSubmittingPayment || !paymentAmount}>
+              {isSubmittingPayment && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+              Save Payment
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
