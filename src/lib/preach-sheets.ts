@@ -36,12 +36,18 @@ async function withCache<T>(key: string, fn: () => Promise<T>, ttl = DATA_CACHE_
 
 const getOrInitDoc = async () => {
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
   const sheetId = process.env.GOOGLE_SHEET_ID;
 
   if (!serviceEmail || !privateKey || !sheetId) {
     throw new Error('Missing Google Sheets environment variables');
   }
+
+  // Robust parsing: handle both escaped \n and actual newlines
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.substring(1, privateKey.length - 1);
+  }
+  privateKey = privateKey.replace(/\\n/g, '\n');
 
   const auth = new JWT({
     email: serviceEmail,
