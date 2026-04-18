@@ -49,9 +49,10 @@ const getOrInitDoc = async () => {
   }
 
   // Handle Base64 encoded keys (The "Nuclear Option" for Vercel)
-  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----') && !privateKey.includes('\n')) {
+  const trimmedKey = privateKey.trim();
+  if (!trimmedKey.includes('-----BEGIN PRIVATE KEY-----') && !trimmedKey.includes('\n') && !trimmedKey.includes('\r')) {
     try {
-      const decoded = Buffer.from(privateKey, 'base64').toString('utf-8');
+      const decoded = Buffer.from(trimmedKey, 'base64').toString('utf-8');
       if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
         privateKey = decoded;
         console.log('[Auth] Detected and decoded Base64 private key.');
