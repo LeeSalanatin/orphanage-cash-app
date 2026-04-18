@@ -43,26 +43,29 @@ const getOrInitDoc = async () => {
     throw new Error('Missing Google Sheets environment variables');
   }
 
-  // Robust parsing for Vercel formatting
+  // ROBUST KEY LOADING LOGIC
+  console.log(`[Auth] Secret Key Check: Length=${privateKey.length}, StartsWith="${privateKey.substring(0, 10)}...", EndsWith="...${privateKey.substring(privateKey.length - 10)}"`);
+
+  // 1. Remove optional surrounding quotes
   if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
     privateKey = privateKey.substring(1, privateKey.length - 1);
   }
 
-  // Handle Base64 encoded keys (The "Nuclear Option" for Vercel)
+  // 2. Try Base64 decoding if it looks like Base64 (no PEM headers, no newlines)
   const trimmedKey = privateKey.trim();
-  if (!trimmedKey.includes('-----BEGIN PRIVATE KEY-----') && !trimmedKey.includes('\n') && !trimmedKey.includes('\r')) {
+  if (!trimmedKey.includes('-----BEGIN') && !trimmedKey.includes('\n')) {
     try {
-      const decoded = Buffer.from(trimmedKey, 'base64').toString('utf-8');
-      if (decoded.includes('-----BEGIN PRIVATE KEY-----')) {
+      const decoded = Buffer.from(trimmedKey, 'base64').toString('utf8');
+      if (decoded.includes('-----BEGIN')) {
         privateKey = decoded;
-        console.log('[Auth] Detected and decoded Base64 private key.');
+        console.log('[Auth] Successfully decoded Base64 key.');
       }
     } catch (e) {
-      console.warn('[Auth] Key looks like Base64 but failed to decode.');
+      console.error('[Auth] Failed to decode potential Base64 key.');
     }
   }
-  
-  // Ensure literal \n are replaced with real newlines for PEM format
+
+  // 3. Final PEM cleanup (handle literal \n and trim)
   privateKey = privateKey.trim().replace(/\\n/g, '\n');
 
   const auth = new JWT({
