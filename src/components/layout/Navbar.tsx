@@ -4,11 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut, Settings2, Menu } from 'lucide-react';
-import { useUser, useAuth, useFirestore } from '@/firebase';
+import { useState, useMemo } from 'react';
+import { useUser, useAuth, useFirestore, doc, getDoc } from '@/db';
 import { Button } from '@/components/ui/button';
-import { signOut } from 'firebase/auth';
-import { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
 import {
   Sheet,
   SheetContent,
@@ -17,35 +15,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
-
 export function Navbar() {
   const pathname = usePathname();
   const { user, isUserLoading } = useUser();
-  const auth = useAuth();
-  const firestore = useFirestore();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { logout } = useAuth();
+  const isAdmin = user?.role === 'admin' || (user as any)?.isAdmin;
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!firestore || !user) {
-      setIsAdmin(false);
-      return;
-    }
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [firestore, user]);
 
   const allLinks = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
@@ -97,7 +72,7 @@ export function Navbar() {
                       variant="ghost" 
                       className="w-full justify-start text-muted-foreground hover:text-destructive h-12" 
                       onClick={() => {
-                        signOut(auth);
+                        logout();
                         setIsOpen(false);
                       }}
                     >
@@ -155,7 +130,7 @@ export function Navbar() {
                     </Button>
                   </Link>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => signOut(auth)} className="hidden md:flex">
+                <Button variant="ghost" size="sm" onClick={() => logout()} className="hidden md:flex">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </Button>

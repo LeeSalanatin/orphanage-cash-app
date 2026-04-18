@@ -4,7 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ColorThemeProvider } from "@/components/ColorThemeProvider";
-import { FirebaseClientProvider } from "@/firebase/client-provider";
+import { AuthProvider } from "@/lib/auth-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -35,14 +35,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <FirebaseClientProvider>
+        <AuthProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem themes={['light', 'dark']}>
             <ColorThemeProvider>
               <Navbar />
               <main>{children}</main>
             </ColorThemeProvider>
           </ThemeProvider>
-        </FirebaseClientProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -2,8 +2,7 @@
 
 
 
-import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, doc } from 'firebase/firestore';
+import { useMemoDb, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, collection, query, where, doc } from '@/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +28,7 @@ export default function ConfigurationsPage() {
   const router = useRouter();
   const [configToDelete, setConfigToDelete] = useState<string | null>(null);
 
-  const configsQuery = useMemoFirebase(() => {
+  const configsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'session_configurations');
   }, [firestore, user]);

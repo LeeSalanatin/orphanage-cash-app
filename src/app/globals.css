@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   /* Default Theme (Red) */
   --theme-color: #d32f2f;

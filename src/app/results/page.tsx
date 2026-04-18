@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, doc, collectionGroup, where } from 'firebase/firestore';
+import { useMemoDb, useCollection, useUser, useFirestore, collection, query, doc, collectionGroup, where } from '@/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,22 +30,22 @@ function ResultsContent() {
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
 
-  const participantsQuery = useMemoFirebase(() => {
+  const participantsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const groupsQuery = useMemoFirebase(() => {
+  const groupsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
-  const sessionsQuery = useMemoFirebase(() => {
+  const sessionsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'sessions');
   }, [firestore, user]);
 
-  const votesQuery = useMemoFirebase(() => {
+  const votesQuery = useMemoDb(() => {
     if (!firestore || !user || !sessionFilterId) return null;
     return collection(firestore, 'sessions', sessionFilterId, 'votes');
   }, [firestore, user, sessionFilterId]);

@@ -2,8 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, collection } from 'firebase/firestore';
-import { useFirestore, useUser, updateDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { doc, getDoc, collection, useFirestore, useUser, updateDocumentNonBlocking, useCollection, useMemoDb } from '@/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,13 +12,12 @@ import { Loader2, Save, ArrowLeft, AlertCircle, Calendar as CalendarIcon } from 
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
-
 export default function EditSession({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const db = useFirestore();
   const { user, isUserLoading } = useUser();
+  const isAdmin = user?.role === 'admin' || (user as any)?.isAdmin;
   const { toast } = useToast();
   
   const [title, setTitle] = useState('');
@@ -27,25 +25,6 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
   const [selectedConfigId, setSelectedConfigId] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-
-  // Check admin status
-  useEffect(() => {
-    if (isUserLoading || !db || !user) return;
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(db, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [db, user, isUserLoading]);
 
   // Load existing session data
   useEffect(() => {
@@ -67,7 +46,7 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
     loadSession();
   }, [db, id, toast]);
 
-  const configsQuery = useMemoFirebase(() => {
+  const configsQuery = useMemoDb(() => {
     if (!db || !user) return null;
     return collection(db, 'session_configurations');
   }, [db, user]);

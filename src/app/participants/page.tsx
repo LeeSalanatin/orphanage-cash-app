@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, collectionGroup, doc, query, getDoc } from 'firebase/firestore';
+import { useMemoDb, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking, collection, collectionGroup, doc, query, getDoc } from '@/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,11 +26,10 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
-
 export default function ParticipantsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const isAdmin = user?.role === 'admin' || (user as any)?.isAdmin;
   const { toast } = useToast();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +39,6 @@ export default function ParticipantsPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
   
   type SortColumn = 'name' | 'points' | 'totalFines' | 'diffFines';
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
@@ -71,35 +68,17 @@ export default function ParticipantsPage() {
   const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
   const [groupToLeave, setGroupToLeave] = useState<string | null>(null);
 
-  // Check if current user is admin
-  useEffect(() => {
-    if (!firestore || !user) return;
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [firestore, user]);
-
-  const participantsRef = useMemoFirebase(() => {
+  const participantsRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const adminsRef = useMemoFirebase(() => {
+  const adminsRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'roles_admin');
   }, [firestore, user]);
 
-  const groupsQuery = useMemoFirebase(() => {
+  const groupsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'groups');
   }, [firestore, user]);
@@ -110,17 +89,17 @@ export default function ParticipantsPage() {
 
   const adminIds = new Set(admins?.map(a => a.id) || []);
 
-  const allEventsQuery = useMemoFirebase(() => {
+  const allEventsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collectionGroup(firestore, 'preaching_events');
   }, [firestore, user]);
 
-  const sessionsQuery = useMemoFirebase(() => {
+  const sessionsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'sessions');
   }, [firestore, user]);
 
-  const allVotesQuery = useMemoFirebase(() => {
+  const allVotesQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collectionGroup(firestore, 'votes');
   }, [firestore, user]);
@@ -616,7 +595,7 @@ export default function ParticipantsPage() {
                         </TableRow>
                       ) : filteredParticipants.length > 0 ? (
                         filteredParticipants.map((p) => {
-                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email.toLowerCase()));
+                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && adminIds.has(p.email.toLowerCase()));
                           const isCurrentUser = user?.uid === p.userId;
                           
                           return (

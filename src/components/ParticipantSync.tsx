@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFirestore, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { useFirestore, useUser, setDocumentNonBlocking, updateDocumentNonBlocking, collection, query, where, getDocs, doc, getDoc } from '@/db';
 
 /**
  * A global component that ensures the current authenticated user has a Participant record.

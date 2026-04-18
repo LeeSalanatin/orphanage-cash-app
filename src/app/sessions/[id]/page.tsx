@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { useMemoDb, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking, doc, collection } from '@/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,11 +52,10 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useState, useEffect, use, useMemo } from 'react';
 
-const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
-
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useUser();
+  const isAdmin = user?.role === 'admin' || (user as any)?.isAdmin;
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -73,27 +71,27 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editMin, setEditMin] = useState('');
   const [editSec, setEditSec] = useState('');
 
-  const sessionRef = useMemoFirebase(() => {
+  const sessionRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'sessions', id);
   }, [firestore, id, user]);
 
-  const participantsRef = useMemoFirebase(() => {
+  const participantsRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const allGroupsQuery = useMemoFirebase(() => {
+  const allGroupsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
-  const preachingEventsRef = useMemoFirebase(() => {
+  const preachingEventsRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
-  const votesQuery = useMemoFirebase(() => {
+  const votesQuery = useMemoDb(() => {
     if (!firestore || !user || !id) return null;
     return collection(firestore, 'sessions', id, 'votes');
   }, [firestore, id, user]);
@@ -106,12 +104,36 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   const records = useMemo(() => {
     if (!rawRecords) return [];
-    return [...rawRecords].sort((a, b) => {
-      const startA = a.startTime ? new Date(a.startTime).getTime() : 0;
-      const startB = b.startTime ? new Date(b.startTime).getTime() : 0;
-      return startB - startA;
+    
+    // Inject missing group IDs by cross-referencing groups membership
+    const mapped = rawRecords.map(r => {
+      let preachingGroupId = r.preachingGroupId;
+      if (!preachingGroupId && allGroups) {
+        // Find which group contains this participant in its members object
+        const group = allGroups.find(g => g.members && g.members[r.participantId]);
+        if (group) {
+          preachingGroupId = group.id;
+        }
+      }
+      return { ...r, preachingGroupId };
     });
-  }, [rawRecords]);
+
+    return mapped.sort((a, b) => {
+      // For group sessions, group them by group Name first
+      if (session?.sessionType === 'group') {
+        const gNameA = a.preachingGroupId ? (allGroups?.find(g => g.id === a.preachingGroupId)?.name || '') : '';
+        const gNameB = b.preachingGroupId ? (allGroups?.find(g => g.id === b.preachingGroupId)?.name || '') : '';
+        if (gNameA !== gNameB) {
+          return gNameA.localeCompare(gNameB);
+        }
+      }
+      
+      // Then sort by time recorded chronologically (oldest first)
+      const startA = a.timestamp || (a.startTime ? new Date(a.startTime).getTime() : 0);
+      const startB = b.timestamp || (b.startTime ? new Date(b.startTime).getTime() : 0);
+      return startA - startB;
+    });
+  }, [rawRecords, session?.sessionType, allGroups]);
 
   function formatDuration(seconds: number) {
     const h = Math.floor(seconds / 3600);
@@ -129,12 +151,20 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     const groupTimeTotals: Record<string, number> = {};
     const groupPreacherCounts: Record<string, Set<string>> = {};
+    const groupPreacherNames: Record<string, string[]> = {};
     
     records.forEach(r => {
       if (r.preachingGroupId) {
         groupTimeTotals[r.preachingGroupId] = (groupTimeTotals[r.preachingGroupId] || 0) + r.actualDurationSeconds;
+        
         if (!groupPreacherCounts[r.preachingGroupId]) groupPreacherCounts[r.preachingGroupId] = new Set();
         groupPreacherCounts[r.preachingGroupId].add(r.participantId);
+
+        if (!groupPreacherNames[r.preachingGroupId]) groupPreacherNames[r.preachingGroupId] = [];
+        const simplifiedName = r.participantName?.includes(' - ') ? r.participantName.split(' - ').pop() : (r.participantName || 'Unknown');
+        if (!groupPreacherNames[r.preachingGroupId].includes(simplifiedName as string)) {
+           groupPreacherNames[r.preachingGroupId].push(simplifiedName as string);
+        }
       }
     });
 
@@ -155,8 +185,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
         totalFine,
         splitFine: totalFine / participatingCount,
         groupCode: gInfo?.name || 'Unknown',
-        participatingCount
-      };
+        participatingCount,
+        preacherNames: groupPreacherNames[groupId].join(', '),
+        totalSecondsFormatted: formatDuration(totalSeconds),
+      } as any;
     });
     
     return map;
@@ -426,7 +458,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     );
   }
 
-  const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
+  const isSessionAdmin = isAdmin || user?.uid === session?.ownerId || (user as any)?.email === session?.ownerId;
 
   const activeGroups = allGroups?.filter(group => 
     availableParticipants?.some(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]))
@@ -503,16 +535,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                 <TableBody>
                   {records.map(r => {
                     const gStats = r.preachingGroupId ? groupStatsMap[r.preachingGroupId] : null;
-                    const simplifiedName = r.participantName.includes(' - ') 
+                    const simplifiedName = r.participantName?.includes(' - ') 
                       ? r.participantName.split(' - ').pop() 
-                      : r.participantName;
+                      : (r.participantName || 'Unknown');
                     
                     const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
                     const displayPoints = incentiveMap[r.participantId] || 0;
 
                     return (
                       <TableRow key={r.id} className="h-12">
-                        <TableCell className="font-bold text-xs">{simplifiedName}</TableCell>
+                        <TableCell>
+                          <div className="font-bold text-xs">{simplifiedName}</div>
+                          {session?.sessionType === 'group' && gStats?.groupCode && (
+                            <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">{gStats.groupCode}</div>
+                          )}
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{r.actualDurationFormatted}</TableCell>
                         <TableCell>
                           {displayPoints > 0 ? (
@@ -611,21 +648,82 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                   })}
                 </Tabs>
               ) : (
-                <Card className="border-none shadow-sm">
-                  <CardHeader className="py-4"><CardTitle className="text-base">Preaching Roster</CardTitle></CardHeader>
-                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
-                    {availableParticipants?.map(p => (
-                      <div key={p.id} className="p-3 border rounded-lg flex justify-between items-center bg-card">
-                        <span className="font-medium text-xs">{p.name}</span>
-                        {isAdmin && !activeParticipantId && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id)}>
-                            <Play className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                // For individual sessions: group by group membership if groups exist, else flat list
+                activeGroups.length > 0 ? (
+                  <div className="space-y-4">
+                    {activeGroups.map(group => {
+                      const groupMembers = availableParticipants?.filter(p =>
+                        group.members?.[p.id] || (p.userId && group.members?.[p.userId])
+                      );
+                      if (!groupMembers?.length) return null;
+                      return (
+                        <Card key={group.id} className="border-none shadow-sm border-primary/10">
+                          <CardHeader className="bg-primary/5 py-3 px-4">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <UsersIcon className="h-4 w-4 text-primary" />
+                              {group.name}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-3 px-4 pb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {groupMembers.map(p => (
+                                <div key={p.id} className="p-3 border rounded-lg flex justify-between items-center bg-card hover:bg-muted/30 transition-colors">
+                                  <span className="font-medium text-xs">{p.name}</span>
+                                  {isAdmin && !activeParticipantId && (
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id)}>
+                                      <Play className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    {/* Ungrouped participants */}
+                    {(() => {
+                      const groupedIds = new Set(activeGroups.flatMap(g => Object.keys(g.members || {})));
+                      const ungrouped = availableParticipants?.filter(p => !groupedIds.has(p.id) && !(p.userId && groupedIds.has(p.userId)));
+                      if (!ungrouped?.length) return null;
+                      return (
+                        <Card className="border-none shadow-sm">
+                          <CardHeader className="py-3 px-4"><CardTitle className="text-sm">Others</CardTitle></CardHeader>
+                          <CardContent className="pt-3 px-4 pb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {ungrouped.map(p => (
+                                <div key={p.id} className="p-3 border rounded-lg flex justify-between items-center bg-card">
+                                  <span className="font-medium text-xs">{p.name}</span>
+                                  {isAdmin && !activeParticipantId && (
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id)}>
+                                      <Play className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader className="py-4"><CardTitle className="text-base">Preaching Roster</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
+                      {availableParticipants?.map(p => (
+                        <div key={p.id} className="p-3 border rounded-lg flex justify-between items-center bg-card">
+                          <span className="font-medium text-xs">{p.name}</span>
+                          {isAdmin && !activeParticipantId && (
+                            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleStartTracking(p.id)}>
+                              <Play className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )
               )}
             </div>
           </div>

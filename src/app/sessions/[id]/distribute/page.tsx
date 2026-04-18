@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc, collection, collectionGroup, writeBatch, increment } from 'firebase/firestore';
+import { useFirestore, useUser, useDoc, useCollection, updateDocumentNonBlocking, useMemoDb, doc, collection, collectionGroup, writeBatch, increment } from '@/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,27 +22,27 @@ export default function DistributePointsPage({ params }: { params: Promise<{ id:
 
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const sessionRef = useMemoFirebase(() => {
+  const sessionRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'sessions', id);
   }, [firestore, id, user]);
 
-  const participantsRef = useMemoFirebase(() => {
+  const participantsRef = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'participants');
   }, [firestore, user]);
 
-  const groupsQuery = useMemoFirebase(() => {
+  const groupsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'groups');
   }, [firestore, user]);
 
-  const eventsQuery = useMemoFirebase(() => {
+  const eventsQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'sessions', id, 'preaching_events');
   }, [firestore, id, user]);
 
-  const votesQuery = useMemoFirebase(() => {
+  const votesQuery = useMemoDb(() => {
     if (!firestore || !user) return null;
     return collection(firestore, 'sessions', id, 'votes');
   }, [firestore, id, user]);
