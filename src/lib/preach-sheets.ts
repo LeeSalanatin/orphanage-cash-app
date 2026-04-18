@@ -35,45 +35,67 @@ async function withCache<T>(key: string, fn: () => Promise<T>, ttl = DATA_CACHE_
 }
 
 const getOrInitDoc = async () => {
-  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
-  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
   const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!serviceEmail || !privateKey || !sheetId) {
-    throw new Error('Missing Google Sheets environment variables');
+  const jsonAuth = process.env.GOOGLE_SHEETS_AUTH_JSON;
+  
+  if (!sheetId) {
+    throw new Error('Missing GOOGLE_SHEET_ID');
   }
 
-  // ROBUST KEY LOADING LOGIC
-  console.log(`[Auth] Secret Key Check: Length=${privateKey.length}, StartsWith="${privateKey.substring(0, 10)}...", EndsWith="...${privateKey.substring(privateKey.length - 10)}"`);
+  let auth;
 
-  // 1. Remove optional surrounding quotes
-  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-    privateKey = privateKey.substring(1, privateKey.length - 1);
-  }
-
-  // 2. Try Base64 decoding if it looks like Base64 (no PEM headers)
-  // We strip ALL whitespace for the check to ignore Vercel trailing newlines
-  const flattenedKey = privateKey.replace(/\s/g, '');
-  if (!flattenedKey.includes('-----BEGIN')) {
+  // Method 1: Full JSON (Most robust)
+  if (jsonAuth) {
     try {
-      const decoded = Buffer.from(flattenedKey, 'base64').toString('utf8');
-      if (decoded.includes('-----BEGIN')) {
-        privateKey = decoded;
-        console.log('[Auth] Successfully decoded Base64 key (whitespace-stripped).');
-      }
+      const creds = JSON.parse(jsonAuth);
+      auth = new JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: SCOPES,
+      });
+      console.log('[Auth] Using GOOGLE_SHEETS_AUTH_JSON.');
     } catch (e) {
-      console.error('[Auth] Failed to decode potential Base64 key.');
+      console.error('[Auth] Failed to parse GOOGLE_SHEETS_AUTH_JSON:', (e as Error).message);
     }
   }
 
-  // 3. Final PEM cleanup (handle literal \n and trim)
-  privateKey = privateKey.trim().replace(/\\n/g, '\n');
+  // Method 2: Individual variables (Fallback)
+  if (!auth) {
+    const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+    let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
-  const auth = new JWT({
-    email: serviceEmail,
-    key: privateKey,
-    scopes: SCOPES,
-  });
+    if (!serviceEmail || !privateKey) {
+      throw new Error('Missing Google Sheets credentials (both JSON and individual vars)');
+    }
+
+    // 1. Remove optional surrounding quotes
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+      privateKey = privateKey.substring(1, privateKey.length - 1);
+    }
+
+    // 2. Decode Base64 if needed
+    const flattenedKey = privateKey.replace(/\s/g, '');
+    if (!flattenedKey.includes('-----BEGIN')) {
+      try {
+        const decoded = Buffer.from(flattenedKey, 'base64').toString('utf8');
+        if (decoded.includes('-----BEGIN')) {
+          privateKey = decoded;
+          console.log('[Auth] Decoded Base64 fallback key.');
+        }
+      } catch (e) {
+        // Not Base64, ignore
+      }
+    }
+
+    // 3. Final PEM cleanup
+    privateKey = privateKey.trim().replace(/\\n/g, '\n');
+
+    auth = new JWT({
+      email: serviceEmail,
+      key: privateKey,
+      scopes: SCOPES,
+    });
+  }
 
   const doc = new GoogleSpreadsheet(sheetId, auth);
   await doc.loadInfo();
