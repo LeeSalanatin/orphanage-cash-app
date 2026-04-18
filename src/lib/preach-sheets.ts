@@ -47,7 +47,14 @@ const getOrInitDoc = async () => {
   if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
     privateKey = privateKey.substring(1, privateKey.length - 1);
   }
-  privateKey = privateKey.replace(/\\n/g, '\n');
+  
+  // Clean up any weird spaces and ensure literal \n are replaced with real newlines
+  privateKey = privateKey.trim().replace(/\\n/g, '\n');
+
+  // Diagnostic (Safe: only logs length and start/end markers)
+  console.log(`[Auth] Attempting init with Key Length: ${privateKey.length}`);
+  console.log(`[Auth] Key starts with: ${privateKey.substring(0, 25)}...`);
+  console.log(`[Auth] Key ends with: ...${privateKey.substring(privateKey.length - 25)}`);
 
   const auth = new JWT({
     email: serviceEmail,
