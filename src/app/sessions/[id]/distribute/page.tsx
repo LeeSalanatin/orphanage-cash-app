@@ -1,73 +1,93 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc, collection, collectionGroup, writeBatch, increment } from 'firebase/firestore';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Trophy, Star, Save, User as UserIcon, Users as UsersIcon, Info, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Trophy, Star, Save, User as UserIcon, Users as UsersIcon, Info, CheckCircle2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { 
+  getSessionById, 
+  getPreachingEvents, 
+  getVotes, 
+  getAllParticipants, 
+  getAllGroups,
+  distributePointsAction
+} from '@/lib/app-actions';
 
 export default function DistributePointsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useUser();
-  const firestore = useFirestore();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
 
+  const [data, setData] = useState<{
+    session: any;
+    participants: any[];
+    groups: any[];
+    events: any[];
+    votes: any[];
+  }>({
+    session: null,
+    participants: [],
+    groups: [],
+    events: [],
+    votes: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const sessionRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'sessions', id);
-  }, [firestore, id, user]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [session, participants, groups, events, votes] = await Promise.all([
+        getSessionById(id),
+        getAllParticipants(),
+        getAllGroups(),
+        getPreachingEvents(id),
+        getVotes(id)
+      ]);
+      
+      setData({
+        session,
+        participants,
+        groups,
+        events,
+        votes
+      });
+    } catch (error) {
+      console.error('Error fetching distribution data:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load distribution details.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, toast]);
 
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const eventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions', id, 'preaching_events');
-  }, [firestore, id, user]);
-
-  const votesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions', id, 'votes');
-  }, [firestore, id, user]);
-
-  const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
-  const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: events, isLoading: eventsLoading } = useCollection(eventsQuery);
-  const { data: votes, isLoading: votesLoading } = useCollection(votesQuery);
-
-  const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading || votesLoading;
+  const { session, participants, groups: allGroups, events, votes } = data;
 
   // Calculate Distribution
   const distributionData = useMemo(() => {
     if (!session || !participants || !allGroups || !events || !votes) return null;
 
     const results: any[] = [];
-    const config = session.pointDistribution || { enabled: false };
+    const config = typeof session.pointDistribution === 'string' ? JSON.parse(session.pointDistribution) : (session.pointDistribution || { enabled: false });
     if (!config.enabled) return [];
 
     // 1. Calculate Individual Rankings
     const individualCounts: Record<string, number> = {};
     votes.forEach(v => {
-      (v.voteData?.individual || []).forEach((id: string) => {
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      (voteData.individual || []).forEach((id: string) => {
         individualCounts[id] = (individualCounts[id] || 0) + 1;
       });
     });
@@ -112,8 +132,9 @@ export default function DistributePointsPage({ params }: { params: Promise<{ id:
     if (session.sessionType === 'group') {
       const groupCounts: Record<string, number> = {};
       votes.forEach(v => {
-        if (v.voteData?.group) {
-          groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+        const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+        if (voteData.group) {
+          groupCounts[voteData.group] = (groupCounts[voteData.group] || 0) + 1;
         }
       });
 
@@ -123,7 +144,6 @@ export default function DistributePointsPage({ params }: { params: Promise<{ id:
 
       winningGroups.forEach(([groupId, count]) => {
         const groupInfo = allGroups.find(g => g.id === groupId);
-        // FIND members of this group who actually preached in this session
         const groupEvents = events.filter(e => e.preachingGroupId === groupId);
         const participatingMemberIds = Array.from(new Set(groupEvents.map(e => e.participantId)));
         
@@ -156,36 +176,28 @@ export default function DistributePointsPage({ params }: { params: Promise<{ id:
   }, [session, participants, allGroups, events, votes]);
 
   async function handleConfirmDistribution() {
-    if (!firestore || !distributionData || distributionData.length === 0 || !session) return;
+    if (!distributionData || distributionData.length === 0 || !session) return;
 
     setIsProcessing(true);
     try {
-      const batch = writeBatch(firestore);
-
-      distributionData.forEach(item => {
-        const participantRef = doc(firestore, 'participants', item.id);
-        batch.update(participantRef, {
-          totalPoints: increment(item.points)
-        });
-      });
-
-      // Mark session as distributed
-      batch.update(doc(firestore, 'sessions', id), {
-        rewardsDistributed: true,
-        status: 'completed'
-      });
-
-      await batch.commit();
-      toast({ title: "Points Distributed", description: "All preachers have been credited." });
-      router.push(`/sessions/${id}`);
+      const distributions = distributionData.map(d => ({ id: d.id, points: d.points }));
+      const result = await distributePointsAction(id, distributions);
+      
+      if (result.success) {
+        toast({ title: "Points Distributed", description: "All preachers have been credited." });
+        router.push(`/sessions/${id}`);
+      } else {
+        throw new Error(result.error);
+      }
     } catch (e) {
+      console.error(e);
       toast({ variant: "destructive", title: "Error", description: "Failed to distribute points." });
     } finally {
       setIsProcessing(false);
     }
   }
 
-  if (loading) return (
+  if (isLoading || userLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
@@ -200,11 +212,17 @@ export default function DistributePointsPage({ params }: { params: Promise<{ id:
             Back to Session
           </Link>
         </Button>
-        <h1 className="text-3xl font-headline font-bold text-primary flex items-center gap-3">
-          <Trophy className="h-8 w-8 text-yellow-500" />
-          Point Distribution
-        </h1>
-        <p className="text-muted-foreground">Confirm rewards based on voting results and participation.</p>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-headline font-bold text-primary flex items-center gap-3">
+            <Trophy className="h-8 w-8 text-yellow-500" />
+            Point Distribution
+          </h1>
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+        <p className="text-muted-foreground mt-2">Confirm rewards based on voting results and participation.</p>
       </div>
 
       <Card className="shadow-lg border-none overflow-hidden">

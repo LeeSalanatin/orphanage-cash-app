@@ -36,7 +36,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
-    "firebase": "^11.9.1",
     "genkit": "^1.28.0",
     "google-auth-library": "^10.6.2",
     "google-spreadsheet": "^5.2.0",

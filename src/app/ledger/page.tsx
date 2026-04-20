@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import LedgerTable from "@/components/LedgerTable";
 import { fetchTransactions, fetchBranches, fetchFOFJBranches } from "@/lib/sheets";
 import { BranchFilters, PrintReportButton, BranchTabs } from '@/components/BranchReportControls';
+import AddTransactionForm from "@/components/AddTransactionForm";
 import styles from "./ledger.module.css";
 import branchStyles from "@/app/branch/[name]/branch.module.css";
 import Link from "next/link";
@@ -218,6 +219,17 @@ export default async function LedgerPage({ searchParams }: PageProps) {
             </div>
           </div>
         </section>
+      </div>
+  
+      <div className={activeTab === 'calendar' ? branchStyles.tabContentActive : branchStyles.tabContent}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <AddTransactionForm 
+            branches={childBranches}
+            fofjBranches={fofjBranchNames}
+            isAdmin={isAdmin}
+            currentFofjBranch={filterBranch}
+          />
+        </div>
       </div>
 
       <PrintReportButton isAdmin={isAdmin} />

@@ -170,6 +170,12 @@ export function BranchTabs({ activeTab }: { activeTab: string }) {
       >
         Summary
       </Link>
+      <Link 
+        href={createTabUrl('calendar')} 
+        className={`${styles.tab} ${activeTab === 'calendar' ? styles.tabActive : ''}`}
+      >
+        Calendar
+      </Link>
     </div>
   );
 }

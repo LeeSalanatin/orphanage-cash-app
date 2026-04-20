@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useDoc, useCollection, useFirestore, useUser, updateDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,20 +45,46 @@ import {
   Star,
   ClipboardList,
   CheckSquare,
-  XSquare
+  XSquare,
+  RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { useState, useEffect, use, useMemo } from 'react';
+import { useState, useEffect, use, useMemo, useCallback } from 'react';
+import { 
+  getSessionById, 
+  getPreachingEvents, 
+  getVotes, 
+  getAllParticipants, 
+  getAllGroups,
+  updateSessionAction,
+  addPreachingEventAction,
+  updatePreachingEventAction,
+  deletePreachingEventAction
+} from '@/lib/app-actions';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function SessionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { user } = useUser();
-  const firestore = useFirestore();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
+
+  const [data, setData] = useState<{
+    session: any;
+    participants: any[];
+    groups: any[];
+    records: any[];
+    votes: any[];
+  }>({
+    session: null,
+    participants: [],
+    groups: [],
+    records: [],
+    votes: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   const [activeParticipantId, setActiveParticipantId] = useState<string | null>(null);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
@@ -73,36 +98,37 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   const [editMin, setEditMin] = useState('');
   const [editSec, setEditSec] = useState('');
 
-  const sessionRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'sessions', id);
-  }, [firestore, id, user]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [session, participants, groups, records, votes] = await Promise.all([
+        getSessionById(id),
+        getAllParticipants(),
+        getAllGroups(),
+        getPreachingEvents(id),
+        getVotes(id)
+      ]);
+      
+      setData({
+        session,
+        participants,
+        groups,
+        records,
+        votes
+      });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load session details.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, toast]);
 
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const allGroupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const preachingEventsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions', id, 'preaching_events');
-  }, [firestore, id, user]);
-
-  const votesQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !id) return null;
-    return collection(firestore, 'sessions', id, 'votes');
-  }, [firestore, id, user]);
-
-  const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
-  const { data: availableParticipants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(allGroupsQuery);
-  const { data: rawRecords, isLoading: recordsLoading } = useCollection(preachingEventsRef);
-  const { data: votes, isLoading: votesLoading } = useCollection(votesQuery);
+  const { session, participants: availableParticipants, groups: allGroups, records: rawRecords, votes } = data;
 
   const records = useMemo(() => {
     if (!rawRecords) return [];
@@ -132,14 +158,15 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     
     records.forEach(r => {
       if (r.preachingGroupId) {
-        groupTimeTotals[r.preachingGroupId] = (groupTimeTotals[r.preachingGroupId] || 0) + r.actualDurationSeconds;
+        groupTimeTotals[r.preachingGroupId] = (groupTimeTotals[r.preachingGroupId] || 0) + (parseFloat(r.actualDurationSeconds) || 0);
         if (!groupPreacherCounts[r.preachingGroupId]) groupPreacherCounts[r.preachingGroupId] = new Set();
         groupPreacherCounts[r.preachingGroupId].add(r.participantId);
       }
     });
 
-    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
-    const rule = session.fineRules?.find((r: any) => r.appliesTo === 'group') || session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+    const maxSeconds = ((parseInt(session.maxPreachingTimeMinutes) || 0) * 60) + (parseInt(session.maxPreachingTimeSeconds) || 0);
+    const rules = typeof session.fineRules === 'string' ? JSON.parse(session.fineRules) : (session.fineRules || []);
+    const rule = rules.find((r: any) => r.appliesTo === 'group') || rules[0] || { amount: 30, type: 'per-minute-overage' };
 
     const map: Record<string, { totalFine: number, splitFine: number, groupCode: string, participatingCount: number }> = {};
     
@@ -167,13 +194,13 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     if (!session || !votes || !records || !allGroups) return {};
     
     const points: Record<string, number> = {};
-    const config = session.pointDistribution || { enabled: false };
+    const config = typeof session.pointDistribution === 'string' ? JSON.parse(session.pointDistribution) : (session.pointDistribution || { enabled: false });
     if (!config.enabled) return {};
 
-    // 1. Individual rankings from votes
     const individualCounts: Record<string, number> = {};
     votes.forEach(v => {
-      (v.voteData?.individual || []).forEach((pId: string) => {
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      (voteData.individual || []).forEach((pId: string) => {
         individualCounts[pId] = (individualCounts[pId] || 0) + 1;
       });
     });
@@ -205,12 +232,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       }
     });
 
-    // 2. Group rankings from votes
     if (session.sessionType === 'group') {
       const groupCounts: Record<string, number> = {};
       votes.forEach(v => {
-        if (v.voteData?.group) {
-          groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+        const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+        if (voteData.group) {
+          groupCounts[voteData.group] = (groupCounts[voteData.group] || 0) + 1;
         }
       });
 
@@ -220,7 +247,6 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       if (maxVotes > 0) {
         const winningGroups = topGroupEntries.filter(e => e[1] === maxVotes).map(e => e[0]);
         winningGroups.forEach(groupId => {
-          // Find members of this group who actually preached
           const groupEvents = records.filter(e => e.preachingGroupId === groupId);
           const participatingMemberIds = Array.from(new Set(groupEvents.map(e => e.participantId)));
           
@@ -239,23 +265,21 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     return points;
   }, [session, votes, records, allGroups]);
   
-  // --- Admin Audit Logic ---
   const auditData = useMemo(() => {
     if (!availableParticipants || !votes) return { voterStatus: [], individualTally: [], groupTally: [] };
 
     const votedIds = new Set(votes.map(v => v.voterParticipantId));
     
-    // 1. Participation
     const voterStatus = availableParticipants.map(p => ({
       ...p,
       hasVoted: votedIds.has(p.id) || (p.userId && votedIds.has(p.userId)),
       voteTimestamp: votes.find(v => v.voterParticipantId === p.id || (p.userId && v.voterParticipantId === p.userId))?.timestamp
     }));
 
-    // 2. Individual Tally
     const indCounts: Record<string, number> = {};
     votes.forEach(v => {
-      (v.voteData?.individual || []).forEach((pId: string) => {
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      (voteData.individual || []).forEach((pId: string) => {
         indCounts[pId] = (indCounts[pId] || 0) + 1;
       });
     });
@@ -276,11 +300,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       return { ...item, rank: indRank };
     });
 
-    // 3. Group Tally
     const grpCounts: Record<string, number> = {};
     votes.forEach(v => {
-      if (v.voteData?.group) {
-        grpCounts[v.voteData.group] = (grpCounts[v.voteData.group] || 0) + 1;
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      if (voteData.group) {
+        grpCounts[voteData.group] = (grpCounts[voteData.group] || 0) + 1;
       }
     });
 
@@ -336,24 +360,26 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
   }
 
   async function handleStopTracking() {
-    if (!activeParticipantId || !session || !firestore || !user) return;
+    if (!activeParticipantId || !session || !user) return;
     
     const targetParticipant = availableParticipants?.find(p => p.id === activeParticipantId);
     const targetGroup = activeGroupId ? allGroups?.find(g => g.id === activeGroupId) : null;
     
     const participantsMap: Record<string, boolean> = { [activeParticipantId]: true };
     if (targetGroup?.members) {
-      Object.keys(targetGroup.members).forEach(mId => {
+      const members = typeof targetGroup.members === 'string' ? JSON.parse(targetGroup.members) : (targetGroup.members || {});
+      Object.keys(members).forEach(mId => {
         participantsMap[mId] = true;
       });
     }
 
-    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+    const maxSeconds = ((parseInt(session.maxPreachingTimeMinutes) || 0) * 60) + (parseInt(session.maxPreachingTimeSeconds) || 0);
     
     let fineToRecord = 0;
     if (!activeGroupId) {
       const overageSeconds = Math.max(0, timer - maxSeconds);
-      const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+      const rules = typeof session.fineRules === 'string' ? JSON.parse(session.fineRules) : (session.fineRules || []);
+      const rule = rules[0] || { amount: 30, type: 'per-minute-overage' };
       fineToRecord = rule.type === 'fixed' ? (overageSeconds > 0 ? rule.amount : 0) : overageSeconds * (rule.amount / 60);
     }
 
@@ -374,51 +400,62 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       eventParticipants: participantsMap
     };
 
-    addDocumentNonBlocking(collection(firestore, 'sessions', id, 'preaching_events'), eventData);
-    setActiveParticipantId(null);
-    setActiveGroupId(null);
-    setTimer(0);
-    toast({ title: "Recording Saved" });
+    const result = await addPreachingEventAction(eventData);
+    if (result.success) {
+      setActiveParticipantId(null);
+      setActiveGroupId(null);
+      setTimer(0);
+      toast({ title: "Recording Saved" });
+      fetchData();
+    }
   }
 
   function handleEditClick(record: any) {
     setEditingRecord(record);
-    setEditMin(Math.floor(record.actualDurationSeconds / 60).toString());
-    setEditSec((record.actualDurationSeconds % 60).toString());
+    const totalSec = parseInt(record.actualDurationSeconds) || 0;
+    setEditMin(Math.floor(totalSec / 60).toString());
+    setEditSec((totalSec % 60).toString());
   }
 
-  function saveEditedTime() {
-    if (!firestore || !id || !editingRecord) return;
+  async function saveEditedTime() {
+    if (!id || !editingRecord) return;
     const newSeconds = (parseInt(editMin) || 0) * 60 + (parseInt(editSec) || 0);
     
-    const maxSeconds = ((session.maxPreachingTimeMinutes || 0) * 60) + (session.maxPreachingTimeSeconds || 0);
+    const maxSeconds = ((parseInt(session.maxPreachingTimeMinutes) || 0) * 60) + (parseInt(session.maxPreachingTimeSeconds) || 0);
     const newOverage = Math.max(0, newSeconds - maxSeconds);
     
     let newFine = 0;
     if (!editingRecord.preachingGroupId) {
-      const rule = session.fineRules?.[0] || { amount: 30, type: 'per-minute-overage' };
+      const rules = typeof session.fineRules === 'string' ? JSON.parse(session.fineRules) : (session.fineRules || []);
+      const rule = rules[0] || { amount: 30, type: 'per-minute-overage' };
       newFine = rule.type === 'fixed' ? (newOverage > 0 ? rule.amount : 0) : newOverage * (rule.amount / 60);
     }
 
-    updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', editingRecord.id), {
+    const result = await updatePreachingEventAction(editingRecord.id, {
       actualDurationSeconds: newSeconds,
       actualDurationFormatted: formatDuration(newSeconds),
       overageSeconds: newOverage,
       totalFineAmount: newFine
-    });
+    }, id);
 
-    setEditingRecord(null);
-    toast({ title: "Time Updated" });
+    if (result.success) {
+      setEditingRecord(null);
+      toast({ title: "Time Updated" });
+      fetchData();
+    }
   }
 
-  function confirmDeleteRecord() {
-    if (!firestore || !id || !recordToDelete) return;
-    deleteDocumentNonBlocking(doc(firestore, 'sessions', id, 'preaching_events', recordToDelete));
-    setRecordToDelete(null);
-    toast({ title: "Record Deleted" });
+  async function confirmDeleteRecord() {
+    if (!id || !recordToDelete) return;
+    const result = await deletePreachingEventAction(recordToDelete, id);
+    if (result.success) {
+      setRecordToDelete(null);
+      toast({ title: "Record Deleted" });
+      fetchData();
+    }
   }
 
-  if (sessionLoading || participantsLoading || recordsLoading || groupsLoading || votesLoading) {
+  if (isLoading || userLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -426,11 +463,12 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
     );
   }
 
-  const isAdmin = user?.uid === session?.ownerId || HARDCODED_ADMINS.includes(user?.email || '');
+  const isAdmin = user?.uid === session?.ownerId || (user?.email && HARDCODED_ADMINS.includes(user.email.toLowerCase()));
 
-  const activeGroups = allGroups?.filter(group => 
-    availableParticipants?.some(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]))
-  ) || [];
+  const activeGroups = allGroups?.filter(group => {
+    const members = typeof group.members === 'string' ? JSON.parse(group.members) : (group.members || {});
+    return availableParticipants?.some(p => members[p.id] || (p.userId && members[p.userId]));
+  }) || [];
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-8">
@@ -445,12 +483,19 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
           {isAdmin && (
             <>
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/sessions/${id}/edit`}><Edit2 className="mr-2 h-4 w-4" /> Edit</Link>
               </Button>
-              <Button size="sm" onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { votingClosed: !session?.votingClosed })} variant="outline">
+              <Button size="sm" onClick={async () => {
+                await updateSessionAction(id, { votingClosed: !session?.votingClosed });
+                fetchData();
+              }} variant="outline">
                 {session?.votingClosed ? 'Open Voting' : 'Close Voting'}
               </Button>
               {session?.votingClosed && !session?.rewardsDistributed && (
@@ -464,7 +509,10 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <Button variant="outline" size="sm" asChild><Link href={`/sessions/${id}/voting`}><Vote className="mr-2 h-4 w-4" /> Voting</Link></Button>
           )}
           {isAdmin && (
-            <Button size="sm" onClick={() => updateDocumentNonBlocking(doc(firestore!, 'sessions', id), { status: session?.status === 'active' ? 'completed' : 'active' })} 
+            <Button size="sm" onClick={async () => {
+              await updateSessionAction(id, { status: session?.status === 'active' ? 'completed' : 'active' });
+              fetchData();
+            }} 
                     variant={session?.status === 'active' ? 'destructive' : 'default'}>
               {session?.status === 'active' ? 'End Session' : 'Start Session'}
             </Button>
@@ -507,7 +555,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                       ? r.participantName.split(' - ').pop() 
                       : r.participantName;
                     
-                    const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (r.totalFineAmount || 0);
+                    const displayFine = r.preachingGroupId && gStats ? gStats.splitFine : (parseFloat(r.totalFineAmount) || 0);
                     const displayPoints = incentiveMap[r.participantId] || 0;
 
                     return (
@@ -581,7 +629,8 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
                     ))}
                   </TabsList>
                   {activeGroups.map(group => {
-                    const groupMembers = availableParticipants?.filter(p => group.members?.[p.id] || (p.userId && group.members?.[p.userId]));
+                    const members = typeof group.members === 'string' ? JSON.parse(group.members) : (group.members || {});
+                    const groupMembers = availableParticipants?.filter(p => members[p.id] || (p.userId && members[p.userId]));
                     return (
                       <TabsContent key={group.id} value={group.id} className="mt-0 focus-visible:ring-0">
                         <Card className="shadow-sm border-primary/10">
@@ -799,12 +848,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             </div>
             <div className="space-y-1">
               <Label className="text-[10px]">Seconds</Label>
-              <Input className="h-8 text-xs" type="number" min="0" max="59" value={editSec} onChange={(e) => setEditSec(e.target.value)} />
+              <Input className="h-8 text-xs" type="number" value={editSec} onChange={(e) => setEditSec(e.target.value)} />
             </div>
           </div>
-          <DialogFooter className="mt-4">
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditingRecord(null)}>Cancel</Button>
-            <Button size="sm" className="h-8 text-xs" onClick={saveEditedTime}>Save</Button>
+          <DialogFooter>
+            <Button size="sm" onClick={saveEditedTime} className="h-8 text-xs">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

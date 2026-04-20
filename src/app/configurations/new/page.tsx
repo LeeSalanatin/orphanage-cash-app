@@ -1,11 +1,8 @@
 "use client";
 
-
-
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Vote as VoteIcon, Info, Calculator, Star, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { addSessionConfigAction } from '@/lib/app-actions';
 
 const SUGGESTIONS = [
   { 
@@ -36,8 +34,7 @@ const SUGGESTIONS = [
 
 export default function NewConfiguration() {
   const router = useRouter();
-  const db = useFirestore();
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -106,7 +103,6 @@ export default function NewConfiguration() {
       setMaxTimeSec(rules.maxPreachingTimeSeconds?.toString() || '0');
       if (rules.fineRules?.[0]) {
         setFineAmount(rules.fineRules[0].amount.toString());
-        // AI flow should already respect Sunday = fixed, but we force it here too
         setFineType(rules.sessionType === 'sunday preaching' ? 'fixed' : rules.fineRules[0].type);
       }
       setVotingEnabled(rules.votingConfig?.enabled || false);
@@ -121,12 +117,10 @@ export default function NewConfiguration() {
   }
 
   async function handleSaveConfig() {
-    if (!name.trim() || !db || !user) return;
+    if (!name.trim() || !user) return;
 
     setLoading(true);
     try {
-      const colRef = collection(db, 'session_configurations');
-      
       const configData = {
         name,
         description,
@@ -154,17 +148,29 @@ export default function NewConfiguration() {
           rewardGroupTop1: parseInt(rewardGroupTop1) || 0
         },
         ownerId: user.uid,
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
       };
 
-      addDocumentNonBlocking(colRef, configData);
-      toast({ title: "Rule Set Created", description: "You can now use this template for new sessions." });
-      router.push('/configurations');
+      const result = await addSessionConfigAction(configData);
+      if (result.success) {
+        toast({ title: "Rule Set Created", description: "You can now use this template for new sessions." });
+        router.push('/configurations');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (e) {
-      console.error(e);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to save configuration.' });
     } finally {
       setLoading(false);
     }
+  }
+
+  if (userLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (

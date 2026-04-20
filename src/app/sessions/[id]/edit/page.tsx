@@ -1,25 +1,29 @@
 "use client";
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, collection } from 'firebase/firestore';
-import { useFirestore, useUser, updateDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Save, ArrowLeft, AlertCircle, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, AlertCircle, Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { 
+  getSessionById, 
+  getAllSessionConfigs, 
+  updateSessionAction 
+} from '@/lib/app-actions';
+import { cn } from '@/lib/utils';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function EditSession({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const db = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
   
   const [title, setTitle] = useState('');
@@ -28,54 +32,52 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [configs, setConfigs] = useState<any[]>([]);
+  const [configsLoading, setConfigsLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setFetching(true);
+    try {
+      const [session, allConfigs] = await Promise.all([
+        getSessionById(id),
+        getAllSessionConfigs()
+      ]);
+      
+      if (session) {
+        setTitle(session.title || '');
+        setSessionDate(session.sessionDate || '');
+      }
+      setConfigs(allConfigs || []);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to load session details." });
+    } finally {
+      setFetching(false);
+      setConfigsLoading(false);
+    }
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchData();
+    }
+  }, [user, userLoading, fetchData]);
 
   // Check admin status
   useEffect(() => {
-    if (isUserLoading || !db || !user) return;
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(db, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [db, user, isUserLoading]);
+    if (userLoading || !user) return;
+    const isUserAdmin = user.role === 'Admin' || (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase()));
+    setIsAdmin(isUserAdmin || false);
+  }, [user, userLoading]);
 
-  // Load existing session data
+  // Redirect if not admin
   useEffect(() => {
-    if (!db || !id) return;
-    async function loadSession() {
-      try {
-        const snap = await getDoc(doc(db, 'sessions', id));
-        if (snap.exists()) {
-          const data = snap.data();
-          setTitle(data.title || '');
-          setSessionDate(data.sessionDate || '');
-        }
-      } catch (e) {
-        toast({ variant: "destructive", title: "Error", description: "Failed to load session." });
-      } finally {
-        setFetching(false);
-      }
+    if (isAdmin === false) {
+      router.push('/sessions');
     }
-    loadSession();
-  }, [db, id, toast]);
-
-  const configsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'session_configurations');
-  }, [db, user]);
-
-  const { data: configs, isLoading: configsLoading } = useCollection(configsQuery);
+  }, [isAdmin, router]);
 
   async function handleUpdateSession() {
-    if (!title.trim() || !db || !user || !id) return;
+    if (!title.trim() || !user || !id) return;
 
     setLoading(true);
     try {
@@ -97,9 +99,13 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
         }
       }
 
-      updateDocumentNonBlocking(doc(db, 'sessions', id), updateData);
-      toast({ title: "Session Updated", description: "Changes saved successfully." });
-      router.push(`/sessions/${id}`);
+      const result = await updateSessionAction(id, updateData);
+      if (result.success) {
+        toast({ title: "Session Updated", description: "Changes saved successfully." });
+        router.push(`/sessions/${id}`);
+      } else {
+        throw new Error(result.error);
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "Could not update session." });
     } finally {
@@ -107,12 +113,7 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
     }
   }
 
-  if (isAdmin === false) {
-    router.push('/sessions');
-    return null;
-  }
-
-  if (fetching || isAdmin === null || isUserLoading) {
+  if (fetching || isAdmin === null || userLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -129,8 +130,16 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
             Back to Session
           </Link>
         </Button>
-        <h1 className="text-xl font-headline font-bold text-primary">Edit Session</h1>
-        <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-bold">Session Configuration</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-headline font-bold text-primary">Edit Session</h1>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wider font-bold">Session Configuration</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", fetching && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <Card className="shadow-md border-none">
@@ -190,13 +199,16 @@ export default function EditSession({ params }: { params: Promise<{ id: string }
               <h4 className="text-[10px] font-bold flex items-center gap-2 uppercase">
                 <AlertCircle className="h-3 w-3 text-primary" /> New Rule Preview
               </h4>
-              {configs?.filter(c => c.id === selectedConfigId).map(c => (
-                <div key={c.id} className="text-[10px] space-y-0.5 text-muted-foreground">
-                  <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
-                  <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
-                  <p>• Fine: ₱{c.fineRules?.[0]?.amount} ({c.fineRules?.[0]?.type})</p>
-                </div>
-              ))}
+              {configs?.filter(c => c.id === selectedConfigId).map(c => {
+                const fineRules = typeof c.fineRules === 'string' ? JSON.parse(c.fineRules) : (c.fineRules || []);
+                return (
+                  <div key={c.id} className="text-[10px] space-y-0.5 text-muted-foreground">
+                    <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
+                    <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
+                    <p>• Fine: ₱{fineRules[0]?.amount || 0} ({fineRules[0]?.type || 'N/A'})</p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

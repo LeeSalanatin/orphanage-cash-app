@@ -1,26 +1,48 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
-import { useFirestore, useUser, useDoc, useCollection, addDocumentNonBlocking, updateDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { doc, collection, query, where } from 'firebase/firestore';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Lock, CheckCircle2, Info, Star, Save, Mic2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Lock, CheckCircle2, Info, Star, Save, Mic2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { 
+  getSessionById, 
+  getPreachingEvents, 
+  getVotes, 
+  getAllParticipants, 
+  getAllGroups,
+  addVoteAction,
+  updateVoteAction
+} from '@/lib/app-actions';
 
 export default function VotingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useUser();
-  const firestore = useFirestore();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
+
+  const [data, setData] = useState<{
+    session: any;
+    participants: any[];
+    groups: any[];
+    events: any[];
+    existingVotes: any[];
+  }>({
+    session: null,
+    participants: [],
+    groups: [],
+    events: [],
+    existingVotes: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   const [votes, setVotes] = useState<any>({
     individual: [],
@@ -29,62 +51,58 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  const sessionRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'sessions', id);
-  }, [firestore, id, user]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [session, participants, groups, events, allVotes] = await Promise.all([
+        getSessionById(id),
+        getAllParticipants(),
+        getAllGroups(),
+        getPreachingEvents(id),
+        getVotes(id)
+      ]);
+      
+      const userVotes = (allVotes || []).filter((v: any) => v.voterParticipantId === user?.uid);
 
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const eventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions', id, 'preaching_events');
-  }, [firestore, id, user]);
-
-  const userVoteQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !id) return null;
-    return query(
-      collection(firestore, 'sessions', id, 'votes'),
-      where('voterParticipantId', '==', user.uid)
-    );
-  }, [firestore, user, id]);
-
-  const { data: session, isLoading: sessionLoading } = useDoc(sessionRef);
-  const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: allGroups, isLoading: groupsLoading } = useCollection(groupsQuery);
-  const { data: events, isLoading: eventsLoading } = useCollection(eventsQuery);
-  const { data: existingVotes, isLoading: voteCheckLoading } = useCollection(userVoteQuery);
-
-  const loading = sessionLoading || participantsLoading || groupsLoading || eventsLoading || voteCheckLoading;
-  const hasVoted = existingVotes && existingVotes.length > 0;
-
-  // Initialize votes from existing data only once
-  useEffect(() => {
-    if (existingVotes && existingVotes.length > 0 && !hasInitialized) {
-      const firstVote = existingVotes[0];
-      setVotes({
-        individual: firstVote.voteData?.individual || [],
-        group: firstVote.voteData?.group || null
+      setData({
+        session,
+        participants,
+        groups,
+        events,
+        existingVotes: userVotes
       });
-      setHasInitialized(true);
+
+      if (userVotes.length > 0 && !hasInitialized) {
+        const firstVote = userVotes[0];
+        const voteData = typeof firstVote.voteData === 'string' ? JSON.parse(firstVote.voteData) : (firstVote.voteData || {});
+        setVotes({
+          individual: voteData.individual || [],
+          group: voteData.group || null
+        });
+        setHasInitialized(true);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load voting data.' });
+    } finally {
+      setIsLoading(false);
     }
-  }, [existingVotes, hasInitialized]);
+  }, [id, user, toast, hasInitialized]);
+
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchData();
+    }
+  }, [user, userLoading, fetchData]);
+
+  const { session, participants, groups: allGroups, events, existingVotes } = data;
+  const hasVoted = existingVotes && existingVotes.length > 0;
 
   const filteredParticipants = useMemo(() => {
     if (!participants || !events || !user) return [];
-    // Only show participants who actually preached in this session
     const activeIds = new Set(events.map(e => e.participantId));
     return participants
       .filter(p => activeIds.has(p.id))
-      // Filter out the current user to prevent self-voting
       .filter(p => p.id !== user.uid && p.userId !== user.uid);
   }, [participants, events, user]);
 
@@ -102,14 +120,13 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
     return allGroups
       .filter(g => activeGroupIds.has(g.id))
       .filter(g => {
-        const members = g.members || {};
-        // Filter out the group that the user is a member of
+        const members = typeof g.members === 'string' ? JSON.parse(g.members) : (g.members || {});
         return !userParticipantIds.some(id => !!members[id]);
       });
   }, [allGroups, events, user, participants]);
 
-  function handleSubmitVote() {
-    if (!session?.votingConfig?.enabled || session?.votingClosed || !firestore || !user) return;
+  async function handleSubmitVote() {
+    if (!session?.votingConfig?.enabled || session?.votingClosed || !user) return;
     
     setIsSubmitting(true);
     const voteData = {
@@ -121,22 +138,31 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
       sessionMembers: session.members || { [user.uid]: 'owner' }
     };
 
+    let result;
     if (hasVoted && existingVotes?.[0]) {
-      updateDocumentNonBlocking(doc(firestore, 'sessions', id, 'votes', existingVotes[0].id), {
+      result = await updateVoteAction(existingVotes[0].id, {
         voteData: votes,
         updatedAt: new Date().toISOString()
-      });
-      toast({ title: "Ballot Updated", description: "Your changes have been saved." });
+      }, id);
+      if (result.success) {
+        toast({ title: "Ballot Updated", description: "Your changes have been saved." });
+      }
     } else {
-      addDocumentNonBlocking(collection(firestore, 'sessions', id, 'votes'), voteData);
-      toast({ title: "Vote Cast", description: "Your ballot has been confirmed." });
+      result = await addVoteAction(voteData);
+      if (result.success) {
+        toast({ title: "Vote Cast", description: "Your ballot has been confirmed." });
+      }
     }
 
-    // Redirect back to the session after a short delay
-    setTimeout(() => router.push(`/sessions/${id}`), 1000);
+    if (result?.success) {
+      setTimeout(() => router.push(`/sessions/${id}`), 1000);
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: result?.error || 'Failed to submit vote.' });
+      setIsSubmitting(false);
+    }
   }
 
-  if (loading) return (
+  if (isLoading || userLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <div className="text-center space-y-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
@@ -154,13 +180,19 @@ export default function VotingPage({ params }: { params: Promise<{ id: string }>
             Back to Session
           </Link>
         </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-headline font-bold text-primary">Session Ballot</h1>
-          {hasVoted && (
-            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-              Editing Previous Vote
-            </Badge>
-          )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-headline font-bold text-primary">Session Ballot</h1>
+            {hasVoted && (
+              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                Editing Previous Vote
+              </Badge>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
         </div>
       </div>
 

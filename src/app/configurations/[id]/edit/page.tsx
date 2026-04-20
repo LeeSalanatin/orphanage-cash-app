@@ -1,11 +1,8 @@
 "use client";
 
-
-
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { generateSessionRules } from '@/ai/flows/session-rule-generator-flow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,9 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Info, Calculator, Star, User } from 'lucide-react';
+import { Wand2, Loader2, Save, ArrowLeft, Sparkles, Settings2, Trophy, Info, Calculator, Star, User, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { 
+  getSessionConfigById, 
+  updateSessionConfigAction 
+} from '@/lib/app-actions';
+import { cn } from '@/lib/utils';
 
 const SUGGESTIONS = [
   { 
@@ -33,8 +35,7 @@ const SUGGESTIONS = [
 export default function EditConfiguration({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const db = useFirestore();
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(false);
@@ -66,37 +67,45 @@ export default function EditConfiguration({ params }: { params: Promise<{ id: st
   const [simSec, setSimSec] = useState('');
   const [simResult, setSimResult] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!db || !id) return;
-    async function loadConfig() {
-      try {
-        const snap = await getDoc(doc(db!, 'session_configurations', id));
-        if (snap.exists()) {
-          const data = snap.data();
-          setName(data.name || '');
-          setDescription(data.description || '');
-          setSessionType(data.sessionType || 'individual');
-          setMaxTimeMin(data.maxPreachingTimeMinutes?.toString() || '0');
-          setMaxTimeSec(data.maxPreachingTimeSeconds?.toString() || '0');
-          if (data.fineRules?.[0]) {
-            setFineAmount(data.fineRules[0].amount.toString());
-            setFineType(data.fineRules[0].type);
-          }
-          setVotingEnabled(data.votingConfig?.enabled || false);
-          setPointsEnabled(data.pointDistribution?.enabled || false);
-          setRewardTop1(data.pointDistribution?.rewardTop1?.toString() || '100');
-          setRewardTop2(data.pointDistribution?.rewardTop2?.toString() || '50');
-          setRewardTop3(data.pointDistribution?.rewardTop3?.toString() || '25');
-          setRewardGroupTop1(data.pointDistribution?.rewardGroupTop1?.toString() || '100');
+  const fetchData = useCallback(async () => {
+    setFetching(true);
+    try {
+      const data = await getSessionConfigById(id);
+      if (data) {
+        setName(data.name || '');
+        setDescription(data.description || '');
+        setSessionType(data.sessionType || 'individual');
+        setMaxTimeMin(data.maxPreachingTimeMinutes?.toString() || '0');
+        setMaxTimeSec(data.maxPreachingTimeSeconds?.toString() || '0');
+        
+        const fineRules = typeof data.fineRules === 'string' ? JSON.parse(data.fineRules) : (data.fineRules || []);
+        if (fineRules?.[0]) {
+          setFineAmount(fineRules[0].amount.toString());
+          setFineType(fineRules[0].type);
         }
-      } catch (e) {
-        toast({ variant: "destructive", title: "Error", description: "Failed to load configuration." });
-      } finally {
-        setFetching(false);
+        
+        const votingConfig = typeof data.votingConfig === 'string' ? JSON.parse(data.votingConfig) : (data.votingConfig || {});
+        setVotingEnabled(votingConfig.enabled || false);
+        
+        const pointDistribution = typeof data.pointDistribution === 'string' ? JSON.parse(data.pointDistribution) : (data.pointDistribution || {});
+        setPointsEnabled(pointDistribution.enabled || false);
+        setRewardTop1(pointDistribution.rewardTop1?.toString() || '100');
+        setRewardTop2(pointDistribution.rewardTop2?.toString() || '50');
+        setRewardTop3(pointDistribution.rewardTop3?.toString() || '25');
+        setRewardGroupTop1(pointDistribution.rewardGroupTop1?.toString() || '100');
       }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to load configuration." });
+    } finally {
+      setFetching(false);
     }
-    loadConfig();
-  }, [db, id, toast]);
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (user && !userLoading) {
+      fetchData();
+    }
+  }, [user, userLoading, fetchData]);
 
   useEffect(() => {
     if (sessionType === 'sunday preaching') {
@@ -145,7 +154,7 @@ export default function EditConfiguration({ params }: { params: Promise<{ id: st
   }
 
   async function handleSaveConfig() {
-    if (!name.trim() || !db || !user || !id) return;
+    if (!name.trim() || !user || !id) return;
 
     setLoading(true);
     try {
@@ -177,17 +186,21 @@ export default function EditConfiguration({ params }: { params: Promise<{ id: st
         },
       };
 
-      updateDocumentNonBlocking(doc(db, 'session_configurations', id), configData);
-      toast({ title: "Saved", description: "Rule Set has been updated." });
-      router.push('/configurations');
+      const result = await updateSessionConfigAction(id, configData);
+      if (result.success) {
+        toast({ title: "Saved", description: "Rule Set has been updated." });
+        router.push('/configurations');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (e) {
-      console.error(e);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to update configuration.' });
     } finally {
       setLoading(false);
     }
   }
 
-  if (fetching) return (
+  if (fetching || userLoading) return (
     <div className="flex h-[80vh] items-center justify-center">
       <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
@@ -202,8 +215,16 @@ export default function EditConfiguration({ params }: { params: Promise<{ id: st
             Back to Rules
           </Link>
         </Button>
-        <h1 className="text-2xl font-headline font-bold text-primary">Edit Rule Set</h1>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Modify timing and fines.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-headline font-bold text-primary">Edit Rule Set</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Modify timing and fines.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", fetching && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -4,11 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Mic2, Users, LayoutDashboard, PlusCircle, LogIn, LogOut, Settings2, Menu } from 'lucide-react';
-import { useUser, useAuth, useFirestore } from '@/firebase';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Button } from '@/components/ui/button';
-import { signOut } from 'firebase/auth';
+import { logoutAction } from '@/lib/actions';
 import { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
 import {
   Sheet,
   SheetContent,
@@ -21,31 +20,13 @@ const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@examp
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, isUserLoading } = useUser();
-  const auth = useAuth();
-  const firestore = useFirestore();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { user, isLoading: userLoading } = useLocalUser();
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    if (!firestore || !user) {
-      setIsAdmin(false);
-      return;
-    }
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [firestore, user]);
+  const isAdmin = useMemo(() => {
+    if (!user) return false;
+    return user.role === 'Admin' || (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase()));
+  }, [user]);
 
   const allLinks = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
@@ -57,6 +38,10 @@ export function Navbar() {
   const visibleLinks = useMemo(() => {
     return allLinks.filter(link => !link.adminOnly || isAdmin);
   }, [isAdmin]);
+
+  const handleLogout = async () => {
+    await logoutAction();
+  };
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -97,7 +82,7 @@ export function Navbar() {
                       variant="ghost" 
                       className="w-full justify-start text-muted-foreground hover:text-destructive h-12" 
                       onClick={() => {
-                        signOut(auth);
+                        handleLogout();
                         setIsOpen(false);
                       }}
                     >
@@ -144,7 +129,7 @@ export function Navbar() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {!isUserLoading && (
+          {!userLoading && (
             user ? (
               <div className="flex items-center gap-4">
                 {isAdmin && (
@@ -155,7 +140,7 @@ export function Navbar() {
                     </Button>
                   </Link>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => signOut(auth)} className="hidden md:flex">
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden md:flex">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </Button>

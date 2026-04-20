@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { useAuth } from '@/firebase';
-import { initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,10 +8,10 @@ import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { Mic2, UserPlus } from 'lucide-react';
+import { Mic2, UserPlus, Loader2 } from 'lucide-react';
+import { signupAction } from '@/lib/actions';
 
 export default function SignupPage() {
-  const auth = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -21,27 +19,36 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      toast({ variant: "destructive", title: "Passwords match", description: "Your passwords do not match." });
+      toast({ variant: "destructive", title: "Passwords mismatch", description: "Your passwords do not match." });
       return;
     }
 
     setLoading(true);
-    initiateEmailSignUp(auth, email, password)
-      .then(() => {
-        toast({ title: "Account created", description: "Welcome to PreachPoint!" });
-        router.push('/');
-      })
-      .catch((error: any) => {
-        toast({ 
-          variant: "destructive", 
-          title: "Signup Failed", 
-          description: error.message || "Could not create account." 
-        });
-        setLoading(false);
+    try {
+      const formData = new FormData();
+      formData.append('email', email);
+      formData.append('password', password);
+      
+      const result = await signupAction(formData);
+      
+      if (result.success) {
+        toast({ title: "Account created", description: "Welcome to PreachPoint! Please sign in with your email prefix." });
+        router.push('/login');
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({ 
+        variant: "destructive", 
+        title: "Signup Failed", 
+        description: error.message || "Could not create account." 
       });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,6 +81,7 @@ export default function SignupPage() {
               <Input 
                 id="password" 
                 type="password" 
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -84,6 +92,7 @@ export default function SignupPage() {
               <Input 
                 id="confirmPassword" 
                 type="password" 
+                placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -91,8 +100,8 @@ export default function SignupPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading ? "Creating account..." : <><UserPlus className="mr-2 h-4 w-4" /> Sign Up</>}
+            <Button className="w-full h-12" type="submit" disabled={loading}>
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><UserPlus className="mr-2 h-4 w-4" /> Sign Up</>}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}

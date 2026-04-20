@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, doc, collectionGroup, where } from 'firebase/firestore';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,52 +14,95 @@ import {
   User as UserIcon,
   BarChart3,
   Search,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { useMemo, useState, useEffect, Suspense } from 'react';
+import { useMemo, useState, useEffect, Suspense, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSearchParams } from 'next/navigation';
+import { 
+  getAllSessions, 
+  getVotes, 
+  getAllParticipants, 
+  getAllGroups 
+} from '@/lib/app-actions';
+import { useToast } from '@/hooks/use-toast';
 
 function ResultsContent() {
   const searchParams = useSearchParams();
-  const { user } = useUser();
-  const firestore = useFirestore();
+  const { user, isLoading: userLoading } = useLocalUser();
+  const { toast } = useToast();
+  
+  const [data, setData] = useState<{
+    sessions: any[];
+    participants: any[];
+    groups: any[];
+    votes: any[];
+  }>({
+    sessions: [],
+    participants: [],
+    groups: [],
+    votes: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [votesLoading, setVotesLoading] = useState(false);
+
   const [sessionFilterId, setSessionFilterId] = useState<string>(searchParams.get('sessionId') || "");
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
 
-  const participantsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
+  const fetchInitialData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [sessions, participants, groups] = await Promise.all([
+        getAllSessions(),
+        getAllParticipants(),
+        getAllGroups()
+      ]);
+      setData(prev => ({ ...prev, sessions, participants, groups }));
+    } catch (error) {
+      console.error('Error fetching initial data:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load background data.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
+  const fetchVotesForSession = useCallback(async (sessionId: string) => {
+    if (!sessionId) return;
+    setVotesLoading(true);
+    try {
+      const votes = await getVotes(sessionId);
+      setData(prev => ({ ...prev, votes }));
+    } catch (error) {
+      console.error('Error fetching votes:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load votes for session.' });
+    } finally {
+      setVotesLoading(false);
+    }
+  }, [toast]);
 
-  const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions');
-  }, [firestore, user]);
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
-  const votesQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !sessionFilterId) return null;
-    return collection(firestore, 'sessions', sessionFilterId, 'votes');
-  }, [firestore, user, sessionFilterId]);
+  useEffect(() => {
+    if (sessionFilterId) {
+      fetchVotesForSession(sessionFilterId);
+    } else {
+      setData(prev => ({ ...prev, votes: [] }));
+    }
+  }, [sessionFilterId, fetchVotesForSession]);
 
-  const { data: participants } = useCollection(participantsQuery);
-  const { data: allGroups } = useCollection(groupsQuery);
-  const { data: allSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
-  const { data: allVotes, isLoading: votesLoading } = useCollection(votesQuery);
+  const { sessions: allSessions, participants, groups: allGroups, votes: allVotes } = data;
 
   const availableYears = useMemo(() => {
     const years = new Set<string>();
     if (allSessions) {
       allSessions.forEach((s: any) => {
-        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt ? new Date(s.createdAt) : null);
         if (date && !isNaN(date.getTime()) && date.getFullYear() > 2000) {
           years.add(date.getFullYear().toString());
         }
@@ -72,7 +114,7 @@ function ResultsContent() {
   const filteredSessions = useMemo(() => {
     if (!allSessions) return [];
     return [...allSessions].filter((s: any) => {
-      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+      const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt ? new Date(s.createdAt) : null);
       if (!date || isNaN(date.getTime())) return false;
       const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
       const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
@@ -98,7 +140,8 @@ function ResultsContent() {
     // Process Individuals
     const individualCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
-      (v.voteData?.individual || []).forEach((id: string) => {
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      (voteData.individual || []).forEach((id: string) => {
         individualCounts[id] = (individualCounts[id] || 0) + 1;
       });
     });
@@ -106,7 +149,6 @@ function ResultsContent() {
     const individualRankings = Object.entries(individualCounts)
       .map(([id, count]) => {
         const p = participants.find(p => p.id === id);
-        // We only remain the name, removing group prefix
         const displayName = p?.name || 'Unknown';
         return { id, name: displayName, count };
       })
@@ -129,8 +171,9 @@ function ResultsContent() {
     // Process Groups
     const groupCounts: Record<string, number> = {};
     sessionVotes.forEach(v => {
-      if (v.voteData?.group) {
-        groupCounts[v.voteData.group] = (groupCounts[v.voteData.group] || 0) + 1;
+      const voteData = typeof v.voteData === 'string' ? JSON.parse(v.voteData) : (v.voteData || {});
+      if (voteData.group) {
+        groupCounts[voteData.group] = (groupCounts[voteData.group] || 0) + 1;
       }
     });
 
@@ -163,7 +206,7 @@ function ResultsContent() {
     return { individuals: groupedIndividuals, groups: groupedGroups };
   }, [allVotes, participants, allGroups, sessionFilterId]);
 
-  if (sessionsLoading || votesLoading) {
+  if (isLoading || userLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -187,6 +230,10 @@ function ResultsContent() {
           <p className="text-muted-foreground">Complete ranked breakdown for {selectedSession?.title || 'Selected Session'}.</p>
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 rounded-lg bg-card/50 p-1">
+          <Button variant="outline" size="sm" onClick={() => sessionFilterId && fetchVotesForSession(sessionFilterId)} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", votesLoading && "animate-spin")} />
+            Refresh
+          </Button>
           <div className="flex items-center gap-2">
             <Select value={filterYear} onValueChange={setFilterYear}>
               <SelectTrigger className="w-[90px] h-9 text-xs bg-card shadow-sm border-none">
@@ -251,7 +298,12 @@ function ResultsContent() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {rankedResults.individuals.length > 0 ? (
+            {votesLoading ? (
+              <div className="p-12 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary opacity-20" />
+                <p className="text-xs text-muted-foreground mt-2">Loading rankings...</p>
+              </div>
+            ) : rankedResults.individuals.length > 0 ? (
               <div className="divide-y">
                 {rankedResults.individuals.map((rankGroup) => (
                   <div key={rankGroup.rank} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
@@ -307,7 +359,11 @@ function ResultsContent() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {rankedResults.groups.length > 0 ? (
+              {votesLoading ? (
+                <div className="p-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary opacity-20" />
+                </div>
+              ) : rankedResults.groups.length > 0 ? (
                 <div className="divide-y">
                   {rankedResults.groups.map((rankGroup) => (
                     <div key={rankGroup.rank} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/10 transition-colors">

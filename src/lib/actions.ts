@@ -8,7 +8,8 @@ import {
   syncCashFlowTotals,
   updateTransaction,
   deleteTransaction,
-  fetchBudgetProposals
+  fetchBudgetProposals,
+  fetchParticipants
 } from '@/lib/sheets';
 import { revalidatePath } from 'next/cache';
 import { login as setSession, logout as clearSession, getSession } from '@/lib/auth';
@@ -25,10 +26,17 @@ export async function loginAction(formData: FormData) {
     return { success: false, error: 'Invalid username or password.' };
   }
 
+  // Link to participant if possible
+  const participants = await fetchParticipants();
+  const participant = participants.find(p => p.email === user.email || p.name === user.username);
+
   await setSession({
+    uid: user.username, // Using username as stable UID
     username: user.username,
     fofjBranch: user.fofjBranch,
     role: user.role,
+    email: user.email,
+    participantId: participant?.id,
   });
 
   redirect('/');
@@ -303,5 +311,55 @@ export async function getBudgetProposalsAction(month: number, year: number, fofj
   } catch (error) {
     console.error('Error in getBudgetProposalsAction:', error);
     return [];
+  }
+}
+
+export async function getCurrentSession() {
+  return await getSession();
+}
+
+export async function signupAction(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const username = email.split('@')[0]; // Simple username generation
+
+  if (!email || !password) return { success: false, error: 'Email and password are required.' };
+
+  try {
+    const doc = await getGoogleSheet();
+    let userSheet = doc.sheetsByTitle['Users'];
+    if (!userSheet) {
+      userSheet = await doc.addSheet({ title: 'Users', headerValues: ['username', 'password', 'email', 'role', 'fofjBranch'] });
+    }
+
+    const users = await fetchUsers();
+    if (users.some(u => u.username === username || u.email === email)) {
+      return { success: false, error: 'User already exists.' };
+    }
+
+    await userSheet.addRow({
+      username,
+      password,
+      email,
+      role: 'User',
+      fofjBranch: 'CENTER' // Default branch
+    });
+
+    // Also auto-create participant
+    const { addParticipant } = await import('@/lib/sheets');
+    await addParticipant({
+      name: username,
+      email: email,
+      userId: username,
+      dateJoined: new Date().toISOString(),
+      totalPoints: 0,
+      totalFines: 0,
+      status: 'active'
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Signup error:', error);
+    return { success: false, error: error.message || 'Failed to create account.' };
   }
 }

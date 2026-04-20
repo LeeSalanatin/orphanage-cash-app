@@ -30,7 +30,14 @@ export async function getSession() {
   }
 }
 
-export async function login(userData: { username: string; fofjBranch: string; role: string }) {
+export async function login(userData: { 
+  uid: string; 
+  username: string; 
+  fofjBranch: string; 
+  role: string;
+  email?: string;
+  participantId?: string;
+}) {
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   const session = await encrypt({ ...userData, expires });
 

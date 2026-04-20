@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemoFirebase, useCollection, useFirestore, useUser, deleteDocumentNonBlocking, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, collectionGroup, doc, query, getDoc } from 'firebase/firestore';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,19 +20,44 @@ import {
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Search, Filter, Settings2, LogOut, ArrowUpDown } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { UserPlus, Users, Trash2, Award, Loader2, ShieldCheck, UserCog, Edit2, Search, Filter, Settings2, LogOut, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  getAllParticipants, 
+  getAllGroups, 
+  getAllSessions, 
+  addParticipantAction, 
+  updateParticipantAction, 
+  deleteParticipantAction, 
+  addGroupAction, 
+  updateGroupAction, 
+  deleteGroupAction 
+} from '@/lib/app-actions';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 export default function ParticipantsPage() {
-  const { user } = useUser();
-  const firestore = useFirestore();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
   
+  const [data, setData] = useState<{
+    participants: any[];
+    groups: any[];
+    sessions: any[];
+    events: any[];
+    votes: any[];
+  }>({
+    participants: [],
+    groups: [],
+    sessions: [],
+    events: [],
+    votes: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterYear, setFilterYear] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>('all');
@@ -46,6 +70,39 @@ export default function ParticipantsPage() {
   type SortColumn = 'name' | 'points' | 'totalFines' | 'diffFines';
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [participants, groups, sessions] = await Promise.all([
+        getAllParticipants(),
+        getAllGroups(),
+        getAllSessions()
+      ]);
+      
+      // Note: In the new architecture, events and votes might be fetched per session or in bulk.
+      // For now, we'll fetch them as empty or implement a bulk fetcher if needed.
+      // Since the original code used collectionGroup, we might need a fetchAllPreachingEvents action.
+      // For the participants view, we'll assume they come from the sessions or dedicated tabs.
+      
+      setData({
+        participants,
+        groups,
+        sessions,
+        events: [], // To be expanded if needed
+        votes: []   // To be expanded if needed
+      });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load data.' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -73,73 +130,23 @@ export default function ParticipantsPage() {
 
   // Check if current user is admin
   useEffect(() => {
-    if (!firestore || !user) return;
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(firestore, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [firestore, user]);
+    if (user) {
+      setIsAdmin(user.role === 'Admin' || (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase())) || false);
+    }
+  }, [user]);
 
-  const participantsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'participants');
-  }, [firestore, user]);
-
-  const adminsRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'roles_admin');
-  }, [firestore, user]);
-
-  const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'groups');
-  }, [firestore, user]);
-
-  const { data: participants, isLoading: participantsLoading } = useCollection(participantsRef);
-  const { data: admins, isLoading: adminsLoading } = useCollection(adminsRef);
-  const { data: groups, isLoading: groupsLoading } = useCollection(groupsQuery);
-
-  const adminIds = new Set(admins?.map(a => a.id) || []);
-
-  const allEventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collectionGroup(firestore, 'preaching_events');
-  }, [firestore, user]);
-
-  const sessionsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, 'sessions');
-  }, [firestore, user]);
-
-  const allVotesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collectionGroup(firestore, 'votes');
-  }, [firestore, user]);
-
-  const { data: rawEvents } = useCollection(allEventsQuery);
-  const { data: allSessions } = useCollection(sessionsQuery);
-  const { data: allVotes } = useCollection(allVotesQuery);
+  const { participants, groups, sessions: allSessions, events: rawEvents, votes: allVotes } = data;
 
   const participantStats = useMemo(() => {
     if (!participants || !allSessions || !groups || !rawEvents) return {};
 
     const stats: Record<string, { totalFines: number, points: number }> = {};
 
-    // Filter rawEvents by the currently selected Year & Month based on Session Date
     const timeFilteredEvents = rawEvents.filter((e: any) => {
       const session = allSessions.find((s: any) => s.id === e.sessionId);
       if (!session) return false;
       
-      const date = session.sessionDate ? new Date(session.sessionDate) : (session.createdAt?.seconds ? new Date(session.createdAt.seconds * 1000) : null);
+      const date = session.sessionDate ? new Date(session.sessionDate) : (session.createdAt ? new Date(session.createdAt) : null);
       if (!date || isNaN(date.getTime())) return false;
 
       const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
@@ -151,11 +158,9 @@ export default function ParticipantsPage() {
       let totalFines = 0;
       let dynamicPoints = 0;
       
-      // Calculate derived points from distributed sessions in this timeframe
       if (allSessions && allVotes && timeFilteredEvents) {
         allSessions.forEach((s: any) => {
-          // Verify session matches time filters
-          const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+          const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt ? new Date(s.createdAt) : null);
           if (!date || isNaN(date.getTime())) return;
           const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
           const monthMatch = filterMonth === 'all' || (date.getMonth() + 1).toString() === filterMonth;
@@ -165,8 +170,6 @@ export default function ParticipantsPage() {
             if (!config.enabled) return;
             
             const sessionVotes = allVotes.filter((v: any) => v.sessionId === s.id);
-            
-            // INDIVIDUAL
             const individualCounts: Record<string, number> = {};
             sessionVotes.forEach((v: any) => {
               (v.voteData?.individual || []).forEach((id: string) => {
@@ -195,7 +198,6 @@ export default function ParticipantsPage() {
               }
             });
 
-            // GROUP
             if (s.sessionType === 'group') {
               const groupCounts: Record<string, number> = {};
               sessionVotes.forEach((v: any) => {
@@ -221,9 +223,7 @@ export default function ParticipantsPage() {
         });
       }
 
-      // Use manually tracked totalPoints if viewing all time (in case of manual tweaks), otherwise use dynamic
       const displayPoints = (filterYear === 'all' && filterMonth === 'all') ? (p.totalPoints || 0) : dynamicPoints;
-      
       const myEvents = timeFilteredEvents.filter((re: any) => re.participantId === p.id || (p.userId && re.participantId === p.userId));
 
       const sessionGroupKeys = new Set<string>();
@@ -235,7 +235,7 @@ export default function ParticipantsPage() {
 
       myEvents.forEach((e: any) => {
         if (!e.preachingGroupId) {
-          totalFines += (e.totalFineAmount || 0);
+          totalFines += (parseFloat(e.totalFineAmount) || 0);
         }
       });
 
@@ -269,7 +269,7 @@ export default function ParticipantsPage() {
     const years = new Set<string>();
     if (allSessions) {
       allSessions.forEach((s: any) => {
-        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000) : null);
+        const date = s.sessionDate ? new Date(s.sessionDate) : (s.createdAt ? new Date(s.createdAt) : null);
         if (date && !isNaN(date.getTime()) && date.getFullYear() > 2000) {
           years.add(date.getFullYear().toString());
         }
@@ -281,14 +281,13 @@ export default function ParticipantsPage() {
   const filteredParticipants = useMemo(() => {
     if (!participants) return [];
     
-    // First figure out active status based on the selected year and month
     const activeParticipantIds = new Set<string>();
     if (rawEvents && allSessions) {
       rawEvents.forEach((e: any) => {
         const session = allSessions.find((s: any) => s.id === e.sessionId);
         if (!session) return;
         
-        const date = session.sessionDate ? new Date(session.sessionDate) : (session.createdAt?.seconds ? new Date(session.createdAt.seconds * 1000) : null);
+        const date = session.sessionDate ? new Date(session.sessionDate) : (session.createdAt ? new Date(session.createdAt) : null);
         if (!date || isNaN(date.getTime())) return;
         
         const yearMatch = filterYear === 'all' || date.getFullYear().toString() === filterYear;
@@ -302,7 +301,7 @@ export default function ParticipantsPage() {
 
     let result = participants.map(p => {
       let isSystemActive = activeParticipantIds.has(p.id) || (p.userId && activeParticipantIds.has(p.userId)) || false;
-      if (p.status === 'inactive') isSystemActive = false; // Manual override
+      if (p.status === 'inactive') isSystemActive = false;
 
       return {
         ...p,
@@ -344,10 +343,10 @@ export default function ParticipantsPage() {
     });
   }, [participants, searchTerm, rawEvents, filterYear, filterMonth, allSessions, participantStats, sortColumn, sortDirection]);
 
-  function handleAddParticipant() {
-    if (!newName.trim() || !firestore || !user) return;
+  async function handleAddParticipant() {
+    if (!newName.trim() || !user) return;
     
-    addDocumentNonBlocking(collection(firestore, 'participants'), {
+    const result = await addParticipantAction({
       name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
       userId: null,
@@ -356,39 +355,47 @@ export default function ParticipantsPage() {
       dateJoined: new Date().toISOString()
     });
     
-    setNewName('');
-    setNewEmail('');
-    toast({ title: "Participant Added", description: `${newName} added.` });
+    if (result.success) {
+      setNewName('');
+      setNewEmail('');
+      toast({ title: "Participant Added", description: `${newName} added.` });
+      fetchData();
+    }
   }
 
-  function handleUpdateProfile() {
-    if (!editingParticipant || !editNameValue.trim() || !firestore) return;
+  async function handleUpdateProfile() {
+    if (!editingParticipant || !editNameValue.trim()) return;
 
-    updateDocumentNonBlocking(doc(firestore, 'participants', editingParticipant.id), {
+    const result = await updateParticipantAction(editingParticipant.id, {
       name: editNameValue.trim(),
       email: editEmailValue.trim().toLowerCase(),
       status: editStatusValue
     });
 
-    toast({ title: "Updated", description: "Changes saved." });
-    setEditingParticipant(null);
+    if (result.success) {
+      toast({ title: "Updated", description: "Changes saved." });
+      setEditingParticipant(null);
+      fetchData();
+    }
   }
 
-  function handleAddGroup() {
-    if (!newGroupName.trim() || !firestore || !user) return;
+  async function handleAddGroup() {
+    if (!newGroupName.trim() || !user) return;
     
-    addDocumentNonBlocking(collection(firestore, 'groups'), {
+    const result = await addGroupAction({
       name: newGroupName,
       description: newGroupDescription.trim(),
-      ownerId: user.uid,
       totalPoints: 0,
       totalFines: 0,
-      members: { [user.uid]: 'owner' },
-      createdAt: new Date().toISOString()
+      members: { [user.uid]: 'owner' }
     });
-    setNewGroupName('');
-    setNewGroupDescription('');
-    toast({ title: "Group Created", description: `${newGroupName} ready.` });
+
+    if (result.success) {
+      setNewGroupName('');
+      setNewGroupDescription('');
+      toast({ title: "Group Created", description: `${newGroupName} ready.` });
+      fetchData();
+    }
   }
 
   function handleOpenMemberManagement(group: any) {
@@ -408,49 +415,46 @@ export default function ParticipantsPage() {
     setSelectedMemberIds(newMembers);
   }
 
-  function handleSaveGroupMembers() {
-    if (!managingGroup || !firestore) return;
+  async function handleSaveGroupMembers() {
+    if (!managingGroup) return;
 
-    updateDocumentNonBlocking(doc(firestore, 'groups', managingGroup.id), {
+    const result = await updateGroupAction(managingGroup.id, {
       members: selectedMemberIds
     });
 
-    toast({ title: "Members Updated" });
-    setManagingGroup(null);
-  }
-
-  function toggleAdmin(targetUserId: string, currentStatus: boolean, name: string) {
-    if (!firestore || !isAdmin) return;
-
-    const adminDocRef = doc(firestore, 'roles_admin', targetUserId);
-    if (currentStatus) {
-      deleteDocumentNonBlocking(adminDocRef);
-      toast({ title: "Role Updated", description: `${name} demoted.` });
-    } else {
-      setDocumentNonBlocking(adminDocRef, { 
-        assignedBy: user?.uid,
-        assignedAt: new Date().toISOString()
-      }, { merge: true });
-      toast({ title: "Role Updated", description: `${name} promoted.` });
+    if (result.success) {
+      toast({ title: "Members Updated" });
+      setManagingGroup(null);
+      fetchData();
     }
   }
 
-  function handleDeleteParticipant(id: string) {
-    if (!firestore) return;
-    deleteDocumentNonBlocking(doc(firestore, 'participants', id));
-    setParticipantToDelete(null);
-    toast({ title: "Participant Deleted" });
+  async function toggleAdmin(targetUserId: string, currentStatus: boolean, name: string) {
+    // This part requires a separate logic for roles_admin in Google Sheets
+    // For now, we'll suggest using the admin panel or user settings in Sheets
+    toast({ title: "Admin Toggle", description: "Please manage user roles in the Google Sheet directly for now." });
   }
 
-  function handleDeleteGroup(id: string) {
-    if (!firestore) return;
-    deleteDocumentNonBlocking(doc(firestore, 'groups', id));
-    setGroupToDelete(null);
-    toast({ title: "Group Deleted" });
+  async function handleDeleteParticipant(id: string) {
+    const result = await deleteParticipantAction(id);
+    if (result.success) {
+      setParticipantToDelete(null);
+      toast({ title: "Participant Deleted" });
+      fetchData();
+    }
   }
 
-  function handleLeaveGroup(groupId: string) {
-    if (!firestore || !user || !groups) return;
+  async function handleDeleteGroup(id: string) {
+    const result = await deleteGroupAction(id);
+    if (result.success) {
+      setGroupToDelete(null);
+      toast({ title: "Group Deleted" });
+      fetchData();
+    }
+  }
+
+  async function handleLeaveGroup(groupId: string) {
+    if (!user || !groups) return;
     const group = groups.find(g => g.id === groupId);
     if (!group || !group.members) return;
 
@@ -460,12 +464,15 @@ export default function ParticipantsPage() {
     const myParticipant = participants?.find(p => p.userId === user.uid);
     if (myParticipant) delete newMembers[myParticipant.id];
 
-    updateDocumentNonBlocking(doc(firestore, 'groups', groupId), {
+    const result = await updateGroupAction(groupId, {
       members: newMembers
     });
 
-    setGroupToLeave(null);
-    toast({ title: "Left Group" });
+    if (result.success) {
+      setGroupToLeave(null);
+      toast({ title: "Left Group" });
+      fetchData();
+    }
   }
 
   return (
@@ -476,6 +483,10 @@ export default function ParticipantsPage() {
           <p className="text-xs text-muted-foreground">Manage preachers and teams.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0">
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-8 gap-2">
+            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            Refresh
+          </Button>
           <div className="flex items-center gap-2 mr-auto sm:mr-4 bg-muted/30 p-1.5 rounded-lg border">
             <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1" />
             <Select value={filterYear} onValueChange={setFilterYear}>
@@ -608,16 +619,16 @@ export default function ParticipantsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {participantsLoading ? (
+                      {isLoading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12">
+                          <TableCell colSpan={8} className="text-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary opacity-20" />
                           </TableCell>
                         </TableRow>
                       ) : filteredParticipants.length > 0 ? (
                         filteredParticipants.map((p) => {
-                          const isParticipantAdmin = p.userId ? adminIds.has(p.userId) : (p.email && HARDCODED_ADMINS.includes(p.email.toLowerCase()));
-                          const isCurrentUser = user?.uid === p.userId;
+                          const isParticipantAdmin = p.role === 'Admin' || (p.email && HARDCODED_ADMINS.includes(p.email.toLowerCase()));
+                          const isCurrentUser = user?.uid === p.userId || user?.username === p.name;
                           
                           return (
                             <TableRow key={p.id} className={cn("h-12 transition-colors group", isCurrentUser && "bg-primary/5")}>
@@ -659,7 +670,7 @@ export default function ParticipantsPage() {
                                   ) : (
                                     <span className="text-[10px] text-muted-foreground">Preacher</span>
                                   )}
-                                  {isAdmin && p.userId && p.userId !== user?.uid && (
+                                  {isAdmin && p.userId && p.username !== user?.username && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleAdmin(p.userId!, !!isParticipantAdmin, p.name)}>
                                       <UserCog className="h-3 w-3" />
                                     </Button>
@@ -692,7 +703,7 @@ export default function ParticipantsPage() {
                         })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-10 text-[10px] text-muted-foreground italic">
+                          <TableCell colSpan={8} className="text-center py-10 text-[10px] text-muted-foreground italic">
                             No preachers found.
                           </TableCell>
                         </TableRow>
@@ -730,7 +741,7 @@ export default function ParticipantsPage() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupsLoading ? (
+            {isLoading ? (
               <div className="col-span-full py-12 text-center">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary opacity-20" />
               </div>

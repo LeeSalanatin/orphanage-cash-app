@@ -1,10 +1,8 @@
-
 "use client";
 
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { collection, serverTimestamp, query, where, doc, getDoc } from 'firebase/firestore';
-import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { useLocalUser } from '@/hooks/useLocalUser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,14 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Save, ArrowLeft, AlertCircle, PlusCircle, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { getAllSessionConfigs, addSessionAction } from '@/lib/app-actions';
 
 const HARDCODED_ADMINS = ['yfjcenter@gmail.com', 'yfj@example.com', 'admin@example.com', 'salanatin.leejay12@gmail.com'];
 
 function NewSessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const db = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user, isLoading: userLoading } = useLocalUser();
   const { toast } = useToast();
   
   const initialConfigId = searchParams.get('configId') || '';
@@ -30,24 +28,32 @@ function NewSessionContent() {
   const [selectedConfigId, setSelectedConfigId] = useState(initialConfigId);
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [configs, setConfigs] = useState<any[]>([]);
+  const [configsLoading, setConfigsLoading] = useState(true);
+
+  const fetchConfigs = useCallback(async () => {
+    setConfigsLoading(true);
+    try {
+      const data = await getAllSessionConfigs();
+      setConfigs(data || []);
+    } catch (error) {
+      console.error('Error fetching configs:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to load configurations.' });
+    } finally {
+      setConfigsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchConfigs();
+  }, [fetchConfigs]);
 
   // Check admin status
   useEffect(() => {
-    if (isUserLoading || !db || !user) return;
-    const checkAdmin = async () => {
-      if (user.email && HARDCODED_ADMINS.includes(user.email)) {
-        setIsAdmin(true);
-        return;
-      }
-      try {
-        const adminDoc = await getDoc(doc(db, 'roles_admin', user.uid));
-        setIsAdmin(adminDoc.exists());
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    };
-    checkAdmin();
-  }, [db, user, isUserLoading]);
+    if (userLoading || !user) return;
+    const isUserAdmin = user.role === 'Admin' || (user.email && HARDCODED_ADMINS.includes(user.email.toLowerCase()));
+    setIsAdmin(isUserAdmin || false);
+  }, [user, userLoading]);
 
   // Redirect if not admin after check is complete
   useEffect(() => {
@@ -63,15 +69,8 @@ function NewSessionContent() {
     setSessionDate(today);
   }, []);
 
-  const configsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return collection(db, 'session_configurations');
-  }, [db, user]);
-
-  const { data: configs, isLoading: configsLoading } = useCollection(configsQuery);
-
   async function handleSaveSession() {
-    if (!title.trim() || !selectedConfigId || !db || !user) return;
+    if (!title.trim() || !selectedConfigId || !user) return;
 
     setLoading(true);
     try {
@@ -90,12 +89,15 @@ function NewSessionContent() {
         ownerId: user.uid,
         members: { [user.uid]: 'owner' },
         status: 'pending',
-        createdAt: serverTimestamp(),
       };
 
-      addDocumentNonBlocking(collection(db, 'sessions'), data);
-      toast({ title: "Session Created", description: "Your session has been initialized." });
-      router.push('/sessions');
+      const result = await addSessionAction(data);
+      if (result.success) {
+        toast({ title: "Session Created", description: "Your session has been initialized." });
+        router.push('/sessions');
+      } else {
+        throw new Error(result.error);
+      }
     } catch (e) {
       console.error(e);
       toast({ variant: "destructive", title: "Error", description: "Could not create session." });
@@ -104,7 +106,7 @@ function NewSessionContent() {
     }
   }
 
-  if (isAdmin === null || isUserLoading) {
+  if (isAdmin === null || userLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -191,13 +193,16 @@ function NewSessionContent() {
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-primary" /> Rule Summary
               </h4>
-              {configs.filter(c => c.id === selectedConfigId).map(c => (
-                <div key={c.id} className="text-xs space-y-1 text-muted-foreground">
-                  <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
-                  <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
-                  <p>• Fine: ₱{c.fineRules?.[0]?.amount} ({c.fineRules?.[0]?.type})</p>
-                </div>
-              ))}
+              {configs.filter(c => c.id === selectedConfigId).map(c => {
+                 const fineRules = typeof c.fineRules === 'string' ? JSON.parse(c.fineRules) : (c.fineRules || []);
+                 return (
+                  <div key={c.id} className="text-xs space-y-1 text-muted-foreground">
+                    <p>• Type: <span className="capitalize">{c.sessionType}</span></p>
+                    <p>• Time Limit: {c.maxPreachingTimeMinutes || 0}m {c.maxPreachingTimeSeconds || 0}s</p>
+                    <p>• Fine: ₱{fineRules[0]?.amount || 0} ({fineRules[0]?.type || 'N/A'})</p>
+                  </div>
+                 );
+              })}
             </div>
           )}
         </CardContent>

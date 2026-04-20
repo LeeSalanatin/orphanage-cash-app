@@ -79,11 +79,97 @@ async function getCachedRows(sheetName: string) {
   const sheet = doc.sheetsByTitle[sheetName] || 
                 (sheetName === 'Transactions' ? (doc.sheetsByTitle['Sheet1'] || doc.sheetsByIndex[0]) : null);
   
-  if (!sheet) return [];
+  if (!sheet) {
+    // If the sheet doesn't exist, we might need to create it later, but for fetching, return empty
+    return [];
+  }
   
   const rows = await sheet.getRows();
   rowsCache[sheetName] = { rows, timestamp: now };
   return rows;
+}
+
+/**
+ * Generic CRUD: Fetch all rows from a sheet and convert to plain objects
+ */
+async function fetchSheetData<T>(sheetName: string): Promise<T[]> {
+  const rows = await getCachedRows(sheetName);
+  return rows.map(row => {
+    const data: any = { id: row.get('id') || row.rowNumber.toString() };
+    row.sheet.headerValues.forEach(header => {
+      const val = row.get(header);
+      try {
+        // Try to parse JSON strings for complex fields
+        if (val && (val.startsWith('{') || val.startsWith('['))) {
+          data[header] = JSON.parse(val);
+        } else {
+          data[header] = val;
+        }
+      } catch (e) {
+        data[header] = val;
+      }
+    });
+    return data as T;
+  });
+}
+
+/**
+ * Generic CRUD: Add a row to a sheet
+ */
+export async function addRowToSheet(sheetName: string, data: any, headers: string[]) {
+  const doc = await getGoogleSheet();
+  let sheet = doc.sheetsByTitle[sheetName];
+  if (!sheet) {
+    sheet = await doc.addSheet({ title: sheetName, headerValues: headers });
+  }
+
+  // Ensure all headers are present in the data object
+  const rowData: any = {};
+  headers.forEach(h => {
+    const val = data[h];
+    rowData[h] = (val && typeof val === 'object') ? JSON.stringify(val) : (val ?? '');
+  });
+
+  await sheet.addRow(rowData);
+  delete rowsCache[sheetName]; // Invalidate cache
+}
+
+/**
+ * Generic CRUD: Update a row in a sheet by its primary key (ID)
+ */
+export async function updateRowInSheet(sheetName: string, id: string, data: any) {
+  const doc = await getGoogleSheet();
+  const sheet = doc.sheetsByTitle[sheetName];
+  if (!sheet) throw new Error(`Sheet ${sheetName} not found`);
+
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.get('id') === id || r.rowNumber.toString() === id);
+  if (!row) throw new Error(`Row with ID ${id} not found in ${sheetName}`);
+
+  Object.keys(data).forEach(key => {
+    if (key === 'id') return; // Don't allow changing ID
+    const val = data[key];
+    row.set(key, (val && typeof val === 'object') ? JSON.stringify(val) : (val ?? ''));
+  });
+
+  await row.save();
+  delete rowsCache[sheetName]; // Invalidate cache
+}
+
+/**
+ * Generic CRUD: Delete a row in a sheet by its primary key (ID)
+ */
+export async function deleteRowFromSheet(sheetName: string, id: string) {
+  const doc = await getGoogleSheet();
+  const sheet = doc.sheetsByTitle[sheetName];
+  if (!sheet) throw new Error(`Sheet ${sheetName} not found`);
+
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.get('id') === id || r.rowNumber.toString() === id);
+  if (!row) return; // Already gone or not found
+
+  await row.delete();
+  delete rowsCache[sheetName]; // Invalidate cache
 }
 
 export async function fetchTransactions(fofjBranch?: string) {
@@ -301,10 +387,19 @@ export async function updateUserFOFJBranch(username: string, fofjBranch: string)
   if (!sheet) throw new Error('Users sheet not found.');
   
   const rows = await sheet.getRows();
-  const userRow = rows.find(row => row.get('Username') === username);
+  const userRow = rows.find(row => (row.get('username') || row.get('Username')) === username);
   if (!userRow) throw new Error(`User "${username}" not found.`);
   
-  userRow.set('FOFJ_Branch', fofjBranch);
+  // Try to set 'FOFJ_Branch' but fallback to 'name' if it exists or create FOFJ_Branch
+  if (sheet.headerValues.includes('FOFJ_Branch')) {
+    userRow.set('FOFJ_Branch', fofjBranch);
+  } else if (sheet.headerValues.includes('name') && userRow.get('name') === userRow.get('username').toUpperCase()) {
+    // Specifically for static users like 'center' whose branch is in 'name'
+    userRow.set('name', fofjBranch);
+  } else {
+    // This will create a new column if saved, but better to be safe
+    userRow.set('fofj_branch', fofjBranch);
+  }
   await userRow.save();
 }
 
@@ -319,10 +414,10 @@ export async function fetchUsers() {
     const rows = await sheet.getRows();
     return rows.map(row => ({
       id: row.rowNumber.toString(),
-      username: row.get('Username'),
-      password: row.get('Password'), // In a real app, use hashing!
-      fofjBranch: row.get('FOFJ_Branch'),
-      role: row.get('Role'),
+      username: row.get('username') || row.get('Username'),
+      password: row.get('password') || row.get('Password'), // In a real app, use hashing!
+      fofjBranch: row.get('FOFJ_Branch') || row.get('name') || '',
+      role: row.get('role') || row.get('Role'),
     }));
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -652,4 +747,135 @@ export async function saveBudgetProposals(
       'CreatedAt': createdAt,
     });
   }
+}
+
+/**
+ * Participants Helpers
+ */
+export async function fetchParticipants() {
+  return await fetchSheetData<any>('Participants');
+}
+
+export async function fetchParticipantById(id: string) {
+  const participants = await fetchParticipants();
+  return participants.find(p => p.id === id);
+}
+
+export async function addParticipant(data: any) {
+  const headers = ['id', 'userId', 'name', 'email', 'dateJoined', 'totalPoints', 'totalFines', 'status'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('Participants', { ...data, id }, headers);
+}
+
+export async function updateParticipant(id: string, data: any) {
+  await updateRowInSheet('Participants', id, data);
+}
+
+export async function deleteParticipant(id: string) {
+  await deleteRowFromSheet('Participants', id);
+}
+
+/**
+ * Groups Helpers
+ */
+export async function fetchGroups() {
+  return await fetchSheetData<any>('Groups');
+}
+
+export async function addGroup(data: any) {
+  const headers = ['id', 'name', 'description', 'totalPoints', 'totalFines', 'members', 'ownerId', 'createdAt'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('Groups', { ...data, id }, headers);
+}
+
+export async function updateGroup(id: string, data: any) {
+  await updateRowInSheet('Groups', id, data);
+}
+
+export async function deleteGroup(id: string) {
+  await deleteRowFromSheet('Groups', id);
+}
+
+/**
+ * Sessions Helpers
+ */
+export async function fetchSessions() {
+  return await fetchSheetData<any>('Sessions');
+}
+
+export async function fetchSessionById(id: string) {
+  const sessions = await fetchSessions();
+  return sessions.find(s => s.id === id);
+}
+
+export async function addSession(data: any) {
+  const headers = ['id', 'title', 'sessionType', 'status', 'ownerId', 'members', 'votingClosed', 'rewardsDistributed', 'sessionDate', 'maxPreachingTimeMinutes', 'maxPreachingTimeSeconds', 'fineRules', 'votingConfig', 'pointDistribution', 'createdAt'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('Sessions', { ...data, id }, headers);
+  return id;
+}
+
+export async function updateSession(id: string, data: any) {
+  await updateRowInSheet('Sessions', id, data);
+}
+
+export async function deleteSession(id: string) {
+  // Also delete associated events and votes for a clean cleanup
+  await deleteRowFromSheet('Sessions', id);
+  // (Optional: Implement cascaded deletes if volume grows)
+}
+
+/**
+ * Preaching Events Helpers
+ */
+export async function fetchPreachingEvents(sessionId?: string) {
+  const events = await fetchSheetData<any>('PreachingEvents');
+  if (sessionId) {
+    return events.filter(e => e.sessionId === sessionId);
+  }
+  return events;
+}
+
+export async function addPreachingEvent(data: any) {
+  const headers = ['id', 'sessionId', 'participantId', 'participantName', 'preachingGroupId', 'actualDurationSeconds', 'actualDurationFormatted', 'overageSeconds', 'totalFineAmount', 'explanation', 'startTime', 'endTime', 'sessionMembers', 'sessionOwnerId'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('PreachingEvents', { ...data, id }, headers);
+}
+
+export async function updatePreachingEvent(id: string, data: any) {
+  await updateRowInSheet('PreachingEvents', id, data);
+}
+
+/**
+ * Votes Helpers
+ */
+export async function fetchVotes(sessionId?: string) {
+  const votes = await fetchSheetData<any>('Votes');
+  if (sessionId) {
+    return votes.filter(v => v.sessionId === sessionId);
+  }
+  return votes;
+}
+
+export async function addVote(data: any) {
+  const headers = ['id', 'sessionId', 'voterParticipantId', 'voteData', 'timestamp'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('Votes', { ...data, id }, headers);
+}
+
+/**
+ * Session Configurations Helpers
+ */
+export async function fetchSessionConfigs() {
+  return await fetchSheetData<any>('SessionConfigs');
+}
+
+export async function addSessionConfig(data: any) {
+  const headers = ['id', 'name', 'description', 'sessionType', 'maxPreachingTimeMinutes', 'maxPreachingTimeSeconds', 'fineRules', 'votingConfig', 'pointDistribution', 'ownerId'];
+  const id = data.id || Math.random().toString(36).substring(2, 11);
+  await addRowToSheet('SessionConfigs', { ...data, id }, headers);
+}
+
+export async function deleteSessionConfig(id: string) {
+  await deleteRowFromSheet('SessionConfigs', id);
 }
