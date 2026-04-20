@@ -30,14 +30,14 @@ export default function LoginPage() {
           <div className={styles.logoWrapper}>
             <Image 
               src="/logo.png" 
-              alt="FOFJ Children Funds Logo" 
+              alt="FOFJ School Funds Logo" 
               width={80} 
               height={80} 
               className={styles.logoImage}
               priority
             />
           </div>
-          <h1>FOFJ Children Funds</h1>
+          <h1>FOFJ School Funds</h1>
           <p>Sign in to manage funds</p>
         </div>
         

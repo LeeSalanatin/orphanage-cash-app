@@ -58,7 +58,7 @@ export function Navbar() {
               <SheetHeader className="text-left pb-6 border-b">
                 <SheetTitle className="flex items-center gap-2">
                   <Mic2 className="h-6 w-6 text-primary" />
-                  <span className="font-headline font-bold text-xl tracking-tight text-primary">PreachPoint</span>
+                  <span className="font-headline font-bold text-xl tracking-tight text-primary">FOFJ School Funds</span>
                 </SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-4 mt-6">
@@ -109,7 +109,7 @@ export function Navbar() {
               <Mic2 className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="hidden font-headline font-bold sm:inline-block text-xl tracking-tight text-primary">
-              PreachPoint
+              FOFJ School Funds
             </span>
           </Link>
           <div className="hidden md:flex gap-6">

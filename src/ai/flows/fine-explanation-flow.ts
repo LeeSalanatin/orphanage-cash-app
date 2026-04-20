@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for generating clear explanations for fines incurred by participants in PreachPoint sessions.
+ * @fileOverview This file defines a Genkit flow for generating clear explanations for fines incurred by participants in FOFJ School Funds sessions.
  *
  * - generateFineExplanation - A function that triggers the fine explanation generation process.
  * - FineExplanationInput - The input type for the generateFineExplanation function.
@@ -37,7 +37,7 @@ const fineExplanationPrompt = ai.definePrompt({
   output: { schema: FineExplanationOutputSchema },
   prompt: `You are an assistant specialized in explaining financial fines related to session overages.
 
-Generate a clear and concise explanation for a fine incurred in a PreachPoint session. The explanation should detail how the fine was calculated based on session rules and recorded time overages. Be polite but firm.
+Generate a clear and concise explanation for a fine incurred in a FOFJ School Funds session. The explanation should detail how the fine was calculated based on session rules and recorded time overages. Be polite but firm.
 
 Here are the details:
 Session Type: {{{sessionType}}}

@@ -16,8 +16,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "FOFJ Children Funds | Funds Management",
-  description: "Secure and transparent funds management system for FOFJ Children Funds.",
+  title: "FOFJ School Funds | Management System",
+  description: "Secure and transparent management system for FOFJ School Funds.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

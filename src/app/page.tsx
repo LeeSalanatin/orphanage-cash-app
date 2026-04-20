@@ -189,7 +189,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       {/* ── Header ── */}
       <div className={styles.dashboardHeader}>
         <h2 className={styles.sectionTitle}>
-          {isAdmin ? 'Admin' : session.fofjBranch} Financial Dashboard
+          FOFJ School Funds - Financial Dashboard
         </h2>
         <Suspense fallback={<p className={styles.dateRange}>Reporting Period: {periodLabel}</p>}>
           <div className={styles.filterRow}>

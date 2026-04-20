@@ -35,7 +35,7 @@ export default function SignupPage() {
       const result = await signupAction(formData);
       
       if (result.success) {
-        toast({ title: "Account created", description: "Welcome to PreachPoint! Please sign in with your email prefix." });
+        toast({ title: "Account created", description: "Welcome to FOFJ School Funds! Please sign in with your email prefix." });
         router.push('/login');
       } else {
         throw new Error(result.error);
@@ -61,7 +61,7 @@ export default function SignupPage() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">Create an Account</CardTitle>
-          <CardDescription>Join PreachPoint to manage your sessions</CardDescription>
+          <CardDescription>Join FOFJ School Funds to manage your sessions</CardDescription>
         </CardHeader>
         <form onSubmit={handleSignup}>
           <CardContent className="space-y-4">

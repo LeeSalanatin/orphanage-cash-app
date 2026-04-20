@@ -59,7 +59,7 @@ export default function HeaderClient({ session }: HeaderClientProps) {
                 />
               </div>
               <div className={styles.logoInfo}>
-                <h1 className={styles.title}>FOFJ Children Funds</h1>
+                <h1 className={styles.title}>FOFJ School Funds</h1>
                 <p className={styles.subtitle}>Fund Management System</p>
               </div>
             </Link>
